@@ -28,6 +28,23 @@ function fallbackScore(id: string, slot: 0 | 1): number {
   return n % 4;
 }
 
+/**
+ * Mock match clock, in minutes after kickoff (`elapsed`).
+ * `SeedFixture.kickoffOffsetMin` is applied against `now` at hydrate time so the
+ * catalog always contains live / today / upcoming fixtures without a live API.
+ *
+ * | elapsed t (min) | status    | display minute                         |
+ * |-----------------|-----------|----------------------------------------|
+ * | t < 0           | upcoming  | —                                      |
+ * | 0 ≤ t < 45      | live      | max(1, floor(t))  (1st half)           |
+ * | 45 ≤ t < 48     | ht        | 45  (3-minute half-time window)        |
+ * | 48 ≤ t < 98     | live      | min(90, max(46, floor(t − 3)))         |
+ * | t ≥ 98          | finished  | —  (90 + 3 HT + 5 stoppage)            |
+ */
+export const MOCK_FIRST_HALF_END = 45;
+export const MOCK_HT_END = 48;
+export const MOCK_FULL_TIME = 98;
+
 export function hydrateFixture(seed: SeedFixture, now = Date.now()): Fixture {
   const kickoff = new Date(now + seed.kickoffOffsetMin * 60_000).toISOString();
   const elapsed = (now - Date.parse(kickoff)) / 60_000;
@@ -36,11 +53,11 @@ export function hydrateFixture(seed: SeedFixture, now = Date.now()): Fixture {
   let homeScore = 0;
   let awayScore = 0;
 
-  if (seed.finishedHome != null && seed.finishedAway != null && elapsed >= 98) {
+  if (seed.finishedHome != null && seed.finishedAway != null && elapsed >= MOCK_FULL_TIME) {
     status = 'finished';
     homeScore = seed.finishedHome;
     awayScore = seed.finishedAway;
-  } else if (elapsed >= 98) {
+  } else if (elapsed >= MOCK_FULL_TIME) {
     status = 'finished';
     homeScore = seed.finishedHome ?? scoreFromEvents(seed.events, seed.homeTeamId);
     awayScore = seed.finishedAway ?? scoreFromEvents(seed.events, seed.awayTeamId);
@@ -49,17 +66,17 @@ export function hydrateFixture(seed: SeedFixture, now = Date.now()): Fixture {
       awayScore = fallbackScore(seed.id, 1);
     }
   } else if (elapsed >= 0) {
-    if (elapsed >= 45 && elapsed < 48) {
+    if (elapsed >= MOCK_FIRST_HALF_END && elapsed < MOCK_HT_END) {
       status = 'ht';
-      minute = 45;
-    } else if (elapsed < 45) {
+      minute = MOCK_FIRST_HALF_END;
+    } else if (elapsed < MOCK_FIRST_HALF_END) {
       status = 'live';
       minute = Math.max(1, Math.floor(elapsed));
     } else {
       status = 'live';
-      minute = Math.min(90, Math.max(46, Math.floor(elapsed - 3)));
+      minute = Math.min(90, Math.max(MOCK_FIRST_HALF_END + 1, Math.floor(elapsed - (MOCK_HT_END - MOCK_FIRST_HALF_END))));
     }
-    const visible = seed.events.filter((e) => e.minute <= (minute ?? 45));
+    const visible = seed.events.filter((e) => e.minute <= (minute ?? MOCK_FIRST_HALF_END));
     homeScore = scoreFromEvents(visible, seed.homeTeamId);
     awayScore = scoreFromEvents(visible, seed.awayTeamId);
   }

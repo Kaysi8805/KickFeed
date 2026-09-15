@@ -28,11 +28,14 @@ Then open:
 - **Android emulator** (`a` in the terminal)
 - **Web** (`w` in the terminal) for a quick desktop preview
 
-Typecheck:
+Typecheck and unit tests:
 
 ```bash
 npm run typecheck
+npm test
 ```
+
+CI runs `npm ci` → `typecheck` → `test` on pull requests (see `.github/workflows/ci.yml`).
 
 ## Demo mode
 
@@ -69,7 +72,17 @@ theme/               Color, type, and spacing tokens
 
 Replace the mock with an adapter (FotMob-style, API-Football, Opta, etc.) that implements the same methods: continents, countries, leagues, teams, fixtures, standings, scorers, lineups.
 
-Keep `data/types.ts` stable so screens do not care whether data is seeded or remote. Hydration of live minutes today is derived from kickoff offsets in `data/mocks/fixtures.ts` so the app always has live/today/upcoming matches — a live API would return real statuses instead.
+Keep `data/types.ts` stable so screens do not care whether data is seeded or remote.
+
+Mock fixtures use `SeedFixture.kickoffOffsetMin` relative to “now” when `hydrateFixture` runs (`services/football.ts`). Status windows:
+
+- **Upcoming** — kickoff still in the future
+- **Live 1st half** — 0–45 minutes after kickoff
+- **HT** — 45–48 minutes (3-minute half-time window)
+- **Live 2nd half** — 48–98 minutes (display minute is elapsed minus HT, capped at 90)
+- **Finished** — 98+ minutes (90 + 3 HT + 5 stoppage)
+
+A live API would return real statuses instead of this clock.
 
 ## Theme
 
