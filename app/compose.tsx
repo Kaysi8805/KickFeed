@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -31,7 +32,7 @@ export default function ComposeScreen() {
         value={text}
         onChangeText={setText}
       />
-      {imageUri ? <Text style={styles.attached}>Image attached</Text> : null}
+      {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} contentFit="cover" /> : null}
       <View style={styles.row}>
         <Pressable onPress={pickImage} style={styles.ghost}>
           <Text style={styles.ghostText}>Add photo</Text>
@@ -65,7 +66,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     ...type.body,
   },
-  attached: { ...type.caption, color: colors.limeMuted, marginTop: spacing.sm },
+  preview: {
+    height: 160,
+    width: '100%',
+    borderRadius: radius.lg,
+    marginTop: spacing.sm,
+  },
   row: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg, alignItems: 'center' },
   ghost: { padding: 8 },
   ghostText: { ...type.caption, color: colors.limeMuted },

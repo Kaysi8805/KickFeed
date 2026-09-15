@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -35,13 +36,11 @@ export function PostCard({
         </View>
       </Pressable>
       <Text style={styles.body}>{post.text}</Text>
-      {post.imageUri || post.imageTone ? (
-        <View style={[styles.image, { backgroundColor: post.imageTone ?? colors.surfaceAlt }]}>
-          {post.imageUri ? (
-            <Text style={styles.imageHint}>Photo attached</Text>
-          ) : (
-            <Text style={styles.imageHint}>Match night</Text>
-          )}
+      {post.imageUri ? (
+        <Image source={{ uri: post.imageUri }} style={styles.photo} contentFit="cover" />
+      ) : post.imageTone ? (
+        <View style={[styles.image, { backgroundColor: post.imageTone }]}>
+          <Text style={styles.imageHint}>Match night</Text>
         </View>
       ) : null}
       {match && home && away ? (
@@ -89,6 +88,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  photo: {
+    height: 140,
+    width: '100%',
+    borderRadius: radius.md,
     marginBottom: spacing.sm,
   },
   imageHint: { ...type.caption, color: colors.white, opacity: 0.85 },
