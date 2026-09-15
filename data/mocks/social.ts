@@ -192,6 +192,7 @@ export const seedNotifications: AppNotification[] = [
     body: "Mac Allister heads in from a corner at Anfield.",
     createdAt: ago(0.15),
     read: false,
+    recipientId: 'maya',
     matchId: 'fx-liv-ars',
   },
   {
@@ -201,6 +202,7 @@ export const seedNotifications: AppNotification[] = [
     body: 'Klassiker is live at the Allianz Arena.',
     createdAt: ago(0.3),
     read: false,
+    recipientId: 'maya',
     matchId: 'fx-bay-dor',
   },
   {
@@ -210,6 +212,7 @@ export const seedNotifications: AppNotification[] = [
     body: 'Salah is still the most unplayable winger in England…',
     createdAt: ago(0.4),
     read: false,
+    recipientId: 'maya',
     userId: 'jordan',
   },
   {
@@ -219,6 +222,7 @@ export const seedNotifications: AppNotification[] = [
     body: 'Aisha Okonkwo started following you.',
     createdAt: ago(6),
     read: true,
+    recipientId: 'maya',
     userId: 'aisha',
   },
   {
@@ -228,6 +232,7 @@ export const seedNotifications: AppNotification[] = [
     body: 'Omar replied in Liverpool vs Arsenal.',
     createdAt: ago(0.2),
     read: false,
+    recipientId: 'maya',
     matchId: 'fx-liv-ars',
   },
 ];

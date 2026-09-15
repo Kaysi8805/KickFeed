@@ -151,6 +151,8 @@ export interface AppNotification {
   body: string;
   createdAt: string;
   read: boolean;
+  /** Demo user who should see this notification. */
+  recipientId: string;
   matchId?: string;
   userId?: string;
 }

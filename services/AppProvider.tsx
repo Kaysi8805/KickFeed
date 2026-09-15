@@ -2,38 +2,27 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import type { AppNotification, Comment, Post, User } from '@/data/types';
-import { demoUsers, seedComments, seedFollowing, seedNotifications, seedPosts } from '@/data/mocks/social';
-import { registerForPushNotifications } from '@/services/notifications';
+import { demoUsers } from '@/data/mocks/social';
+import {
+  addComment as addCommentState,
+  addPost as addPostState,
+  defaults,
+  follow as followState,
+  hydratePersisted,
+  markNotificationsRead as markNotificationsReadState,
+  notificationsFor,
+  Persisted,
+  signInDemo as signInDemoState,
+  signOut as signOutState,
+  toggleFavoriteLeague as toggleFavoriteLeagueState,
+  toggleFavoriteTeam as toggleFavoriteTeamState,
+  toggleLike as toggleLikeState,
+  unfollow as unfollowState,
+  unreadCountFor,
+  updateProfile as updateProfileState,
+} from '@/services/appState';
 
 const STORAGE_KEY = 'kickfeed.v1.state';
-
-interface Persisted {
-  currentUserId: string | null;
-  following: Record<string, string[]>;
-  favorites: Record<string, { teams: string[]; leagues: string[] }>;
-  profiles: Record<string, Partial<User>>;
-  posts: Post[];
-  likes: Record<string, string[]>;
-  comments: Comment[];
-  notifications: AppNotification[];
-}
-
-function defaults(): Persisted {
-  const favorites: Persisted['favorites'] = {};
-  for (const u of demoUsers) {
-    favorites[u.id] = { teams: [...u.favoriteTeamIds], leagues: [...u.favoriteLeagueIds] };
-  }
-  return {
-    currentUserId: null,
-    following: { ...seedFollowing },
-    favorites,
-    profiles: {},
-    posts: seedPosts,
-    likes: { maya: ['p1', 'p3'], jordan: ['p2'] },
-    comments: seedComments,
-    notifications: seedNotifications,
-  };
-}
 
 interface AppContextValue {
   ready: boolean;
@@ -72,16 +61,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw && !cancelled) {
-          const parsed = JSON.parse(raw) as Partial<Persisted>;
-          setState((prev) => ({ ...prev, ...parsed }));
-        }
+        if (!cancelled) setState(hydratePersisted(raw));
       } catch {
-        // first launch
+        if (!cancelled) setState(defaults());
       } finally {
         if (!cancelled) setReady(true);
       }
-      registerForPushNotifications().catch(() => undefined);
     })();
     return () => {
       cancelled = true;
@@ -109,7 +94,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const favoriteTeamIds = currentUser?.favoriteTeamIds ?? [];
   const favoriteLeagueIds = currentUser?.favoriteLeagueIds ?? [];
   const likedPostIds = currentUser ? (state.likes[currentUser.id] ?? []) : [];
-  const unreadCount = state.notifications.filter((n) => !n.read).length;
+  const notifications = notificationsFor(state, currentUser?.id ?? null);
+  const unreadCount = unreadCountFor(state, currentUser?.id ?? null);
 
   const patch = useCallback((fn: (prev: Persisted) => Persisted) => {
     setState((prev) => fn(prev));
@@ -125,136 +111,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       favoriteLeagueIds,
       posts: [...state.posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
       comments: state.comments,
-      notifications: [...state.notifications].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
+      notifications,
       unreadCount,
       likedPostIds,
-      signInDemo: (userId) => patch((p) => ({ ...p, currentUserId: userId })),
-      signOut: () => patch((p) => ({ ...p, currentUserId: null })),
+      signInDemo: (userId) => patch((p) => signInDemoState(p, userId)),
+      signOut: () => patch(signOutState),
       follow: (userId) =>
-        patch((p) => {
-          if (!p.currentUserId || userId === p.currentUserId) return p;
-          const mine = new Set(p.following[p.currentUserId] ?? []);
-          mine.add(userId);
-          return {
-            ...p,
-            following: { ...p.following, [p.currentUserId]: [...mine] },
-            notifications: [
-              {
-                id: `n-${Date.now()}`,
-                type: 'follow',
-                title: 'Following',
-                body: `You are now following ${users.find((u) => u.id === userId)?.name ?? 'a fan'}.`,
-                createdAt: new Date().toISOString(),
-                read: false,
-                userId,
-              },
-              ...p.notifications,
-            ],
-          };
-        }),
-      unfollow: (userId) =>
-        patch((p) => {
-          if (!p.currentUserId) return p;
-          return {
-            ...p,
-            following: {
-              ...p.following,
-              [p.currentUserId]: (p.following[p.currentUserId] ?? []).filter((id) => id !== userId),
-            },
-          };
-        }),
-      toggleFavoriteTeam: (teamId) =>
-        patch((p) => {
-          if (!p.currentUserId) return p;
-          const cur = p.favorites[p.currentUserId] ?? { teams: [], leagues: [] };
-          const has = cur.teams.includes(teamId);
-          return {
-            ...p,
-            favorites: {
-              ...p.favorites,
-              [p.currentUserId]: {
-                ...cur,
-                teams: has ? cur.teams.filter((id) => id !== teamId) : [...cur.teams, teamId],
-              },
-            },
-          };
-        }),
-      toggleFavoriteLeague: (leagueId) =>
-        patch((p) => {
-          if (!p.currentUserId) return p;
-          const cur = p.favorites[p.currentUserId] ?? { teams: [], leagues: [] };
-          const has = cur.leagues.includes(leagueId);
-          return {
-            ...p,
-            favorites: {
-              ...p.favorites,
-              [p.currentUserId]: {
-                ...cur,
-                leagues: has ? cur.leagues.filter((id) => id !== leagueId) : [...cur.leagues, leagueId],
-              },
-            },
-          };
-        }),
-      updateProfile: (next) =>
-        patch((p) => {
-          if (!p.currentUserId) return p;
-          return {
-            ...p,
-            profiles: { ...p.profiles, [p.currentUserId]: { ...p.profiles[p.currentUserId], ...next } },
-          };
-        }),
-      addPost: (text, imageUri) =>
-        patch((p) => {
-          if (!p.currentUserId) return p;
-          const post: Post = {
-            id: `p-${Date.now()}`,
-            authorId: p.currentUserId,
-            text: text.trim(),
-            imageUri,
-            createdAt: new Date().toISOString(),
-          };
-          return {
-            ...p,
-            posts: [post, ...p.posts],
-            notifications: [
-              {
-                id: `n-post-${Date.now()}`,
-                type: 'friend_post',
-                title: 'Posted to KickFeed',
-                body: text.trim().slice(0, 80),
-                createdAt: new Date().toISOString(),
-                read: false,
-              },
-              ...p.notifications,
-            ],
-          };
-        }),
-      toggleLike: (postId) =>
-        patch((p) => {
-          if (!p.currentUserId) return p;
-          const mine = new Set(p.likes[p.currentUserId] ?? []);
-          if (mine.has(postId)) mine.delete(postId);
-          else mine.add(postId);
-          return { ...p, likes: { ...p.likes, [p.currentUserId]: [...mine] } };
-        }),
-      addComment: (matchId, text, parentId) =>
-        patch((p) => {
-          if (!p.currentUserId) return p;
-          const comment: Comment = {
-            id: `c-${Date.now()}`,
-            matchId,
-            authorId: p.currentUserId,
-            text: text.trim(),
-            createdAt: new Date().toISOString(),
-            parentId,
-          };
-          return { ...p, comments: [...p.comments, comment] };
-        }),
-      markNotificationsRead: () =>
-        patch((p) => ({ ...p, notifications: p.notifications.map((n) => ({ ...n, read: true })) })),
+        patch((p) => followState(p, userId, users.find((u) => u.id === userId)?.name ?? 'a fan')),
+      unfollow: (userId) => patch((p) => unfollowState(p, userId)),
+      toggleFavoriteTeam: (teamId) => patch((p) => toggleFavoriteTeamState(p, teamId)),
+      toggleFavoriteLeague: (leagueId) => patch((p) => toggleFavoriteLeagueState(p, leagueId)),
+      updateProfile: (next) => patch((p) => updateProfileState(p, next)),
+      addPost: (text, imageUri) => patch((p) => addPostState(p, text, imageUri)),
+      toggleLike: (postId) => patch((p) => toggleLikeState(p, postId)),
+      addComment: (matchId, text, parentId) => patch((p) => addCommentState(p, matchId, text, parentId)),
+      markNotificationsRead: () => patch(markNotificationsReadState),
       followerCount: (userId) => Object.values(state.following).filter((ids) => ids.includes(userId)).length,
     }),
-    [currentUser, favoriteLeagueIds, favoriteTeamIds, followingIds, likedPostIds, patch, ready, state, unreadCount, users],
+    [currentUser, favoriteLeagueIds, favoriteTeamIds, followingIds, likedPostIds, notifications, patch, ready, state, unreadCount, users],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
