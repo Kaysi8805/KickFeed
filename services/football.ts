@@ -22,6 +22,12 @@ function scoreFromEvents(events: SeedFixture['events'], teamId: string): number 
   return events.filter((e) => e.type === 'goal' && e.teamId === teamId).length;
 }
 
+function fallbackScore(id: string, slot: 0 | 1): number {
+  let n = 0;
+  for (let i = 0; i < id.length; i += 1) n = (n * 31 + id.charCodeAt(i) + slot) >>> 0;
+  return n % 4;
+}
+
 export function hydrateFixture(seed: SeedFixture, now = Date.now()): Fixture {
   const kickoff = new Date(now + seed.kickoffOffsetMin * 60_000).toISOString();
   const elapsed = (now - Date.parse(kickoff)) / 60_000;
@@ -38,6 +44,10 @@ export function hydrateFixture(seed: SeedFixture, now = Date.now()): Fixture {
     status = 'finished';
     homeScore = seed.finishedHome ?? scoreFromEvents(seed.events, seed.homeTeamId);
     awayScore = seed.finishedAway ?? scoreFromEvents(seed.events, seed.awayTeamId);
+    if (!seed.events.length && seed.finishedHome == null) {
+      homeScore = fallbackScore(seed.id, 0);
+      awayScore = fallbackScore(seed.id, 1);
+    }
   } else if (elapsed >= 0) {
     if (elapsed >= 45 && elapsed < 48) {
       status = 'ht';
