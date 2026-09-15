@@ -35,7 +35,14 @@ export default function MatchDetailScreen() {
   const [replyTo, setReplyTo] = useState<string | undefined>();
 
   const fixture = football.getFixture(id);
-  if (!fixture) {
+  const home = fixture ? football.getTeam(fixture.homeTeamId) : undefined;
+  const away = fixture ? football.getTeam(fixture.awayTeamId) : undefined;
+  const possession = useMemo(() => {
+    const h = 48 + ((home?.id.length ?? 0) % 10);
+    return { home: h, away: 100 - h };
+  }, [home?.id]);
+
+  if (!fixture || !home || !away) {
     return (
       <Screen>
         <HeaderBar title="Match" onBack={() => router.back()} />
@@ -44,19 +51,12 @@ export default function MatchDetailScreen() {
     );
   }
 
-  const home = football.getTeam(fixture.homeTeamId)!;
-  const away = football.getTeam(fixture.awayTeamId)!;
   const league = football.getLeague(fixture.leagueId);
   const live = fixture.status === 'live' || fixture.status === 'ht';
   const lineups = football.getLineups(fixture);
   const thread = comments.filter((c) => c.matchId === fixture.id);
   const roots = thread.filter((c) => !c.parentId);
   const replyTarget = thread.find((c) => c.id === replyTo);
-
-  const possession = useMemo(() => {
-    const h = 48 + (home.id.length % 10);
-    return { home: h, away: 100 - h };
-  }, [home.id]);
 
   return (
     <Screen padded={false}>

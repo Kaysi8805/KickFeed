@@ -14,10 +14,10 @@ import { colors, spacing, type } from '@/theme';
 type Filter = 'live' | 'today' | 'upcoming';
 
 export default function MatchesScreen() {
-  useLiveTick();
+  const tick = useLiveTick();
   const { favoriteLeagueIds } = useApp();
   const [filter, setFilter] = useState<Filter>('live');
-  const fixtures = football.getFixtures();
+  const fixtures = useMemo(() => football.getFixtures(), [tick]);
 
   const filtered = useMemo(() => {
     if (filter === 'live') return fixtures.filter((f) => f.status === 'live' || f.status === 'ht');
