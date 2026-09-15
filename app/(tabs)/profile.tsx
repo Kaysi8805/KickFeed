@@ -85,6 +85,7 @@ const styles = StyleSheet.create({
     marginHorizontal: -spacing.lg,
     backgroundColor: colors.pitch,
     overflow: 'hidden',
+    alignSelf: 'stretch',
   },
   stripe: {
     position: 'absolute',

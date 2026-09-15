@@ -32,7 +32,7 @@ export function MatchRow({ fixture, compact }: { fixture: Fixture; compact?: boo
         <View style={styles.mid}>
           {live || done ? (
             <Text style={styles.score}>
-              {fixture.homeScore}  {fixture.awayScore}
+              {fixture.homeScore}–{fixture.awayScore}
             </Text>
           ) : (
             <Text style={styles.ko}>{kickoffLabel(fixture.kickoff)}</Text>

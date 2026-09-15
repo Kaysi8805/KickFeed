@@ -63,7 +63,7 @@ export default function MatchDetailScreen() {
       <View style={styles.pad}>
         <HeaderBar title={league?.shortName ?? 'Match'} onBack={() => router.back()} />
       </View>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.board}>
           <View style={styles.side}>
             <Crest team={home} size={56} />
@@ -240,7 +240,7 @@ export default function MatchDetailScreen() {
 
 const styles = StyleSheet.create({
   pad: { paddingHorizontal: spacing.lg },
-  scroll: { paddingHorizontal: spacing.lg, paddingBottom: 120 },
+  scroll: { paddingHorizontal: spacing.lg, paddingBottom: 24 },
   board: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: radius.xl,
@@ -294,10 +294,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   composer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     backgroundColor: colors.bgElevated,
     padding: spacing.md,
     borderTopWidth: 1,

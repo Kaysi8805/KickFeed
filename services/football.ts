@@ -30,11 +30,11 @@ export function hydrateFixture(seed: SeedFixture, now = Date.now()): Fixture {
   let homeScore = 0;
   let awayScore = 0;
 
-  if (seed.finishedHome != null && seed.finishedAway != null && elapsed >= 105) {
+  if (seed.finishedHome != null && seed.finishedAway != null && elapsed >= 98) {
     status = 'finished';
     homeScore = seed.finishedHome;
     awayScore = seed.finishedAway;
-  } else if (elapsed >= 105) {
+  } else if (elapsed >= 98) {
     status = 'finished';
     homeScore = seed.finishedHome ?? scoreFromEvents(seed.events, seed.homeTeamId);
     awayScore = seed.finishedAway ?? scoreFromEvents(seed.events, seed.awayTeamId);
@@ -42,9 +42,12 @@ export function hydrateFixture(seed: SeedFixture, now = Date.now()): Fixture {
     if (elapsed >= 45 && elapsed < 48) {
       status = 'ht';
       minute = 45;
+    } else if (elapsed < 45) {
+      status = 'live';
+      minute = Math.max(1, Math.floor(elapsed));
     } else {
       status = 'live';
-      minute = elapsed < 45 ? Math.max(1, Math.floor(elapsed)) : Math.min(90 + Math.floor(elapsed - 48), 95);
+      minute = Math.min(90, Math.max(46, Math.floor(elapsed - 3)));
     }
     const visible = seed.events.filter((e) => e.minute <= (minute ?? 45));
     homeScore = scoreFromEvents(visible, seed.homeTeamId);

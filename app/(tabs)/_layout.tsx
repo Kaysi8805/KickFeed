@@ -41,7 +41,7 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="favorites"
+        name="following"
         options={{
           title: 'Following',
           tabBarIcon: ({ color, size }) => <Ionicons name="heart" color={color} size={size} />,

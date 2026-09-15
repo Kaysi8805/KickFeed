@@ -37,7 +37,7 @@ export function Screen({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  body: { flex: 1, backgroundColor: colors.bg, maxWidth: 560, width: '100%', alignSelf: 'center' },
+  body: { flex: 1, backgroundColor: colors.bg, width: '100%' },
   padded: { paddingHorizontal: spacing.lg },
   scroll: { paddingBottom: 48, flexGrow: 1 },
 });
