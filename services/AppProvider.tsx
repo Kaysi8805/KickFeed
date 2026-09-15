@@ -117,7 +117,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       signInDemo: (userId) => patch((p) => signInDemoState(p, userId)),
       signOut: () => patch(signOutState),
       follow: (userId) =>
-        patch((p) => followState(p, userId, users.find((u) => u.id === userId)?.name ?? 'a fan')),
+        patch((p) => followState(p, userId, currentUser?.name ?? 'A fan')),
       unfollow: (userId) => patch((p) => unfollowState(p, userId)),
       toggleFavoriteTeam: (teamId) => patch((p) => toggleFavoriteTeamState(p, teamId)),
       toggleFavoriteLeague: (leagueId) => patch((p) => toggleFavoriteLeagueState(p, leagueId)),

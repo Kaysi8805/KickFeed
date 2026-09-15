@@ -58,4 +58,12 @@ describe('hydrateFixture', () => {
     expect(fx.awayScore).toBe(1);
     expect(MOCK_HT_END).toBe(48);
   });
+
+  it('never uses a 0-0 fallback for generated finished matches', () => {
+    for (const id of ['fx-a', 'fx-b', 'fx-zero', 'fx-epl-whu-eve', 'x', 'fx-test']) {
+      const fx = hydrateFixture(seed(-MOCK_FULL_TIME, { id, events: [] }), NOW);
+      expect(fx.status).toBe('finished');
+      expect(fx.homeScore + fx.awayScore).toBeGreaterThan(0);
+    }
+  });
 });

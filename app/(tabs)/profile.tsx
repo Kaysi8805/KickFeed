@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PostCard } from '@/components/feed/PostCard';
@@ -7,13 +8,27 @@ import { Crest } from '@/components/ui/Crest';
 import { Screen } from '@/components/ui/Screen';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
+import { registerForPushNotifications } from '@/services/notifications';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function ProfileScreen() {
   const { currentUser, posts, users, likedPostIds, toggleLike, followingIds, followerCount, signOut } = useApp();
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushNote, setPushNote] = useState<string | null>(null);
   if (!currentUser) return null;
   const mine = posts.filter((p) => p.authorId === currentUser.id);
   const teams = currentUser.favoriteTeamIds.map((id) => football.getTeam(id)).filter(Boolean);
+
+  async function enableDeviceAlerts() {
+    setPushBusy(true);
+    const token = await registerForPushNotifications();
+    setPushBusy(false);
+    setPushNote(
+      token
+        ? 'Device alerts on for this install.'
+        : 'No push token yet — needs a native build with an EAS projectId. In-app notifications still work.',
+    );
+  }
 
   return (
     <Screen padded={false}>
@@ -72,6 +87,10 @@ export default function ProfileScreen() {
         <Pressable style={styles.switcher} onPress={signOut}>
           <Text style={styles.switcherText}>Switch demo user</Text>
         </Pressable>
+        <Pressable style={styles.switcher} onPress={enableDeviceAlerts} disabled={pushBusy}>
+          <Text style={styles.switcherText}>{pushBusy ? 'Checking…' : 'Enable device match alerts'}</Text>
+        </Pressable>
+        {pushNote ? <Text style={styles.demoNote}>{pushNote}</Text> : null}
         <Text style={styles.demoNote}>Demo mode only — email/OAuth stubs are in services/auth.ts</Text>
       </ScrollView>
     </Screen>

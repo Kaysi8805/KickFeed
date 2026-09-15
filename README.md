@@ -41,7 +41,9 @@ CI runs `npm ci` → `typecheck` → `test` on pull requests (see `.github/workf
 
 On first launch, choose a demo profile. State (favorites, follows, posts, comments, notification read flags) is persisted with AsyncStorage under `kickfeed.v1.state`.
 
-Use **Profile → Switch demo user** to pick another seeded fan. Real credentials are intentionally not collected.
+Corrupt JSON is discarded. A missing or newer `schemaVersion` still keeps valid slices (signed-in demo user, follows, posts, …) and stamps the current version. Unknown `currentUserId` values are cleared.
+
+Use **Profile → Switch demo user** to pick another seeded fan. **Profile → Enable device match alerts** opts into Expo push (no-op until an EAS `projectId` exists). Real credentials are intentionally not collected.
 
 ## Project layout
 

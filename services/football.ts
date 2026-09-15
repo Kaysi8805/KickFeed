@@ -22,10 +22,13 @@ function scoreFromEvents(events: SeedFixture['events'], teamId: string): number 
   return events.filter((e) => e.type === 'goal' && e.teamId === teamId).length;
 }
 
-function fallbackScore(id: string, slot: 0 | 1): number {
+function fallbackFinishedScore(id: string): { home: number; away: number } {
   let n = 0;
-  for (let i = 0; i < id.length; i += 1) n = (n * 31 + id.charCodeAt(i) + slot) >>> 0;
-  return n % 4;
+  for (let i = 0; i < id.length; i += 1) n = (n * 31 + id.charCodeAt(i)) >>> 0;
+  const home = n % 4;
+  const away = (n >>> 8) % 4;
+  if (home === 0 && away === 0) return { home: 1, away: 0 };
+  return { home, away };
 }
 
 /**
@@ -62,8 +65,9 @@ export function hydrateFixture(seed: SeedFixture, now = Date.now()): Fixture {
     homeScore = seed.finishedHome ?? scoreFromEvents(seed.events, seed.homeTeamId);
     awayScore = seed.finishedAway ?? scoreFromEvents(seed.events, seed.awayTeamId);
     if (!seed.events.length && seed.finishedHome == null) {
-      homeScore = fallbackScore(seed.id, 0);
-      awayScore = fallbackScore(seed.id, 1);
+      const score = fallbackFinishedScore(seed.id);
+      homeScore = score.home;
+      awayScore = score.away;
     }
   } else if (elapsed >= 0) {
     if (elapsed >= MOCK_FIRST_HALF_END && elapsed < MOCK_HT_END) {

@@ -154,5 +154,6 @@ export interface AppNotification {
   /** Demo user who should see this notification. */
   recipientId: string;
   matchId?: string;
+  /** Actor or related user (never equal to recipientId for self-activity). */
   userId?: string;
 }

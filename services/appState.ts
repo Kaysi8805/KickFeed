@@ -39,21 +39,24 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function looksLikeState(blob: Record<string, unknown>): boolean {
-  return (
-    blob.schemaVersion === STATE_SCHEMA_VERSION &&
-    (blob.currentUserId === null || typeof blob.currentUserId === 'string') &&
-    isPlainObject(blob.following) &&
-    isPlainObject(blob.favorites) &&
-    isPlainObject(blob.profiles) &&
-    isPlainObject(blob.likes) &&
-    Array.isArray(blob.posts) &&
-    Array.isArray(blob.comments) &&
-    Array.isArray(blob.notifications)
-  );
+function knownUserId(value: unknown): string | null {
+  return typeof value === 'string' && KNOWN_USER_IDS.has(value) ? value : null;
 }
 
-/** Parse AsyncStorage JSON. Corrupt, unversioned, or invalid user ids fall back to defaults. */
+function pickRecord<T>(value: unknown, fallback: T): T {
+  return isPlainObject(value) ? ({ ...fallback, ...value } as T) : fallback;
+}
+
+function pickArray<T>(value: unknown, fallback: T[]): T[] {
+  return Array.isArray(value) ? (value as T[]) : fallback;
+}
+
+/**
+ * Parse AsyncStorage JSON.
+ * Corrupt JSON → full defaults.
+ * Missing/future schemaVersion still keeps valid slices (user, follows, posts, …)
+ * and stamps STATE_SCHEMA_VERSION. Unknown currentUserId becomes null.
+ */
 export function hydratePersisted(raw: string | null): Persisted {
   const base = defaults();
   if (!raw) return base;
@@ -63,30 +66,35 @@ export function hydratePersisted(raw: string | null): Persisted {
   } catch {
     return base;
   }
-  if (!isPlainObject(parsed) || !looksLikeState(parsed)) return base;
-
-  const currentUserId =
-    typeof parsed.currentUserId === 'string' && KNOWN_USER_IDS.has(parsed.currentUserId)
-      ? parsed.currentUserId
-      : null;
+  if (!isPlainObject(parsed)) return base;
 
   return {
-    ...(parsed as unknown as Persisted),
     schemaVersion: STATE_SCHEMA_VERSION,
-    currentUserId,
+    currentUserId: knownUserId(parsed.currentUserId),
+    following: pickRecord(parsed.following, base.following),
+    favorites: pickRecord(parsed.favorites, base.favorites),
+    profiles: pickRecord(parsed.profiles, base.profiles),
+    likes: pickRecord(parsed.likes, base.likes),
+    posts: pickArray(parsed.posts, base.posts),
+    comments: pickArray(parsed.comments, base.comments),
+    notifications: pickArray(parsed.notifications, base.notifications),
   };
+}
+
+function isSelfActivity(n: AppNotification, userId: string): boolean {
+  return n.userId === userId;
 }
 
 export function notificationsFor(state: Persisted, userId: string | null): AppNotification[] {
   if (!userId) return [];
   return state.notifications
-    .filter((n) => n.recipientId === userId)
+    .filter((n) => n.recipientId === userId && !isSelfActivity(n, userId))
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
 export function unreadCountFor(state: Persisted, userId: string | null): number {
   if (!userId) return 0;
-  return state.notifications.filter((n) => n.recipientId === userId && !n.read).length;
+  return state.notifications.filter((n) => n.recipientId === userId && !n.read && !isSelfActivity(n, userId)).length;
 }
 
 export function signInDemo(state: Persisted, userId: string): Persisted {
@@ -98,19 +106,19 @@ export function signOut(state: Persisted): Persisted {
   return { ...state, currentUserId: null };
 }
 
-export function follow(state: Persisted, userId: string, displayName: string, now = Date.now()): Persisted {
-  if (!state.currentUserId || userId === state.currentUserId) return state;
+export function follow(state: Persisted, targetUserId: string, actorDisplayName: string, now = Date.now()): Persisted {
+  if (!state.currentUserId || targetUserId === state.currentUserId) return state;
   const mine = new Set(state.following[state.currentUserId] ?? []);
-  mine.add(userId);
+  mine.add(targetUserId);
   const notification: AppNotification = {
     id: `n-${now}`,
     type: 'follow',
-    title: 'Following',
-    body: `You are now following ${displayName}.`,
+    title: 'New follower',
+    body: `${actorDisplayName} started following you.`,
     createdAt: new Date(now).toISOString(),
     read: false,
-    recipientId: state.currentUserId,
-    userId,
+    recipientId: targetUserId,
+    userId: state.currentUserId,
   };
   return {
     ...state,
@@ -172,26 +180,33 @@ export function updateProfile(state: Persisted, next: Partial<Pick<User, 'name' 
 
 export function addPost(state: Persisted, text: string, imageUri?: string, now = Date.now()): Persisted {
   if (!state.currentUserId) return state;
+  const authorId = state.currentUserId;
+  const authorName =
+    state.profiles[authorId]?.name ?? demoUsers.find((u) => u.id === authorId)?.name ?? 'A fan';
   const post: Post = {
     id: `p-${now}`,
-    authorId: state.currentUserId,
+    authorId,
     text: text.trim(),
     imageUri,
     createdAt: new Date(now).toISOString(),
   };
-  const notification: AppNotification = {
-    id: `n-post-${now}`,
+  const followerIds = Object.entries(state.following)
+    .filter(([id, ids]) => id !== authorId && ids.includes(authorId))
+    .map(([id]) => id);
+  const notifications: AppNotification[] = followerIds.map((recipientId) => ({
+    id: `n-post-${now}-${recipientId}`,
     type: 'friend_post',
-    title: 'Posted to KickFeed',
+    title: `${authorName} posted`,
     body: text.trim().slice(0, 80),
     createdAt: new Date(now).toISOString(),
     read: false,
-    recipientId: state.currentUserId,
-  };
+    recipientId,
+    userId: authorId,
+  }));
   return {
     ...state,
     posts: [post, ...state.posts],
-    notifications: [notification, ...state.notifications],
+    notifications: [...notifications, ...state.notifications],
   };
 }
 
