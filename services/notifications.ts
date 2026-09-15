@@ -2,8 +2,9 @@ import { Platform } from 'react-native';
 
 /**
  * Expo Notifications wiring for v1.
- * In-app notification center is the source of truth. Do not prompt for push
- * on boot — Expo push tokens need an EAS `projectId` and an explicit opt-in.
+ * In-app notification center is the source of truth.
+ * Call from Profile → Enable device match alerts (opt-in). Push tokens
+ * still require an EAS `projectId`; otherwise this returns null.
  */
 export async function registerForPushNotifications(): Promise<string | null> {
   if (Platform.OS === 'web') return null;
