@@ -15,6 +15,7 @@ import {
   signInDemo as signInDemoState,
   signOut as signOutState,
   toggleFavoriteLeague as toggleFavoriteLeagueState,
+  toggleFavoritePlayer as toggleFavoritePlayerState,
   toggleFavoriteTeam as toggleFavoriteTeamState,
   toggleLike as toggleLikeState,
   unfollow as unfollowState,
@@ -31,6 +32,7 @@ interface AppContextValue {
   followingIds: string[];
   favoriteTeamIds: string[];
   favoriteLeagueIds: string[];
+  favoritePlayerIds: string[];
   posts: Post[];
   comments: Comment[];
   notifications: AppNotification[];
@@ -42,6 +44,7 @@ interface AppContextValue {
   unfollow: (userId: string) => void;
   toggleFavoriteTeam: (teamId: string) => void;
   toggleFavoriteLeague: (leagueId: string) => void;
+  toggleFavoritePlayer: (playerId: string) => void;
   updateProfile: (patch: Partial<Pick<User, 'name' | 'bio'>>) => void;
   addPost: (text: string, imageUri?: string) => void;
   toggleLike: (postId: string) => void;
@@ -93,6 +96,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const followingIds = currentUser ? (state.following[currentUser.id] ?? []) : [];
   const favoriteTeamIds = currentUser?.favoriteTeamIds ?? [];
   const favoriteLeagueIds = currentUser?.favoriteLeagueIds ?? [];
+  const favoritePlayerIds = currentUser ? (state.favorites[currentUser.id]?.players ?? []) : [];
   const likedPostIds = currentUser ? (state.likes[currentUser.id] ?? []) : [];
   const notifications = notificationsFor(state, currentUser?.id ?? null);
   const unreadCount = unreadCountFor(state, currentUser?.id ?? null);
@@ -109,6 +113,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       followingIds,
       favoriteTeamIds,
       favoriteLeagueIds,
+      favoritePlayerIds,
       posts: [...state.posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
       comments: state.comments,
       notifications,
@@ -121,6 +126,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unfollow: (userId) => patch((p) => unfollowState(p, userId)),
       toggleFavoriteTeam: (teamId) => patch((p) => toggleFavoriteTeamState(p, teamId)),
       toggleFavoriteLeague: (leagueId) => patch((p) => toggleFavoriteLeagueState(p, leagueId)),
+      toggleFavoritePlayer: (playerId) => patch((p) => toggleFavoritePlayerState(p, playerId)),
       updateProfile: (next) => patch((p) => updateProfileState(p, next)),
       addPost: (text, imageUri) => patch((p) => addPostState(p, text, imageUri)),
       toggleLike: (postId) => patch((p) => toggleLikeState(p, postId)),
@@ -128,7 +134,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       markNotificationsRead: () => patch(markNotificationsReadState),
       followerCount: (userId) => Object.values(state.following).filter((ids) => ids.includes(userId)).length,
     }),
-    [currentUser, favoriteLeagueIds, favoriteTeamIds, followingIds, likedPostIds, notifications, patch, ready, state, unreadCount, users],
+    [currentUser, favoriteLeagueIds, favoritePlayerIds, favoriteTeamIds, followingIds, likedPostIds, notifications, patch, ready, state, unreadCount, users],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

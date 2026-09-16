@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useMemo, useState } from 'react';
 
+import { SearchButton } from '@/components/search/SearchEntry';
 import { Screen } from '@/components/ui/Screen';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
@@ -26,7 +27,10 @@ export default function LeaguesScreen() {
   return (
     <Screen padded={false}>
       <View style={styles.top}>
-        <Text style={styles.title}>Leagues</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>Leagues</Text>
+          <SearchButton />
+        </View>
         <TextInput
           placeholder="Search leagues or countries"
           placeholderTextColor={colors.textDim}
@@ -78,6 +82,7 @@ export default function LeaguesScreen() {
 
 const styles = StyleSheet.create({
   top: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.md },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { ...type.title, color: colors.text },
   search: {
     backgroundColor: colors.surface,

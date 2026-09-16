@@ -17,7 +17,7 @@ import type {
 } from '@/data/types';
 import { continents, countries, leagues, leagueRosters, teams } from '@/data/mocks/catalog';
 import { seedFixtures } from '@/data/mocks/fixtures';
-import { findPlayerById, findPlayerByName, foldName, squadFor } from '@/data/mocks/players';
+import { allPlayers, findPlayerById, findPlayerByName, foldName, squadFor } from '@/data/mocks/players';
 import { scorersFor, standingsFor } from '@/data/mocks/stats';
 
 const teamMap = new Map(teams.map((t) => [t.id, t]));
@@ -232,6 +232,7 @@ export interface FootballProvider {
   getTeams(leagueId?: string): Team[];
   getTeam(id: string): Team | undefined;
   getPlayer(id: string): Player | undefined;
+  getPlayers(): Player[];
   getSquad(teamId: string): Player[];
   getTeamCompetitions(teamId: string): League[];
   getPlayerStats(playerId: string): PlayerStats | undefined;
@@ -259,6 +260,7 @@ export const mockFootballProvider: FootballProvider = {
   },
   getTeam: (id) => teamMap.get(id),
   getPlayer: (id) => findPlayerById(id),
+  getPlayers: () => allPlayers(),
   getSquad: (teamId) => squadFor(teamId),
   getTeamCompetitions: (teamId) => teamCompetitions(teamId),
   getPlayerStats: (playerId) => {

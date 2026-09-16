@@ -42,6 +42,7 @@ function RootNav() {
         <Stack.Screen name="compose" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="search" />
         <Stack.Screen name="pick-favorites" />
       </Stack>
     </>

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { MatchRow } from '@/components/match/MatchRow';
+import { SearchButton } from '@/components/search/SearchEntry';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
@@ -45,7 +46,10 @@ export default function MatchesScreen() {
   return (
     <Screen padded={false}>
       <View style={styles.top}>
-        <Text style={styles.title}>Matches</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>Matches</Text>
+          <SearchButton />
+        </View>
         <Text style={styles.sub}>Live, today, and what’s next worldwide</Text>
         <Segmented
           value={filter}
@@ -85,6 +89,7 @@ export default function MatchesScreen() {
 
 const styles = StyleSheet.create({
   top: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md, gap: spacing.md },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { ...type.title, color: colors.text },
   sub: { ...type.caption, color: colors.textMuted, fontWeight: '500', marginTop: -8 },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: 40 },

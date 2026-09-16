@@ -5,6 +5,7 @@ import {
   hydratePersisted,
   markNotificationsRead,
   signInDemo,
+  toggleFavoritePlayer,
   toggleLike,
   unreadCountFor,
 } from '@/services/appState';
@@ -36,6 +37,16 @@ describe('hydratePersisted', () => {
     expect(next.following.omar).toEqual(['maya']);
     expect(next.posts[0]?.id).toBe('keep-me');
     expect(next.comments.length).toBeGreaterThan(0);
+  });
+
+  it('fills missing favorite players on old persisted slices', () => {
+    const blob = {
+      schemaVersion: 1,
+      currentUserId: 'maya',
+      favorites: { maya: { teams: ['ars'], leagues: ['epl'] } },
+    };
+    const next = hydratePersisted(JSON.stringify(blob));
+    expect(next.favorites.maya).toEqual({ teams: ['ars'], leagues: ['epl'], players: [] });
   });
 });
 
@@ -70,5 +81,17 @@ describe('AppProvider mutations', () => {
     expect(state.likes.luca).toContain('p1');
     const liked = toggleLike(state, 'p1');
     expect(liked.likes.luca).not.toContain('p1');
+  });
+
+  it('toggles favorite players without dropping clubs or leagues', () => {
+    let state = signInDemo(defaults(), 'maya');
+    expect(state.favorites.maya.players).toEqual([]);
+    state = toggleFavoritePlayer(state, 'p-liv-11');
+    expect(state.favorites.maya.players).toEqual(['p-liv-11']);
+    expect(state.favorites.maya.teams).toContain('ars');
+    expect(state.favorites.maya.leagues).toContain('epl');
+    state = toggleFavoritePlayer(state, 'p-liv-11');
+    expect(state.favorites.maya.players).toEqual([]);
+    expect(state.favorites.maya.teams).toContain('ars');
   });
 });

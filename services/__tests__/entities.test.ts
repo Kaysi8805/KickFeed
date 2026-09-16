@@ -50,4 +50,10 @@ describe('entity catalog', () => {
     expect(mia).toHaveLength(16);
     expect(football.getPlayer(mia[0]!.id)?.name).toBe(mia[0]!.name);
   });
+
+  it('lists catalog players including featured names', () => {
+    const players = football.getPlayers();
+    expect(players.some((p) => p.id === 'p-liv-11')).toBe(true);
+    expect(players.length).toBeGreaterThan(200);
+  });
 });

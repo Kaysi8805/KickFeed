@@ -5,11 +5,17 @@ export const STATE_SCHEMA_VERSION = 1;
 
 const KNOWN_USER_IDS = new Set(demoUsers.map((u) => u.id));
 
+export interface FavoriteSlice {
+  teams: string[];
+  leagues: string[];
+  players: string[];
+}
+
 export interface Persisted {
   schemaVersion: number;
   currentUserId: string | null;
   following: Record<string, string[]>;
-  favorites: Record<string, { teams: string[]; leagues: string[] }>;
+  favorites: Record<string, FavoriteSlice>;
   profiles: Record<string, Partial<User>>;
   posts: Post[];
   likes: Record<string, string[]>;
@@ -20,7 +26,7 @@ export interface Persisted {
 export function defaults(): Persisted {
   const favorites: Persisted['favorites'] = {};
   for (const u of demoUsers) {
-    favorites[u.id] = { teams: [...u.favoriteTeamIds], leagues: [...u.favoriteLeagueIds] };
+    favorites[u.id] = { teams: [...u.favoriteTeamIds], leagues: [...u.favoriteLeagueIds], players: [] };
   }
   return {
     schemaVersion: STATE_SCHEMA_VERSION,
@@ -51,6 +57,28 @@ function pickArray<T>(value: unknown, fallback: T[]): T[] {
   return Array.isArray(value) ? (value as T[]) : fallback;
 }
 
+function pickIdList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+}
+
+export function favoriteSlice(value: unknown): FavoriteSlice {
+  const raw = isPlainObject(value) ? value : {};
+  return {
+    teams: pickIdList(raw.teams),
+    leagues: pickIdList(raw.leagues),
+    players: pickIdList(raw.players),
+  };
+}
+
+function pickFavorites(value: unknown, fallback: Persisted['favorites']): Persisted['favorites'] {
+  const merged = pickRecord(value, fallback);
+  const out: Persisted['favorites'] = {};
+  for (const [userId, slice] of Object.entries({ ...fallback, ...merged })) {
+    out[userId] = favoriteSlice(slice);
+  }
+  return out;
+}
+
 /**
  * Parse AsyncStorage JSON.
  * Corrupt JSON → full defaults.
@@ -72,7 +100,7 @@ export function hydratePersisted(raw: string | null): Persisted {
     schemaVersion: STATE_SCHEMA_VERSION,
     currentUserId: knownUserId(parsed.currentUserId),
     following: pickRecord(parsed.following, base.following),
-    favorites: pickRecord(parsed.favorites, base.favorites),
+    favorites: pickFavorites(parsed.favorites, base.favorites),
     profiles: pickRecord(parsed.profiles, base.profiles),
     likes: pickRecord(parsed.likes, base.likes),
     posts: pickArray(parsed.posts, base.posts),
@@ -140,7 +168,7 @@ export function unfollow(state: Persisted, userId: string): Persisted {
 
 export function toggleFavoriteTeam(state: Persisted, teamId: string): Persisted {
   if (!state.currentUserId) return state;
-  const cur = state.favorites[state.currentUserId] ?? { teams: [], leagues: [] };
+  const cur = favoriteSlice(state.favorites[state.currentUserId]);
   const has = cur.teams.includes(teamId);
   return {
     ...state,
@@ -156,7 +184,7 @@ export function toggleFavoriteTeam(state: Persisted, teamId: string): Persisted 
 
 export function toggleFavoriteLeague(state: Persisted, leagueId: string): Persisted {
   if (!state.currentUserId) return state;
-  const cur = state.favorites[state.currentUserId] ?? { teams: [], leagues: [] };
+  const cur = favoriteSlice(state.favorites[state.currentUserId]);
   const has = cur.leagues.includes(leagueId);
   return {
     ...state,
@@ -165,6 +193,22 @@ export function toggleFavoriteLeague(state: Persisted, leagueId: string): Persis
       [state.currentUserId]: {
         ...cur,
         leagues: has ? cur.leagues.filter((id) => id !== leagueId) : [...cur.leagues, leagueId],
+      },
+    },
+  };
+}
+
+export function toggleFavoritePlayer(state: Persisted, playerId: string): Persisted {
+  if (!state.currentUserId) return state;
+  const cur = favoriteSlice(state.favorites[state.currentUserId]);
+  const has = cur.players.includes(playerId);
+  return {
+    ...state,
+    favorites: {
+      ...state.favorites,
+      [state.currentUserId]: {
+        ...cur,
+        players: has ? cur.players.filter((id) => id !== playerId) : [...cur.players, playerId],
       },
     },
   };

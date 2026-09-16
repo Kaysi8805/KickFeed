@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PostCard } from '@/components/feed/PostCard';
 import { MatchRow } from '@/components/match/MatchRow';
+import { SearchBarPrompt } from '@/components/search/SearchEntry';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { useLiveTick } from '@/lib/useLiveTick';
@@ -13,16 +14,25 @@ import { colors, radius, spacing, type } from '@/theme';
 
 export default function FeedScreen() {
   useLiveTick();
-  const { currentUser, posts, users, followingIds, likedPostIds, toggleLike, unreadCount, favoriteTeamIds } =
+  const { currentUser, posts, users, followingIds, likedPostIds, toggleLike, unreadCount, favoriteTeamIds, favoritePlayerIds } =
     useApp();
 
   const feed = posts.filter(
     (p) => p.authorId === currentUser?.id || followingIds.includes(p.authorId),
   );
+  const followedTeamIds = new Set([
+    ...favoriteTeamIds,
+    ...favoritePlayerIds.map((id) => football.getPlayer(id)?.teamId).filter((id): id is string => !!id),
+  ]);
   const liveFav = football
     .getFixtures()
     .filter((f) => f.status === 'live' || f.status === 'ht')
-    .filter((f) => favoriteTeamIds.includes(f.homeTeamId) || favoriteTeamIds.includes(f.awayTeamId) || favoriteTeamIds.length === 0)
+    .filter(
+      (f) =>
+        followedTeamIds.size === 0 ||
+        followedTeamIds.has(f.homeTeamId) ||
+        followedTeamIds.has(f.awayTeamId),
+    )
     .slice(0, 6);
 
   return (
@@ -46,6 +56,7 @@ export default function FeedScreen() {
           </Pressable>
         </View>
       </View>
+      <SearchBarPrompt />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {liveFav.length > 0 ? (
           <View style={styles.block}>

@@ -5,6 +5,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MatchRow } from '@/components/match/MatchRow';
+import { SearchButton } from '@/components/search/SearchEntry';
 import { Screen } from '@/components/ui/Screen';
 import { entityHref } from '@/lib/entityNav';
 import { useApp } from '@/services/AppProvider';
@@ -12,18 +13,33 @@ import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function FavoritesScreen() {
-  const { users, currentUser, followingIds, follow, unfollow, favoriteTeamIds, favoriteLeagueIds } = useApp();
+  const {
+    users,
+    currentUser,
+    followingIds,
+    follow,
+    unfollow,
+    favoriteTeamIds,
+    favoriteLeagueIds,
+    favoritePlayerIds,
+    toggleFavoritePlayer,
+  } = useApp();
   const suggested = users.filter((u) => u.id !== currentUser?.id && !followingIds.includes(u.id));
   const following = users.filter((u) => followingIds.includes(u.id));
   const teams = favoriteTeamIds.map((id) => football.getTeam(id)).filter(Boolean);
   const leagues = favoriteLeagueIds.map((id) => football.getLeague(id)).filter(Boolean);
+  const players = favoritePlayerIds.map((id) => football.getPlayer(id)).filter(Boolean);
+  const followedTeamIds = new Set([
+    ...favoriteTeamIds,
+    ...players.map((p) => p?.teamId).filter((id): id is string => !!id),
+  ]);
 
   const nextMatches = football
     .getFixtures()
     .filter(
       (f) =>
-        favoriteTeamIds.includes(f.homeTeamId) ||
-        favoriteTeamIds.includes(f.awayTeamId) ||
+        followedTeamIds.has(f.homeTeamId) ||
+        followedTeamIds.has(f.awayTeamId) ||
         favoriteLeagueIds.includes(f.leagueId),
     )
     .filter((f) => f.status !== 'finished')
@@ -33,9 +49,12 @@ export default function FavoritesScreen() {
     <Screen padded={false}>
       <View style={styles.top}>
         <Text style={styles.title}>Following</Text>
-        <Pressable onPress={() => router.push('/pick-favorites')}>
-          <Text style={styles.link}>Edit favorites</Text>
-        </Pressable>
+        <View style={styles.topRight}>
+          <SearchButton />
+          <Pressable onPress={() => router.push('/pick-favorites')}>
+            <Text style={styles.link}>Edit favorites</Text>
+          </Pressable>
+        </View>
       </View>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.section}>Favorite clubs</Text>
@@ -48,6 +67,31 @@ export default function FavoritesScreen() {
                 <Pressable key={t.id} onPress={() => router.push(entityHref('team', t.id))} style={styles.chip}>
                   <Crest team={t} size={28} />
                   <Text style={styles.chipText}>{t.shortName}</Text>
+                </Pressable>
+              ) : null,
+            )}
+          </View>
+        )}
+
+        <Text style={styles.section}>Favorite players</Text>
+        {players.length === 0 ? (
+          <Text style={styles.muted}>Search a footballer and tap Follow — they’ll land here.</Text>
+        ) : (
+          <View style={styles.chips}>
+            {players.map((p) =>
+              p ? (
+                <Pressable key={p.id} onPress={() => router.push(entityHref('player', p.id))} style={styles.chip}>
+                  <View style={styles.num}>
+                    <Text style={styles.numText}>{p.number}</Text>
+                  </View>
+                  <Text style={styles.chipText}>{p.shortName}</Text>
+                  <Pressable
+                    onPress={() => toggleFavoritePlayer(p.id)}
+                    hitSlop={8}
+                    accessibilityLabel={`Unfavorite ${p.shortName}`}
+                  >
+                    <Text style={styles.star}>★</Text>
+                  </Pressable>
                 </Pressable>
               ) : null,
             )}
@@ -70,7 +114,7 @@ export default function FavoritesScreen() {
 
         <Text style={styles.section}>Coming up for you</Text>
         {nextMatches.length === 0 ? (
-          <Text style={styles.muted}>Favorite a team to pin their next matches here.</Text>
+          <Text style={styles.muted}>Favorite a team or player to pin their next matches here.</Text>
         ) : (
           nextMatches.map((f) => <MatchRow key={f.id} fixture={f} compact />)
         )}
@@ -123,6 +167,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: { ...type.title, color: colors.text },
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   link: { ...type.caption, color: colors.lime },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: 40 },
   section: { ...type.micro, color: colors.textMuted, marginTop: spacing.lg, marginBottom: spacing.sm },
@@ -139,6 +184,16 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   chipText: { ...type.caption, color: colors.text },
+  num: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  numText: { ...type.caption, color: colors.lime, fontSize: 11 },
+  star: { color: colors.gold, fontSize: 14 },
   muted: { ...type.caption, color: colors.textMuted, fontWeight: '500' },
   row: {
     backgroundColor: colors.surface,

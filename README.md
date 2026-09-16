@@ -7,10 +7,11 @@ v1 is **fully local**: demo profiles, mock football data, and in-app notificatio
 ## Features
 
 - **Demo auth** — pick a seeded fan profile (Maya, Omar, Luca, …). No email/password or OAuth yet.
-- **Profiles & favorites** — name, photo initials, bio, favorite clubs and competitions. Favorites drive Home live scores and Following.
+- **Profiles & favorites** — name, photo initials, bio, favorite clubs, competitions, and players. Favorites drive Home live scores and Following.
 - **Social feed & follows** — follow demo users, post text (optional photo), like posts, see friends + own posts.
+- **Global search** — dedicated Search screen from the Feed bar and tab headers. Query clubs, players, competitions, and demo fans; results open the existing entity pages.
 - **Live scores & fixtures** — Live / Today / Upcoming, grouped by league. Match pages with score, events, lineups, and stats stubs. Team crests/names and player events/lineups are tappable.
-- **Clubs & players** — Team pages (crest, league table context, fixtures, clickable squad, favorite) and player pages (mock season stats, recent appearances, link back to club).
+- **Clubs & players** — Team pages (crest, league table context, fixtures, clickable squad, favorite) and player pages (mock season stats, recent appearances, follow/favorite, link back to club).
 - **Worldwide leagues** — continents → countries → competitions, plus featured Premier League, Champions League, La Liga, Serie A, and Bundesliga standings, form, and top scorers. Standings rows and scorers open team/player pages.
 - **Match discussions** — threaded comments on a match.
 - **Notifications** — in-app center for goals, kickoff, follows, and friend posts, plus Expo Notifications wiring for local demo alerts.
@@ -40,7 +41,7 @@ CI runs `npm ci` → `typecheck` → `test` on pull requests (see `.github/workf
 
 ## Demo mode
 
-On first launch, choose a demo profile. State (favorites, follows, posts, comments, notification read flags) is persisted with AsyncStorage under `kickfeed.v1.state`.
+On first launch, choose a demo profile. State (favorites including players, follows, posts, comments, notification read flags) is persisted with AsyncStorage under `kickfeed.v1.state`.
 
 Corrupt JSON is discarded. A missing or newer `schemaVersion` still keeps valid slices (signed-in demo user, follows, posts, …) and stamps the current version. Unknown `currentUserId` values are cleared.
 
@@ -51,8 +52,9 @@ Use **Profile → Switch demo user** to pick another seeded fan. **Profile → E
 ```
 app/                 Expo Router screens (tabs + stack)
   team/[id]          Club detail (squad, fixtures, favorite)
-  player/[id]        Player detail (stats, appearances)
-components/          UI, feed cards, match rows, entity links
+  player/[id]        Player detail (stats, appearances, follow)
+  search             Global search (clubs, players, leagues, fans)
+components/          UI, feed cards, match rows, entity links, search entry
 data/types.ts        Shared domain types
 data/mocks/          Seeded users, teams, squads, leagues, fixtures, posts
 services/auth.ts     Demo auth + stubs for email/OAuth
@@ -79,7 +81,7 @@ Replace the mock with an adapter (FotMob-style, API-Football, Opta, etc.) that i
 
 Keep `data/types.ts` stable so screens do not care whether data is seeded or remote.
 
-`FootballProvider` now also exposes `getPlayer`, `getSquad`, `getTeamCompetitions`, `getPlayerStats`, and `getPlayerAppearances`. A live adapter should fill those from the same IDs used on fixtures, lineups, and scorers.
+`FootballProvider` now also exposes `getPlayer`, `getPlayers`, `getSquad`, `getTeamCompetitions`, `getPlayerStats`, and `getPlayerAppearances`. A live adapter should fill those from the same IDs used on fixtures, lineups, and scorers.
 
 Mock fixtures use `SeedFixture.kickoffOffsetMin` relative to “now” when `hydrateFixture` runs (`services/football.ts`). Status windows:
 
@@ -96,9 +98,10 @@ A live API would return real statuses instead of this clock.
 Karol’s batches (still mock/demo-first unless noted):
 
 - **Batch 0 — deferred.** Public landing / kickfeed.polsia.app sneaker page. Explicitly skipped for now.
-- **Batch 1 — done.** Teams, players, and competitions are first-class and clickable throughout the app (this release).
-- **Batch 2 — next.** Global search and follow/favorite **players** (Following should include people *and* footballers).
-- Later: live scores from a real football API, TV schedules, real auth, DMs, predictions.
+- **Batch 1 — done.** Teams, players, and competitions are first-class and clickable throughout the app.
+- **Batch 2 — done.** Global search plus follow/favorite **players** (this release). Following shows clubs, competitions, footballers, and fans.
+- **Batch 3 — next.** Real scores for one geography (live football API, still mock/demo auth).
+- Later: remaining geos, TV schedules, real auth, DMs, predictions.
 
 ## Theme
 

@@ -7,11 +7,13 @@ import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { entityHref } from '@/lib/entityNav';
 import { kickoffLabel } from '@/lib/format';
+import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function PlayerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { favoritePlayerIds, toggleFavoritePlayer } = useApp();
   const player = football.getPlayer(id);
 
   if (!player) {
@@ -27,11 +29,20 @@ export default function PlayerDetailScreen() {
   const stats = football.getPlayerStats(player.id);
   const apps = football.getPlayerAppearances(player.id);
   const country = team ? football.getCountry(team.countryId) : undefined;
+  const fav = favoritePlayerIds.includes(player.id);
 
   return (
     <Screen padded={false}>
       <View style={styles.pad}>
-        <HeaderBar title={player.shortName} onBack={() => router.back()} />
+        <HeaderBar
+          title={player.shortName}
+          onBack={() => router.back()}
+          right={
+            <Pressable onPress={() => toggleFavoritePlayer(player.id)}>
+              <Text style={styles.star}>{fav ? '★ Following' : '☆ Follow'}</Text>
+            </Pressable>
+          }
+        />
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.hero}>
@@ -140,6 +151,7 @@ const styles = StyleSheet.create({
   badgeNum: { ...type.hero, color: colors.white },
   name: { ...type.title, color: colors.text, textAlign: 'center' },
   role: { ...type.caption, color: colors.limeMuted },
+  star: { ...type.caption, color: colors.gold },
   teamWrap: { marginTop: 8 },
   teamName: { ...type.subtitle, fontSize: 15, color: colors.text },
   meta: { ...type.caption, color: colors.textMuted, fontWeight: '500' },
