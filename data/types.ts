@@ -14,7 +14,7 @@ export type MatchEventType = 'goal' | 'yellow' | 'red' | 'sub' | 'var';
 
 export type FormResult = 'W' | 'D' | 'L';
 
-export type NotificationType = 'goal' | 'kickoff' | 'follow' | 'comment' | 'friend_post';
+export type NotificationType = 'goal' | 'kickoff' | 'follow' | 'comment' | 'friend_post' | 'prediction' | 'motm';
 
 export interface Continent {
   id: ContinentId;
@@ -213,6 +213,30 @@ export interface Comment {
   text: string;
   createdAt: string;
   parentId?: string;
+}
+
+/** Demo-user score pick for a fixture. Locked at kickoff / once the match is live. */
+export interface ScorePrediction {
+  matchId: string;
+  userId: string;
+  homeScore: number;
+  awayScore: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One Man of the Match vote per demo user per match.
+ * `playerKey` is the catalog player id when known, else a stable lineup key.
+ */
+export interface MotmVote {
+  matchId: string;
+  userId: string;
+  playerKey: string;
+  playerId?: string;
+  playerName: string;
+  teamId: string;
+  createdAt: string;
 }
 
 export interface AppNotification {

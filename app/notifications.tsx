@@ -14,6 +14,8 @@ const icons: Record<string, string> = {
   follow: '🤝',
   comment: '💬',
   friend_post: '📣',
+  prediction: '🔢',
+  motm: '⭐',
 };
 
 export default function NotificationsScreen() {
@@ -34,14 +36,15 @@ export default function NotificationsScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         {notifications.length === 0 ? (
-          <EmptyState title="All quiet" body="Match chat replies, goals, kickoffs, and friend posts will land here." />
+          <EmptyState title="All quiet" body="Match chat, predictions, MOTM, goals, kickoffs, and friend posts will land here." />
         ) : (
           notifications.map((n) => (
             <Pressable
               key={n.id}
               onPress={() => {
                 if (n.matchId) {
-                  router.push(n.type === 'comment' ? `/match/${n.matchId}?tab=chat` : `/match/${n.matchId}`);
+                  const tab = n.type === 'comment' ? 'chat' : n.type === 'prediction' ? 'predict' : n.type === 'motm' ? 'motm' : undefined;
+                  router.push(tab ? `/match/${n.matchId}?tab=${tab}` : `/match/${n.matchId}`);
                 } else if (n.userId) router.push(`/user/${n.userId}`);
               }}
               style={[styles.card, !n.read && styles.unread]}

@@ -5,6 +5,8 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { PostCard } from '@/components/feed/PostCard';
 import { LiveBadge } from '@/components/match/LiveBadge';
+import { MotmSection } from '@/components/match/MotmSection';
+import { PredictSection } from '@/components/match/PredictSection';
 import { TvMatchSection } from '@/components/tv/TvMatchSection';
 import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
@@ -21,16 +23,25 @@ import {
   fixtureScoreLabel,
   participantsFromUsers,
   postsForMatch,
+  relatedFixtureIds,
   resolveMatchDeepLink,
 } from '@/lib/matchSocial';
 import { routeId } from '@/lib/routeParams';
 import { useLiveTick } from '@/lib/useLiveTick';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
+import {
+  isMotmOpen,
+  motmCandidates,
+  motmVoteForUser,
+  predictionForUser,
+  rowsForMatch,
+  scoreline,
+} from '@/lib/engagement';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
-type Tab = 'events' | 'lineups' | 'stats' | 'chat';
+type Tab = 'events' | 'lineups' | 'stats' | 'predict' | 'motm' | 'chat';
 
 const eventIcon: Record<string, string> = {
   goal: '⚽',
@@ -42,7 +53,9 @@ const eventIcon: Record<string, string> = {
 
 function tabFromParam(value: string | string[] | undefined): Tab {
   const raw = routeId(value);
-  if (raw === 'chat' || raw === 'lineups' || raw === 'stats' || raw === 'events') return raw;
+  if (raw === 'chat' || raw === 'lineups' || raw === 'stats' || raw === 'events' || raw === 'predict' || raw === 'motm') {
+    return raw;
+  }
   return 'events';
 }
 
@@ -51,7 +64,19 @@ export default function MatchDetailScreen() {
   const catalog = useFootballCatalog();
   const { id: rawId, tab: tabParam } = useLocalSearchParams<{ id: string | string[]; tab?: string | string[] }>();
   const id = routeId(rawId);
-  const { users, comments, posts, addComment, currentUser, likedPostIds, toggleLike } = useApp();
+  const {
+    users,
+    comments,
+    posts,
+    addComment,
+    currentUser,
+    likedPostIds,
+    toggleLike,
+    predictions,
+    motmVotes,
+    setPrediction,
+    setMotmVote,
+  } = useApp();
   const [tab, setTab] = useState<Tab>(() => tabFromParam(tabParam));
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<string | undefined>();
@@ -66,6 +91,13 @@ export default function MatchDetailScreen() {
   useEffect(() => {
     if (deepLink?.fixture) void football.ensureMatchDetail(deepLink.catalogId);
   }, [deepLink?.catalogId, deepLink?.fixture]);
+
+  useEffect(() => {
+    if (!deepLink?.fixture) return;
+    if (tab !== 'motm' && tab !== 'lineups') return;
+    void football.ensureSquad(deepLink.fixture.homeTeamId);
+    void football.ensureSquad(deepLink.fixture.awayTeamId);
+  }, [deepLink?.catalogId, deepLink?.fixture, tab]);
 
   const home = fixture ? football.getTeam(fixture.homeTeamId) : undefined;
   const away = fixture ? football.getTeam(fixture.awayTeamId) : undefined;
@@ -103,6 +135,12 @@ export default function MatchDetailScreen() {
     users,
   );
   const label = fixtureScoreLabel(football, fixture);
+  const relatedIds = relatedFixtureIds(football, fixture.id);
+  const matchPredictions = rowsForMatch(predictions, relatedIds);
+  const matchMotmVotes = rowsForMatch(motmVotes, relatedIds);
+  const myPrediction = predictionForUser(matchPredictions, currentUser?.id, relatedIds);
+  const myMotm = motmVoteForUser(matchMotmVotes, currentUser?.id, relatedIds);
+  const ballot = motmCandidates(football, fixture);
 
   return (
     <Screen padded={false}>
@@ -145,6 +183,20 @@ export default function MatchDetailScreen() {
             {deepLink?.via === 'alias' ? (
               <Text style={styles.venue}>Live England catalog · linked from demo match id</Text>
             ) : null}
+            {myPrediction ? (
+              <Pressable onPress={() => setTab('predict')}>
+                <Text style={styles.teaser}>You predicted {scoreline(myPrediction.homeScore, myPrediction.awayScore)}</Text>
+              </Pressable>
+            ) : fixture.status === 'upcoming' ? (
+              <Pressable onPress={() => setTab('predict')}>
+                <Text style={styles.teaser}>Predict the score</Text>
+              </Pressable>
+            ) : null}
+            {isMotmOpen(fixture.status) ? (
+              <Pressable onPress={() => setTab('motm')}>
+                <Text style={styles.teaser}>{myMotm ? `Your MOTM: ${myMotm.playerName}` : 'Vote Man of the Match'}</Text>
+              </Pressable>
+            ) : null}
           </View>
           <Pressable style={styles.side} onPress={() => router.push(entityHref('team', away.id))}>
             <Crest team={away} size={56} />
@@ -161,6 +213,8 @@ export default function MatchDetailScreen() {
             { key: 'events', label: 'Events' },
             { key: 'lineups', label: 'Lineups' },
             { key: 'stats', label: 'Stats' },
+            { key: 'predict', label: 'Predict' },
+            { key: 'motm', label: 'MOTM' },
             { key: 'chat', label: 'Hub' },
           ]}
         />
@@ -256,8 +310,54 @@ export default function MatchDetailScreen() {
           </View>
         ) : null}
 
+        {tab === 'predict' ? (
+          <PredictSection
+            fixture={fixture}
+            home={home}
+            away={away}
+            mine={myPrediction}
+            community={matchPredictions}
+            signedIn={!!currentUser}
+            onSave={(homeScore, awayScore) => setPrediction(fixture, homeScore, awayScore)}
+          />
+        ) : null}
+
+        {tab === 'motm' ? (
+          <MotmSection
+            fixture={fixture}
+            home={home}
+            away={away}
+            candidates={ballot}
+            mine={myMotm}
+            community={matchMotmVotes}
+            signedIn={!!currentUser}
+            onVote={(candidate) => setMotmVote(fixture, candidate)}
+          />
+        ) : null}
+
         {tab === 'chat' ? (
           <View style={styles.block}>
+            {myPrediction || myMotm ? (
+              <View style={styles.engageCard}>
+                {myPrediction ? (
+                  <Pressable onPress={() => setTab('predict')}>
+                    <Text style={styles.engageLine}>
+                      You predicted {scoreline(myPrediction.homeScore, myPrediction.awayScore)}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {myMotm ? (
+                  <Pressable onPress={() => setTab('motm')}>
+                    <Text style={styles.engageLine}>Your MOTM: {myMotm.playerName}</Text>
+                  </Pressable>
+                ) : isMotmOpen(fixture.status) ? (
+                  <Pressable onPress={() => setTab('motm')}>
+                    <Text style={styles.engageLine}>Vote Man of the Match</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+
             {participants.length > 0 ? (
               <View style={styles.people}>
                 <View style={styles.avatars}>
@@ -405,6 +505,7 @@ const styles = StyleSheet.create({
   soon: { ...type.subtitle, color: colors.lime },
   ft: { ...type.micro, color: colors.textMuted },
   venue: { ...type.caption, color: colors.textDim, fontWeight: '500', textAlign: 'center' },
+  teaser: { ...type.caption, color: colors.lime, fontWeight: '700', textAlign: 'center' },
   leagueLink: { ...type.caption, color: colors.lime },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   link: { color: colors.lime },
@@ -437,6 +538,16 @@ const styles = StyleSheet.create({
   avatarHit: { marginRight: -8, borderWidth: 2, borderColor: colors.bg, borderRadius: 16 },
   peopleLabel: { ...type.caption, color: colors.textMuted, flex: 1, marginLeft: 8 },
   hubSection: { ...type.micro, color: colors.textMuted, marginTop: spacing.md, marginBottom: 4 },
+  engageCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  engageLine: { ...type.caption, color: colors.lime, fontWeight: '700' },
   hubCta: { backgroundColor: colors.lime, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full, marginTop: spacing.sm },
   hubCtaText: { ...type.caption, color: colors.bg, fontWeight: '800' },
   comment: { flexDirection: 'row', gap: 8, marginBottom: spacing.md },

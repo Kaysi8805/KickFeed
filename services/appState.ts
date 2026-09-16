@@ -1,8 +1,10 @@
-import type { AppNotification, Comment, Post, User } from '@/data/types';
+import type { AppNotification, Comment, Fixture, MatchStatus, MotmVote, Post, ScorePrediction, User } from '@/data/types';
+import { seedMotmVotes, seedPredictions } from '@/data/mocks/engagement';
 import { demoUsers, seedComments, seedFollowing, seedNotifications, seedPosts } from '@/data/mocks/social';
+import { clampScore, isMotmOpen, isPredictionOpen, motmVoteForUser, predictionForUser } from '@/lib/engagement';
 import type { MatchAlertDraft } from '@/lib/matchSocial';
 
-export const STATE_SCHEMA_VERSION = 1;
+export const STATE_SCHEMA_VERSION = 2;
 
 const KNOWN_USER_IDS = new Set(demoUsers.map((u) => u.id));
 
@@ -22,6 +24,8 @@ export interface Persisted {
   likes: Record<string, string[]>;
   comments: Comment[];
   notifications: AppNotification[];
+  predictions: ScorePrediction[];
+  motmVotes: MotmVote[];
 }
 
 export function defaults(): Persisted {
@@ -39,6 +43,8 @@ export function defaults(): Persisted {
     likes: { maya: ['p1', 'p3'], jordan: ['p2'] },
     comments: seedComments,
     notifications: seedNotifications,
+    predictions: seedPredictions,
+    motmVotes: seedMotmVotes,
   };
 }
 
@@ -62,6 +68,49 @@ function pickIdList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
 }
 
+function parsePrediction(value: unknown): ScorePrediction | null {
+  if (!isPlainObject(value)) return null;
+  if (typeof value.matchId !== 'string' || typeof value.userId !== 'string') return null;
+  if (typeof value.homeScore !== 'number' || typeof value.awayScore !== 'number') return null;
+  if (typeof value.createdAt !== 'string') return null;
+  return {
+    matchId: value.matchId,
+    userId: value.userId,
+    homeScore: clampScore(value.homeScore),
+    awayScore: clampScore(value.awayScore),
+    createdAt: value.createdAt,
+    updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : value.createdAt,
+  };
+}
+
+function parseMotmVote(value: unknown): MotmVote | null {
+  if (!isPlainObject(value)) return null;
+  if (typeof value.matchId !== 'string' || typeof value.userId !== 'string') return null;
+  if (typeof value.playerKey !== 'string' || typeof value.playerName !== 'string' || typeof value.teamId !== 'string') {
+    return null;
+  }
+  if (typeof value.createdAt !== 'string') return null;
+  return {
+    matchId: value.matchId,
+    userId: value.userId,
+    playerKey: value.playerKey,
+    playerId: typeof value.playerId === 'string' ? value.playerId : undefined,
+    playerName: value.playerName,
+    teamId: value.teamId,
+    createdAt: value.createdAt,
+  };
+}
+
+function pickPredictions(value: unknown, fallback: ScorePrediction[]): ScorePrediction[] {
+  if (!Array.isArray(value)) return fallback;
+  return value.map(parsePrediction).filter((row): row is ScorePrediction => !!row);
+}
+
+function pickMotmVotes(value: unknown, fallback: MotmVote[]): MotmVote[] {
+  if (!Array.isArray(value)) return fallback;
+  return value.map(parseMotmVote).filter((row): row is MotmVote => !!row);
+}
+
 export function favoriteSlice(value: unknown): FavoriteSlice {
   const raw = isPlainObject(value) ? value : {};
   return {
@@ -83,7 +132,7 @@ function pickFavorites(value: unknown, fallback: Persisted['favorites']): Persis
 /**
  * Parse AsyncStorage JSON.
  * Corrupt JSON → full defaults.
- * Missing/future schemaVersion still keeps valid slices (user, follows, posts, …)
+ * Missing/future schemaVersion still keeps valid slices (user, follows, posts, predictions, …)
  * and stamps STATE_SCHEMA_VERSION. Unknown currentUserId becomes null.
  */
 export function hydratePersisted(raw: string | null): Persisted {
@@ -107,6 +156,8 @@ export function hydratePersisted(raw: string | null): Persisted {
     posts: pickArray(parsed.posts, base.posts),
     comments: pickArray(parsed.comments, base.comments),
     notifications: pickArray(parsed.notifications, base.notifications),
+    predictions: pickPredictions(parsed.predictions, base.predictions),
+    motmVotes: pickMotmVotes(parsed.motmVotes, base.motmVotes),
   };
 }
 
@@ -376,4 +427,120 @@ export function markNotificationsRead(state: Persisted): Persisted {
       n.recipientId === state.currentUserId ? { ...n, read: true } : n,
     ),
   };
+}
+
+export interface MotmVoteInput {
+  playerKey: string;
+  playerId?: string;
+  playerName: string;
+  teamId: string;
+}
+
+function relatedSet(matchId: string, relatedMatchIds: string[]): Set<string> {
+  const ids = new Set(relatedMatchIds.length ? relatedMatchIds : [matchId]);
+  ids.add(matchId);
+  return ids;
+}
+
+function hasEngagementNote(
+  state: Persisted,
+  type: 'prediction' | 'motm',
+  recipientId: string,
+  related: Set<string>,
+): boolean {
+  return state.notifications.some((n) => n.type === type && n.recipientId === recipientId && n.matchId && related.has(n.matchId));
+}
+
+/**
+ * Upsert the current demo user's score pick while the fixture is still pre-kickoff.
+ * After lock (live / HT / FT, or kickoff time reached) the existing row is left unchanged.
+ */
+export function setPrediction(
+  state: Persisted,
+  matchId: string,
+  homeScore: number,
+  awayScore: number,
+  now = Date.now(),
+  fixture?: Pick<Fixture, 'status' | 'kickoff'>,
+  relatedMatchIds: string[] = [matchId],
+): Persisted {
+  if (!state.currentUserId) return state;
+  if (fixture && !isPredictionOpen(fixture, now)) return state;
+  const userId = state.currentUserId;
+  const related = relatedSet(matchId, relatedMatchIds);
+  const stamp = new Date(now).toISOString();
+  const next: ScorePrediction = {
+    matchId,
+    userId,
+    homeScore: clampScore(homeScore),
+    awayScore: clampScore(awayScore),
+    createdAt: stamp,
+    updatedAt: stamp,
+  };
+  const existing = predictionForUser(state.predictions, userId, [...related]);
+  const predictions = existing
+    ? state.predictions.map((row) =>
+        row.userId === userId && related.has(row.matchId)
+          ? { ...row, matchId, homeScore: next.homeScore, awayScore: next.awayScore, updatedAt: stamp }
+          : row,
+      )
+    : [...state.predictions, next];
+  if (existing) return { ...state, predictions };
+  const notification: AppNotification = {
+    id: `n-pred-${now}-${userId}`,
+    type: 'prediction',
+    title: 'Score prediction saved',
+    body: `You predicted ${next.homeScore}–${next.awayScore}.`,
+    createdAt: stamp,
+    read: false,
+    recipientId: userId,
+    matchId,
+  };
+  if (hasEngagementNote(state, 'prediction', userId, related)) {
+    return { ...state, predictions };
+  }
+  return { ...state, predictions, notifications: [notification, ...state.notifications] };
+}
+
+/**
+ * Cast a single MOTM vote for the current demo user. Live / HT / FT only; a second vote is ignored.
+ */
+export function setMotmVote(
+  state: Persisted,
+  matchId: string,
+  input: MotmVoteInput,
+  now = Date.now(),
+  status?: MatchStatus,
+  relatedMatchIds: string[] = [matchId],
+): Persisted {
+  if (!state.currentUserId) return state;
+  if (status && !isMotmOpen(status)) return state;
+  if (!input.playerKey.trim() || !input.playerName.trim() || !input.teamId.trim()) return state;
+  const userId = state.currentUserId;
+  const related = relatedSet(matchId, relatedMatchIds);
+  if (motmVoteForUser(state.motmVotes, userId, [...related])) return state;
+  const stamp = new Date(now).toISOString();
+  const vote: MotmVote = {
+    matchId,
+    userId,
+    playerKey: input.playerKey,
+    playerId: input.playerId,
+    playerName: input.playerName.trim(),
+    teamId: input.teamId,
+    createdAt: stamp,
+  };
+  const notification: AppNotification = {
+    id: `n-motm-${now}-${userId}`,
+    type: 'motm',
+    title: 'Man of the Match vote',
+    body: `You voted for ${vote.playerName}.`,
+    createdAt: stamp,
+    read: false,
+    recipientId: userId,
+    matchId,
+  };
+  const notifications = hasEngagementNote(state, 'motm', userId, related)
+    ? state.notifications
+    : [notification, ...state.notifications];
+  return { ...state, motmVotes: [...state.motmVotes, vote], notifications };
 }

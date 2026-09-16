@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import type { AppNotification, Comment, Post, User } from '@/data/types';
+import type { AppNotification, Comment, Fixture, MotmVote, Post, ScorePrediction, User } from '@/data/types';
 import { demoUsers } from '@/data/mocks/social';
+import type { MotmCandidate } from '@/lib/engagement';
 import { attachMatchId, favoriteMatchAlertDrafts, relatedFixtureIds } from '@/lib/matchSocial';
 import {
   addComment as addCommentState,
@@ -14,6 +15,8 @@ import {
   mergeMatchAlerts,
   notificationsFor,
   Persisted,
+  setMotmVote as setMotmVoteState,
+  setPrediction as setPredictionState,
   signInDemo as signInDemoState,
   signOut as signOutState,
   toggleFavoriteLeague as toggleFavoriteLeagueState,
@@ -41,6 +44,8 @@ interface AppContextValue {
   notifications: AppNotification[];
   unreadCount: number;
   likedPostIds: string[];
+  predictions: ScorePrediction[];
+  motmVotes: MotmVote[];
   signInDemo: (userId: string) => void;
   signOut: () => void;
   follow: (userId: string) => void;
@@ -52,6 +57,8 @@ interface AppContextValue {
   addPost: (text: string, imageUri?: string, matchId?: string) => void;
   toggleLike: (postId: string) => void;
   addComment: (matchId: string, text: string, parentId?: string) => void;
+  setPrediction: (fixture: Fixture, homeScore: number, awayScore: number) => void;
+  setMotmVote: (fixture: Fixture, candidate: MotmCandidate) => void;
   markNotificationsRead: () => void;
   followerCount: (userId: string) => number;
 }
@@ -135,6 +142,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       notifications,
       unreadCount,
       likedPostIds,
+      predictions: state.predictions,
+      motmVotes: state.motmVotes,
       signInDemo: (userId) => patch((p) => signInDemoState(p, userId)),
       signOut: () => patch(signOutState),
       follow: (userId) =>
@@ -161,6 +170,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             parentId,
             Date.now(),
             relatedFixtureIds(football, matchId),
+          ),
+        ),
+      setPrediction: (fixture, homeScore, awayScore) =>
+        patch((p) =>
+          setPredictionState(
+            p,
+            attachMatchId(football, fixture.id),
+            homeScore,
+            awayScore,
+            Date.now(),
+            { status: fixture.status, kickoff: fixture.kickoff },
+            relatedFixtureIds(football, fixture.id),
+          ),
+        ),
+      setMotmVote: (fixture, candidate) =>
+        patch((p) =>
+          setMotmVoteState(
+            p,
+            attachMatchId(football, fixture.id),
+            {
+              playerKey: candidate.key,
+              playerId: candidate.playerId,
+              playerName: candidate.name,
+              teamId: candidate.teamId,
+            },
+            Date.now(),
+            fixture.status,
+            relatedFixtureIds(football, fixture.id),
           ),
         ),
       markNotificationsRead: () => patch(markNotificationsReadState),
