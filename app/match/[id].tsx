@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
+import { entityHref } from '@/lib/entityNav';
 import { timeAgo } from '@/lib/format';
 import { useLiveTick } from '@/lib/useLiveTick';
 import { useApp } from '@/services/AppProvider';
@@ -61,14 +62,24 @@ export default function MatchDetailScreen() {
   return (
     <Screen padded={false}>
       <View style={styles.pad}>
-        <HeaderBar title={league?.shortName ?? 'Match'} onBack={() => router.back()} />
+        <HeaderBar
+          title={league?.shortName ?? 'Match'}
+          onBack={() => router.back()}
+          right={
+            league ? (
+              <Pressable onPress={() => router.push(entityHref('league', league.id))}>
+                <Text style={styles.leagueLink}>League</Text>
+              </Pressable>
+            ) : undefined
+          }
+        />
       </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.board}>
-          <View style={styles.side}>
+          <Pressable style={styles.side} onPress={() => router.push(entityHref('team', home.id))}>
             <Crest team={home} size={56} />
             <Text style={styles.team}>{home.shortName}</Text>
-          </View>
+          </Pressable>
           <View style={styles.mid}>
             {fixture.status === 'upcoming' ? (
               <Text style={styles.soon}>Kickoff</Text>
@@ -84,10 +95,10 @@ export default function MatchDetailScreen() {
             ) : null}
             <Text style={styles.venue}>{fixture.venue}</Text>
           </View>
-          <View style={styles.side}>
+          <Pressable style={styles.side} onPress={() => router.push(entityHref('team', away.id))}>
             <Crest team={away} size={56} />
             <Text style={styles.team}>{away.shortName}</Text>
-          </View>
+          </Pressable>
         </View>
 
         <Segmented
@@ -113,11 +124,18 @@ export default function MatchDetailScreen() {
                     <Text style={styles.minute}>{e.minute}'</Text>
                     <Text style={styles.eicon}>{eventIcon[e.type]}</Text>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.ename}>{e.playerName}</Text>
-                      <Text style={styles.edetail}>
-                        {team?.shortName}
-                        {e.detail ? ` · ${e.detail}` : ''}
-                      </Text>
+                      <Pressable
+                        disabled={!e.playerId}
+                        onPress={() => e.playerId && router.push(entityHref('player', e.playerId))}
+                      >
+                        <Text style={[styles.ename, e.playerId ? styles.link : null]}>{e.playerName}</Text>
+                      </Pressable>
+                      <Pressable disabled={!team} onPress={() => team && router.push(entityHref('team', team.id))}>
+                        <Text style={styles.edetail}>
+                          {team?.shortName}
+                          {e.detail ? ` · ${e.detail}` : ''}
+                        </Text>
+                      </Pressable>
                     </View>
                   </View>
                 );
@@ -131,19 +149,31 @@ export default function MatchDetailScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.lineTitle}>{home.code} · {lineups.home.formation}</Text>
               {lineups.home.players.map((p) => (
-                <Text key={`h-${p.number}`} style={styles.player}>
-                  {p.number}  {p.name}
-                  <Text style={styles.pos}>  {p.pos}</Text>
-                </Text>
+                <Pressable
+                  key={`h-${p.number}`}
+                  disabled={!p.playerId}
+                  onPress={() => p.playerId && router.push(entityHref('player', p.playerId))}
+                >
+                  <Text style={[styles.player, p.playerId ? styles.link : null]}>
+                    {p.number}  {p.name}
+                    <Text style={styles.pos}>  {p.pos}</Text>
+                  </Text>
+                </Pressable>
               ))}
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.lineTitle}>{away.code} · {lineups.away.formation}</Text>
               {lineups.away.players.map((p) => (
-                <Text key={`a-${p.number}`} style={styles.player}>
-                  {p.number}  {p.name}
-                  <Text style={styles.pos}>  {p.pos}</Text>
-                </Text>
+                <Pressable
+                  key={`a-${p.number}`}
+                  disabled={!p.playerId}
+                  onPress={() => p.playerId && router.push(entityHref('player', p.playerId))}
+                >
+                  <Text style={[styles.player, p.playerId ? styles.link : null]}>
+                    {p.number}  {p.name}
+                    <Text style={styles.pos}>  {p.pos}</Text>
+                  </Text>
+                </Pressable>
               ))}
             </View>
           </View>
@@ -252,12 +282,14 @@ const styles = StyleSheet.create({
     borderColor: colors.pitch,
   },
   side: { flex: 1, alignItems: 'center', gap: 8 },
-  team: { ...type.caption, color: colors.text, textAlign: 'center' },
+  team: { ...type.caption, color: colors.lime, textAlign: 'center' },
   mid: { alignItems: 'center', minWidth: 120, gap: 6 },
   score: { ...type.score, color: colors.text },
   soon: { ...type.subtitle, color: colors.lime },
   ft: { ...type.micro, color: colors.textMuted },
   venue: { ...type.caption, color: colors.textDim, fontWeight: '500', textAlign: 'center' },
+  leagueLink: { ...type.caption, color: colors.lime },
+  link: { color: colors.lime },
   block: { marginTop: spacing.lg, gap: 8 },
   event: {
     flexDirection: 'row',

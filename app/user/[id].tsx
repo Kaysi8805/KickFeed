@@ -10,6 +10,7 @@ import { Screen } from '@/components/ui/Screen';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
+import { entityHref } from '@/lib/entityNav';
 
 export default function UserScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -45,7 +46,15 @@ export default function UserScreen() {
           <Text style={styles.counts}>
             {followerCount(user.id)} followers · {userPosts.length} posts
           </Text>
-          <View style={styles.crests}>{teams.map((t) => (t ? <Crest key={t.id} team={t} size={28} /> : null))}</View>
+          <View style={styles.crests}>
+            {teams.map((t) =>
+              t ? (
+                <Pressable key={t.id} onPress={() => router.push(entityHref('team', t.id))}>
+                  <Crest team={t} size={28} />
+                </Pressable>
+              ) : null,
+            )}
+          </View>
           {!mine ? (
             <Pressable
               onPress={() => (following ? unfollow(user.id) : follow(user.id))}

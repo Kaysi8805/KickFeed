@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
+import { entityHref } from '@/lib/entityNav';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
@@ -78,7 +79,11 @@ export default function LeagueScreen() {
                 const team = football.getTeam(row.teamId);
                 if (!team) return null;
                 return (
-                  <View key={row.teamId} style={styles.trow}>
+                  <Pressable
+                    key={row.teamId}
+                    onPress={() => router.push(entityHref('team', team.id))}
+                    style={({ pressed }) => [styles.trow, pressed && { opacity: 0.86 }]}
+                  >
                     <Text style={[styles.td, { flex: 0.4 }]}>{i + 1}</Text>
                     <View style={[styles.club, { flex: 2 }]}>
                       <Crest team={team} size={22} />
@@ -89,7 +94,7 @@ export default function LeagueScreen() {
                     <Text style={styles.td}>{row.played}</Text>
                     <Text style={styles.td}>{row.gf - row.ga}</Text>
                     <Text style={[styles.td, styles.pts]}>{row.points}</Text>
-                  </View>
+                  </Pressable>
                 );
               })}
               <View style={styles.formBlock}>
@@ -97,7 +102,11 @@ export default function LeagueScreen() {
                 {table.slice(0, 6).map((row) => {
                   const team = football.getTeam(row.teamId);
                   return (
-                    <View key={`f-${row.teamId}`} style={styles.formRow}>
+                    <Pressable
+                      key={`f-${row.teamId}`}
+                      onPress={() => team && router.push(entityHref('team', team.id))}
+                      style={styles.formRow}
+                    >
                       <Text style={styles.formName}>{team?.code}</Text>
                       <View style={styles.dots}>
                         {row.form.map((r, idx) => (
@@ -112,7 +121,7 @@ export default function LeagueScreen() {
                           />
                         ))}
                       </View>
-                    </View>
+                    </Pressable>
                   );
                 })}
               </View>
@@ -126,11 +135,21 @@ export default function LeagueScreen() {
             return (
               <View key={s.id} style={styles.scorer}>
                 <Text style={styles.rank}>{i + 1}</Text>
-                {team ? <Crest team={team} size={28} /> : null}
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.sname}>{s.playerName}</Text>
-                  <Text style={styles.smeta}>{team?.shortName}</Text>
-                </View>
+                {team ? (
+                  <Pressable onPress={() => router.push(entityHref('team', team.id))}>
+                    <Crest team={team} size={28} />
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  style={{ flex: 1 }}
+                  disabled={!s.playerId}
+                  onPress={() => s.playerId && router.push(entityHref('player', s.playerId))}
+                >
+                  <Text style={[styles.sname, s.playerId ? styles.link : null]}>{s.playerName}</Text>
+                  <Pressable disabled={!team} onPress={() => team && router.push(entityHref('team', team.id))}>
+                    <Text style={styles.smeta}>{team?.shortName}</Text>
+                  </Pressable>
+                </Pressable>
                 <Text style={styles.goals}>{s.goals}</Text>
                 <Text style={styles.assists}>{s.assists} A</Text>
               </View>
@@ -184,6 +203,7 @@ const styles = StyleSheet.create({
   },
   rank: { ...type.subtitle, color: colors.textDim, width: 22 },
   sname: { ...type.subtitle, fontSize: 14, color: colors.text },
+  link: { color: colors.lime },
   smeta: { ...type.caption, color: colors.textMuted, fontWeight: '500' },
   goals: { ...type.title, fontSize: 20, color: colors.lime },
   assists: { ...type.caption, color: colors.textDim, width: 36, textAlign: 'right' },

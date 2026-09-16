@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { Crest } from '@/components/ui/Crest';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
+import { entityHref } from '@/lib/entityNav';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
@@ -45,21 +46,32 @@ export default function PickFavoritesScreen() {
           .map((l) => {
             const on = favoriteLeagueIds.includes(l.id);
             return (
-              <Pressable key={l.id} onPress={() => toggleFavoriteLeague(l.id)} style={[styles.row, on && styles.on]}>
-                <Text style={styles.name}>{l.name}</Text>
-                <Text style={styles.mark}>{on ? '★' : '☆'}</Text>
-              </Pressable>
+              <View key={l.id} style={[styles.row, on && styles.on]}>
+                <Pressable onPress={() => router.push(entityHref('league', l.id))} style={{ flex: 1 }}>
+                  <Text style={styles.name}>{l.name}</Text>
+                </Pressable>
+                <Pressable onPress={() => toggleFavoriteLeague(l.id)} hitSlop={8}>
+                  <Text style={styles.mark}>{on ? '★' : '☆'}</Text>
+                </Pressable>
+              </View>
             );
           })}
         <Text style={styles.section}>Clubs</Text>
         {teamResults.map((t) => {
           const on = favoriteTeamIds.includes(t.id);
           return (
-            <Pressable key={t.id} onPress={() => toggleFavoriteTeam(t.id)} style={[styles.row, on && styles.on]}>
-              <Crest team={t} size={28} />
-              <Text style={[styles.name, { flex: 1 }]}>{t.name}</Text>
-              <Text style={styles.mark}>{on ? '★' : '☆'}</Text>
-            </Pressable>
+            <View key={t.id} style={[styles.row, on && styles.on]}>
+              <Pressable
+                onPress={() => router.push(entityHref('team', t.id))}
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+              >
+                <Crest team={t} size={28} />
+                <Text style={[styles.name, { flex: 1 }]}>{t.name}</Text>
+              </Pressable>
+              <Pressable onPress={() => toggleFavoriteTeam(t.id)} hitSlop={8}>
+                <Text style={styles.mark}>{on ? '★' : '☆'}</Text>
+              </Pressable>
+            </View>
           );
         })}
       </ScrollView>

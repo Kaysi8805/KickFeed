@@ -66,4 +66,9 @@ describe('hydrateFixture', () => {
       expect(fx.homeScore + fx.awayScore).toBeGreaterThan(0);
     }
   });
+
+  it('attaches squad playerIds to match events', () => {
+    const fx = hydrateFixture(seed(-20), NOW);
+    expect(fx.events[0]?.playerId).toBe('p-liv-11');
+  });
 });

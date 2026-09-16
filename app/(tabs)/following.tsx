@@ -6,6 +6,7 @@ import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MatchRow } from '@/components/match/MatchRow';
 import { Screen } from '@/components/ui/Screen';
+import { entityHref } from '@/lib/entityNav';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
@@ -44,10 +45,10 @@ export default function FavoritesScreen() {
           <View style={styles.chips}>
             {teams.map((t) =>
               t ? (
-                <View key={t.id} style={styles.chip}>
+                <Pressable key={t.id} onPress={() => router.push(entityHref('team', t.id))} style={styles.chip}>
                   <Crest team={t} size={28} />
                   <Text style={styles.chipText}>{t.shortName}</Text>
-                </View>
+                </Pressable>
               ) : null,
             )}
           </View>
@@ -59,7 +60,7 @@ export default function FavoritesScreen() {
         ) : (
           leagues.map((l) =>
             l ? (
-              <Pressable key={l.id} onPress={() => router.push(`/league/${l.id}`)} style={styles.row}>
+              <Pressable key={l.id} onPress={() => router.push(entityHref('league', l.id))} style={styles.row}>
                 <Text style={styles.rowTitle}>{l.name}</Text>
                 <Text style={styles.chev}>→</Text>
               </Pressable>
@@ -79,7 +80,7 @@ export default function FavoritesScreen() {
           <Text style={styles.muted}>Follow demo fans to fill your social feed.</Text>
         ) : (
           following.map((u) => (
-            <Pressable key={u.id} onPress={() => router.push(`/user/${u.id}`)} style={styles.person}>
+            <Pressable key={u.id} onPress={() => router.push(entityHref('user', u.id))} style={styles.person}>
               <Avatar initials={u.initials} color={u.avatarColor} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle}>{u.name}</Text>
@@ -94,7 +95,7 @@ export default function FavoritesScreen() {
 
         <Text style={styles.section}>Suggested fans</Text>
         {suggested.map((u) => (
-          <Pressable key={u.id} onPress={() => router.push(`/user/${u.id}`)} style={styles.person}>
+          <Pressable key={u.id} onPress={() => router.push(entityHref('user', u.id))} style={styles.person}>
             <Avatar initials={u.initials} color={u.avatarColor} />
             <View style={{ flex: 1 }}>
               <Text style={styles.rowTitle}>{u.name}</Text>

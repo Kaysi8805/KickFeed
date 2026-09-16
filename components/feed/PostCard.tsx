@@ -3,8 +3,10 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { EntityText } from '@/components/feed/EntityText';
 import { Avatar } from '@/components/ui/Avatar';
 import type { Post, User } from '@/data/types';
+import { entityHref } from '@/lib/entityNav';
 import { timeAgo } from '@/lib/format';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
@@ -35,7 +37,7 @@ export function PostCard({
           </Text>
         </View>
       </Pressable>
-      <Text style={styles.body}>{post.text}</Text>
+      <EntityText text={post.text} style={styles.body} />
       {post.imageUri ? (
         <Image source={{ uri: post.imageUri }} style={styles.photo} contentFit="cover" />
       ) : post.imageTone ? (
@@ -44,11 +46,20 @@ export function PostCard({
         </View>
       ) : null}
       {match && home && away ? (
-        <Pressable style={styles.matchChip} onPress={() => router.push(`/match/${match.id}`)}>
-          <Text style={styles.matchChipText}>
-            {home.code} {match.homeScore}-{match.awayScore} {away.code}
-          </Text>
-        </Pressable>
+        <View style={styles.matchChip}>
+          <Pressable onPress={() => router.push(entityHref('team', home.id))}>
+            <Text style={styles.matchChipText}>{home.code}</Text>
+          </Pressable>
+          <Pressable onPress={() => router.push(entityHref('match', match.id))}>
+            <Text style={styles.matchChipText}>
+              {' '}
+              {match.homeScore}-{match.awayScore}{' '}
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => router.push(entityHref('team', away.id))}>
+            <Text style={styles.matchChipText}>{away.code}</Text>
+          </Pressable>
+        </View>
       ) : null}
       <View style={styles.actions}>
         <Pressable
@@ -104,6 +115,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     marginBottom: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   matchChipText: { ...type.micro, color: colors.lime },
   actions: { flexDirection: 'row', gap: spacing.lg, marginTop: 4 },

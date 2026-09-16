@@ -9,8 +9,9 @@ v1 is **fully local**: demo profiles, mock football data, and in-app notificatio
 - **Demo auth** — pick a seeded fan profile (Maya, Omar, Luca, …). No email/password or OAuth yet.
 - **Profiles & favorites** — name, photo initials, bio, favorite clubs and competitions. Favorites drive Home live scores and Following.
 - **Social feed & follows** — follow demo users, post text (optional photo), like posts, see friends + own posts.
-- **Live scores & fixtures** — Live / Today / Upcoming, grouped by league. Match pages with score, events, lineup placeholders, and stats stubs.
-- **Worldwide leagues** — continents → countries → competitions, plus featured Premier League, Champions League, La Liga, Serie A, and Bundesliga standings, form, and top scorers.
+- **Live scores & fixtures** — Live / Today / Upcoming, grouped by league. Match pages with score, events, lineups, and stats stubs. Team crests/names and player events/lineups are tappable.
+- **Clubs & players** — Team pages (crest, league table context, fixtures, clickable squad, favorite) and player pages (mock season stats, recent appearances, link back to club).
+- **Worldwide leagues** — continents → countries → competitions, plus featured Premier League, Champions League, La Liga, Serie A, and Bundesliga standings, form, and top scorers. Standings rows and scorers open team/player pages.
 - **Match discussions** — threaded comments on a match.
 - **Notifications** — in-app center for goals, kickoff, follows, and friend posts, plus Expo Notifications wiring for local demo alerts.
 
@@ -49,9 +50,11 @@ Use **Profile → Switch demo user** to pick another seeded fan. **Profile → E
 
 ```
 app/                 Expo Router screens (tabs + stack)
-components/          UI, feed cards, match rows
+  team/[id]          Club detail (squad, fixtures, favorite)
+  player/[id]        Player detail (stats, appearances)
+components/          UI, feed cards, match rows, entity links
 data/types.ts        Shared domain types
-data/mocks/          Seeded users, teams, leagues, fixtures, posts
+data/mocks/          Seeded users, teams, squads, leagues, fixtures, posts
 services/auth.ts     Demo auth + stubs for email/OAuth
 services/football.ts FootballProvider interface + mock implementation
 services/notifications.ts  Expo Notifications register/schedule stubs
@@ -76,6 +79,8 @@ Replace the mock with an adapter (FotMob-style, API-Football, Opta, etc.) that i
 
 Keep `data/types.ts` stable so screens do not care whether data is seeded or remote.
 
+`FootballProvider` now also exposes `getPlayer`, `getSquad`, `getTeamCompetitions`, `getPlayerStats`, and `getPlayerAppearances`. A live adapter should fill those from the same IDs used on fixtures, lineups, and scorers.
+
 Mock fixtures use `SeedFixture.kickoffOffsetMin` relative to “now” when `hydrateFixture` runs (`services/football.ts`). Status windows:
 
 - **Upcoming** — kickoff still in the future
@@ -85,6 +90,15 @@ Mock fixtures use `SeedFixture.kickoffOffsetMin` relative to “now” when `hyd
 - **Finished** — 98+ minutes (90 + 3 HT + 5 stoppage)
 
 A live API would return real statuses instead of this clock.
+
+## Roadmap
+
+Karol’s batches (still mock/demo-first unless noted):
+
+- **Batch 0 — deferred.** Public landing / kickfeed.polsia.app sneaker page. Explicitly skipped for now.
+- **Batch 1 — done.** Teams, players, and competitions are first-class and clickable throughout the app (this release).
+- **Batch 2 — next.** Global search and follow/favorite **players** (Following should include people *and* footballers).
+- Later: live scores from a real football API, TV schedules, real auth, DMs, predictions.
 
 ## Theme
 

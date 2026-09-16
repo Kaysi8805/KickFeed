@@ -1,11 +1,13 @@
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { MatchRow } from '@/components/match/MatchRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
 import { isSameDay } from '@/lib/format';
+import { entityHref } from '@/lib/entityNav';
 import { useLiveTick } from '@/lib/useLiveTick';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
@@ -64,7 +66,12 @@ export default function MatchesScreen() {
         ) : (
           grouped.map(({ league, fixtures: list }) => (
             <View key={league?.id ?? list[0]?.id} style={styles.group}>
-              <Text style={styles.league}>{league?.name ?? 'League'}</Text>
+              <Pressable
+                onPress={() => league && router.push(entityHref('league', league.id))}
+                disabled={!league}
+              >
+                <Text style={styles.league}>{league?.name ?? 'League'}</Text>
+              </Pressable>
               {list.map((f) => (
                 <MatchRow key={f.id} fixture={f} compact />
               ))}

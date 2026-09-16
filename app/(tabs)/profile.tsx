@@ -9,6 +9,7 @@ import { Screen } from '@/components/ui/Screen';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { registerForPushNotifications } from '@/services/notifications';
+import { entityHref } from '@/lib/entityNav';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function ProfileScreen() {
@@ -56,7 +57,13 @@ export default function ProfileScreen() {
             </View>
           </View>
           <View style={styles.crestRow}>
-            {teams.map((t) => (t ? <Crest key={t.id} team={t} size={32} /> : null))}
+            {teams.map((t) =>
+              t ? (
+                <Pressable key={t.id} onPress={() => router.push(entityHref('team', t.id))}>
+                  <Crest team={t} size={32} />
+                </Pressable>
+              ) : null,
+            )}
           </View>
           <View style={styles.actions}>
             <Pressable style={styles.btn} onPress={() => router.push('/edit-profile')}>

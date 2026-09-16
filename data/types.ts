@@ -48,12 +48,45 @@ export interface Team {
   countryId: string;
 }
 
+export type PlayerPosition = 'GK' | 'DF' | 'MF' | 'FW';
+
+export interface Player {
+  id: string;
+  name: string;
+  shortName: string;
+  teamId: string;
+  number: number;
+  pos: PlayerPosition;
+  nationality: string;
+  age: number;
+}
+
+export interface PlayerStats {
+  appearances: number;
+  goals: number;
+  assists: number;
+  minutes: number;
+  yellows: number;
+  reds: number;
+  rating: number;
+}
+
+export interface PlayerAppearance {
+  fixtureId: string;
+  starter: boolean;
+  minutes: number;
+  goals: number;
+  assists: number;
+  rating: number;
+}
+
 export interface MatchEvent {
   id: string;
   type: MatchEventType;
   minute: number;
   teamId: string;
   playerName: string;
+  playerId?: string;
   detail?: string;
 }
 
@@ -98,6 +131,7 @@ export interface StandingRow {
 export interface Scorer {
   id: string;
   playerName: string;
+  playerId?: string;
   teamId: string;
   goals: number;
   assists: number;
@@ -106,7 +140,8 @@ export interface Scorer {
 export interface LineupPlayer {
   name: string;
   number: number;
-  pos: 'GK' | 'DF' | 'MF' | 'FW';
+  pos: PlayerPosition;
+  playerId?: string;
 }
 
 export interface Lineup {
