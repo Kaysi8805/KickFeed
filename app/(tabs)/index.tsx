@@ -54,7 +54,7 @@ export default function FeedScreen() {
               </View>
             ) : null}
           </Pressable>
-          <Pressable onPress={() => router.push('/compose')} style={styles.compose}>
+          <Pressable onPress={() => router.push('/compose')} style={styles.compose} accessibilityLabel="New post">
             <Ionicons name="create" size={18} color={colors.bg} />
           </Pressable>
         </View>
