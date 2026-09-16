@@ -4,26 +4,39 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PostCard } from '@/components/feed/PostCard';
 import { MatchRow } from '@/components/match/MatchRow';
+import { SearchBarPrompt } from '@/components/search/SearchEntry';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { useLiveTick } from '@/lib/useLiveTick';
+import { favoriteLiveFixtures, isSameMatch, sortFeedPosts } from '@/lib/matchSocial';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function FeedScreen() {
   useLiveTick();
-  const { currentUser, posts, users, followingIds, likedPostIds, toggleLike, unreadCount, favoriteTeamIds } =
+  const catalog = useFootballCatalog();
+  const { currentUser, posts, users, followingIds, likedPostIds, toggleLike, unreadCount, favoriteTeamIds, favoritePlayerIds } =
     useApp();
 
-  const feed = posts.filter(
-    (p) => p.authorId === currentUser?.id || followingIds.includes(p.authorId),
+  const liveFav = favoriteLiveFixtures(football, favoriteTeamIds, favoritePlayerIds);
+  const aroundMatch = sortFeedPosts(
+    posts.filter((p) => p.matchId && liveFav.some((f) => isSameMatch(football, p.matchId!, f.id))),
+    football,
+    favoriteTeamIds,
+    favoritePlayerIds,
   );
-  const liveFav = football
-    .getFixtures()
-    .filter((f) => f.status === 'live' || f.status === 'ht')
-    .filter((f) => favoriteTeamIds.includes(f.homeTeamId) || favoriteTeamIds.includes(f.awayTeamId) || favoriteTeamIds.length === 0)
-    .slice(0, 6);
+  const aroundIds = new Set(aroundMatch.map((p) => p.id));
+  const feed = sortFeedPosts(
+    posts.filter(
+      (p) =>
+        !aroundIds.has(p.id) && (p.authorId === currentUser?.id || followingIds.includes(p.authorId)),
+    ),
+    football,
+    favoriteTeamIds,
+    favoritePlayerIds,
+  );
 
   return (
     <Screen padded={false}>
@@ -41,26 +54,47 @@ export default function FeedScreen() {
               </View>
             ) : null}
           </Pressable>
-          <Pressable onPress={() => router.push('/compose')} style={styles.compose}>
+          <Pressable onPress={() => router.push('/compose')} style={styles.compose} accessibilityLabel="New post">
             <Ionicons name="create" size={18} color={colors.bg} />
           </Pressable>
         </View>
       </View>
+      <SearchBarPrompt />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {liveFav.length > 0 ? (
           <View style={styles.block}>
-            <Text style={styles.section}>For you · live</Text>
+            <Text style={styles.section}>{catalog.source === 'live' ? 'For you · live England' : 'For you · live'}</Text>
             {liveFav.map((f) => (
               <MatchRow key={f.id} fixture={f} compact />
             ))}
           </View>
         ) : null}
+        {aroundMatch.length > 0 ? (
+          <View style={styles.block}>
+            <Text style={styles.section}>Around your matches</Text>
+            {aroundMatch.map((post) => {
+              const author = users.find((u) => u.id === post.authorId);
+              if (!author) return null;
+              return (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  author={author}
+                  liked={likedPostIds.includes(post.id)}
+                  onLike={() => toggleLike(post.id)}
+                />
+              );
+            })}
+          </View>
+        ) : null}
         <Text style={styles.section}>Friends & you</Text>
-        {feed.length === 0 ? (
+        {feed.length === 0 && aroundMatch.length === 0 ? (
           <EmptyState
             title="Your feed is a quiet stadium"
             body="Follow fans from the Following tab, then come back for posts about tonight’s matches."
           />
+        ) : feed.length === 0 ? (
+          <Text style={styles.muted}>More friend posts will land here. Match chatter is up top.</Text>
         ) : (
           feed.map((post) => {
             const author = users.find((u) => u.id === post.authorId);
@@ -125,4 +159,5 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: 32 },
   block: { marginBottom: spacing.md },
   section: { ...type.micro, color: colors.textMuted, marginBottom: spacing.sm, marginTop: spacing.sm },
+  muted: { ...type.caption, color: colors.textMuted, fontWeight: '500', marginBottom: spacing.md },
 });

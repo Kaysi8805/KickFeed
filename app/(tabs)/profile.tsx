@@ -8,16 +8,30 @@ import { Crest } from '@/components/ui/Crest';
 import { Screen } from '@/components/ui/Screen';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { registerForPushNotifications } from '@/services/notifications';
+import { entityHref } from '@/lib/entityNav';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function ProfileScreen() {
-  const { currentUser, posts, users, likedPostIds, toggleLike, followingIds, followerCount, signOut } = useApp();
+  useFootballCatalog();
+  const {
+    currentUser,
+    posts,
+    users,
+    likedPostIds,
+    toggleLike,
+    followingIds,
+    followerCount,
+    signOut,
+    favoritePlayerIds,
+  } = useApp();
   const [pushBusy, setPushBusy] = useState(false);
   const [pushNote, setPushNote] = useState<string | null>(null);
   if (!currentUser) return null;
   const mine = posts.filter((p) => p.authorId === currentUser.id);
   const teams = currentUser.favoriteTeamIds.map((id) => football.getTeam(id)).filter(Boolean);
+  const players = favoritePlayerIds.map((id) => football.getPlayer(id)).filter(Boolean);
 
   async function enableDeviceAlerts() {
     setPushBusy(true);
@@ -56,8 +70,26 @@ export default function ProfileScreen() {
             </View>
           </View>
           <View style={styles.crestRow}>
-            {teams.map((t) => (t ? <Crest key={t.id} team={t} size={32} /> : null))}
+            {teams.map((t) =>
+              t ? (
+                <Pressable key={t.id} onPress={() => router.push(entityHref('team', t.id))}>
+                  <Crest team={t} size={32} />
+                </Pressable>
+              ) : null,
+            )}
           </View>
+          {players.length > 0 ? (
+            <View style={styles.playerRow}>
+              {players.map((p) =>
+                p ? (
+                  <Pressable key={p.id} onPress={() => router.push(entityHref('player', p.id))} style={styles.playerChip}>
+                    <Text style={styles.playerNum}>{p.number}</Text>
+                    <Text style={styles.playerName}>{p.shortName}</Text>
+                  </Pressable>
+                ) : null,
+              )}
+            </View>
+          ) : null}
           <View style={styles.actions}>
             <Pressable style={styles.btn} onPress={() => router.push('/edit-profile')}>
               <Text style={styles.btnText}>Edit profile</Text>
@@ -125,6 +157,20 @@ const styles = StyleSheet.create({
   statN: { ...type.subtitle, color: colors.text },
   statL: { ...type.micro, color: colors.textDim },
   crestRow: { flexDirection: 'row', gap: 8, marginTop: spacing.md },
+  playerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.sm, justifyContent: 'center' },
+  playerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.surface,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  playerNum: { ...type.caption, color: colors.lime, fontSize: 11 },
+  playerName: { ...type.caption, color: colors.text },
   actions: { flexDirection: 'row', gap: 8, marginTop: spacing.lg },
   btn: {
     backgroundColor: colors.surface,

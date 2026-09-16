@@ -3,6 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 
 import type { AppNotification, Comment, Post, User } from '@/data/types';
 import { demoUsers } from '@/data/mocks/social';
+import { attachMatchId, favoriteMatchAlertDrafts, relatedFixtureIds } from '@/lib/matchSocial';
 import {
   addComment as addCommentState,
   addPost as addPostState,
@@ -10,17 +11,20 @@ import {
   follow as followState,
   hydratePersisted,
   markNotificationsRead as markNotificationsReadState,
+  mergeMatchAlerts,
   notificationsFor,
   Persisted,
   signInDemo as signInDemoState,
   signOut as signOutState,
   toggleFavoriteLeague as toggleFavoriteLeagueState,
+  toggleFavoritePlayer as toggleFavoritePlayerState,
   toggleFavoriteTeam as toggleFavoriteTeamState,
   toggleLike as toggleLikeState,
   unfollow as unfollowState,
   unreadCountFor,
   updateProfile as updateProfileState,
 } from '@/services/appState';
+import { football } from '@/services/football';
 
 const STORAGE_KEY = 'kickfeed.v1.state';
 
@@ -31,6 +35,7 @@ interface AppContextValue {
   followingIds: string[];
   favoriteTeamIds: string[];
   favoriteLeagueIds: string[];
+  favoritePlayerIds: string[];
   posts: Post[];
   comments: Comment[];
   notifications: AppNotification[];
@@ -42,8 +47,9 @@ interface AppContextValue {
   unfollow: (userId: string) => void;
   toggleFavoriteTeam: (teamId: string) => void;
   toggleFavoriteLeague: (leagueId: string) => void;
+  toggleFavoritePlayer: (playerId: string) => void;
   updateProfile: (patch: Partial<Pick<User, 'name' | 'bio'>>) => void;
-  addPost: (text: string, imageUri?: string) => void;
+  addPost: (text: string, imageUri?: string, matchId?: string) => void;
   toggleLike: (postId: string) => void;
   addComment: (matchId: string, text: string, parentId?: string) => void;
   markNotificationsRead: () => void;
@@ -74,6 +80,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    void football.hydrate();
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    const syncAlerts = () => {
+      setState((prev) => mergeMatchAlerts(prev, favoriteMatchAlertDrafts(prev.favorites, football)));
+    };
+    syncAlerts();
+    return football.subscribe(syncAlerts);
+  }, [ready]);
+
+  useEffect(() => {
     if (!ready) return;
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => undefined);
   }, [state, ready]);
@@ -93,6 +112,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const followingIds = currentUser ? (state.following[currentUser.id] ?? []) : [];
   const favoriteTeamIds = currentUser?.favoriteTeamIds ?? [];
   const favoriteLeagueIds = currentUser?.favoriteLeagueIds ?? [];
+  const favoritePlayerIds = currentUser ? (state.favorites[currentUser.id]?.players ?? []) : [];
   const likedPostIds = currentUser ? (state.likes[currentUser.id] ?? []) : [];
   const notifications = notificationsFor(state, currentUser?.id ?? null);
   const unreadCount = unreadCountFor(state, currentUser?.id ?? null);
@@ -109,6 +129,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       followingIds,
       favoriteTeamIds,
       favoriteLeagueIds,
+      favoritePlayerIds,
       posts: [...state.posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
       comments: state.comments,
       notifications,
@@ -119,16 +140,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       follow: (userId) =>
         patch((p) => followState(p, userId, currentUser?.name ?? 'A fan')),
       unfollow: (userId) => patch((p) => unfollowState(p, userId)),
-      toggleFavoriteTeam: (teamId) => patch((p) => toggleFavoriteTeamState(p, teamId)),
-      toggleFavoriteLeague: (leagueId) => patch((p) => toggleFavoriteLeagueState(p, leagueId)),
+      toggleFavoriteTeam: (teamId) =>
+        patch((p) => toggleFavoriteTeamState(p, teamId, football.relatedIds('team', teamId))),
+      toggleFavoriteLeague: (leagueId) =>
+        patch((p) => toggleFavoriteLeagueState(p, leagueId, football.relatedIds('league', leagueId))),
+      toggleFavoritePlayer: (playerId) =>
+        patch((p) => toggleFavoritePlayerState(p, playerId, football.relatedIds('player', playerId))),
       updateProfile: (next) => patch((p) => updateProfileState(p, next)),
-      addPost: (text, imageUri) => patch((p) => addPostState(p, text, imageUri)),
+      addPost: (text, imageUri, matchId) =>
+        patch((p) =>
+          addPostState(p, text, imageUri, Date.now(), matchId ? attachMatchId(football, matchId) : undefined),
+        ),
       toggleLike: (postId) => patch((p) => toggleLikeState(p, postId)),
-      addComment: (matchId, text, parentId) => patch((p) => addCommentState(p, matchId, text, parentId)),
+      addComment: (matchId, text, parentId) =>
+        patch((p) =>
+          addCommentState(
+            p,
+            attachMatchId(football, matchId),
+            text,
+            parentId,
+            Date.now(),
+            relatedFixtureIds(football, matchId),
+          ),
+        ),
       markNotificationsRead: () => patch(markNotificationsReadState),
       followerCount: (userId) => Object.values(state.following).filter((ids) => ids.includes(userId)).length,
     }),
-    [currentUser, favoriteLeagueIds, favoriteTeamIds, followingIds, likedPostIds, notifications, patch, ready, state, unreadCount, users],
+    [currentUser, favoriteLeagueIds, favoritePlayerIds, favoriteTeamIds, followingIds, likedPostIds, notifications, patch, ready, state, unreadCount, users],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

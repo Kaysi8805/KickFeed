@@ -16,7 +16,7 @@ export function HeaderBar({
   return (
     <View style={styles.row}>
       {onBack ? (
-        <Pressable onPress={onBack} hitSlop={10} style={styles.back}>
+        <Pressable onPress={onBack} hitSlop={10} style={styles.back} accessibilityLabel="Back">
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
       ) : null}

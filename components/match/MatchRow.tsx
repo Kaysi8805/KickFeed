@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Crest } from '@/components/ui/Crest';
 import { LiveBadge } from '@/components/match/LiveBadge';
 import type { Fixture } from '@/data/types';
+import { entityHref } from '@/lib/entityNav';
 import { kickoffLabel } from '@/lib/format';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
@@ -18,17 +19,21 @@ export function MatchRow({ fixture, compact }: { fixture: Fixture; compact?: boo
 
   return (
     <Pressable
-      onPress={() => router.push(`/match/${fixture.id}`)}
+      onPress={() => router.push(entityHref('match', fixture.id))}
       style={({ pressed }) => [styles.card, pressed && { opacity: 0.86 }]}
     >
-      {!compact && league ? <Text style={styles.league}>{league.shortName}</Text> : null}
+      {!compact && league ? (
+        <Pressable onPress={() => router.push(entityHref('league', league.id))}>
+          <Text style={styles.league}>{league.shortName}</Text>
+        </Pressable>
+      ) : null}
       <View style={styles.row}>
-        <View style={styles.side}>
+        <Pressable onPress={() => router.push(entityHref('team', home.id))} style={styles.side}>
           <Crest team={home} size={compact ? 28 : 34} />
           <Text style={styles.team} numberOfLines={1}>
             {home.shortName}
           </Text>
-        </View>
+        </Pressable>
         <View style={styles.mid}>
           {live || done ? (
             <Text style={styles.score}>
@@ -40,12 +45,12 @@ export function MatchRow({ fixture, compact }: { fixture: Fixture; compact?: boo
           {live ? <LiveBadge minute={fixture.minute} ht={fixture.status === 'ht'} /> : null}
           {done ? <Text style={styles.ft}>FT</Text> : null}
         </View>
-        <View style={[styles.side, styles.right]}>
+        <Pressable onPress={() => router.push(entityHref('team', away.id))} style={[styles.side, styles.right]}>
           <Text style={[styles.team, styles.teamRight]} numberOfLines={1}>
             {away.shortName}
           </Text>
           <Crest team={away} size={compact ? 28 : 34} />
-        </View>
+        </Pressable>
       </View>
     </Pressable>
   );

@@ -1,10 +1,14 @@
 import {
+  addComment,
   addPost,
   defaults,
   follow,
   hydratePersisted,
   markNotificationsRead,
+  mergeMatchAlerts,
   signInDemo,
+  toggleFavoritePlayer,
+  toggleFavoriteTeam,
   toggleLike,
   unreadCountFor,
 } from '@/services/appState';
@@ -36,6 +40,16 @@ describe('hydratePersisted', () => {
     expect(next.following.omar).toEqual(['maya']);
     expect(next.posts[0]?.id).toBe('keep-me');
     expect(next.comments.length).toBeGreaterThan(0);
+  });
+
+  it('fills missing favorite players on old persisted slices', () => {
+    const blob = {
+      schemaVersion: 1,
+      currentUserId: 'maya',
+      favorites: { maya: { teams: ['ars'], leagues: ['epl'] } },
+    };
+    const next = hydratePersisted(JSON.stringify(blob));
+    expect(next.favorites.maya).toEqual({ teams: ['ars'], leagues: ['epl'], players: [] });
   });
 });
 
@@ -70,5 +84,96 @@ describe('AppProvider mutations', () => {
     expect(state.likes.luca).toContain('p1');
     const liked = toggleLike(state, 'p1');
     expect(liked.likes.luca).not.toContain('p1');
+  });
+
+  it('toggles favorite players without dropping clubs or leagues', () => {
+    let state = signInDemo(defaults(), 'maya');
+    expect(state.favorites.maya.players).toEqual([]);
+    state = toggleFavoritePlayer(state, 'p-liv-11');
+    expect(state.favorites.maya.players).toEqual(['p-liv-11']);
+    expect(state.favorites.maya.teams).toContain('ars');
+    expect(state.favorites.maya.leagues).toContain('epl');
+    state = toggleFavoritePlayer(state, 'p-liv-11');
+    expect(state.favorites.maya.players).toEqual([]);
+    expect(state.favorites.maya.teams).toContain('ars');
+  });
+
+  it('attaches a match id to a post and follower notification', () => {
+    let state = signInDemo(defaults(), 'luca');
+    state = addPost(state, 'Come on Inter', undefined, 3_000, 'fx-int-mil');
+    expect(state.posts[0]?.matchId).toBe('fx-int-mil');
+    const forMaya = state.notifications.find((n) => n.id === 'n-post-3000-maya');
+    expect(forMaya?.matchId).toBe('fx-int-mil');
+    expect(forMaya?.userId).toBe('luca');
+  });
+
+  it('notifies the parent author on a match-chat reply, not the actor', () => {
+    const base = defaults();
+    const jordanUnread = unreadCountFor(base, 'jordan');
+    let state = signInDemo(base, 'maya');
+    state = addComment(state, 'fx-liv-ars', 'Mac Allister from that corner — textbook.', 'c1', 4_000);
+    expect(state.comments.at(-1)?.matchId).toBe('fx-liv-ars');
+    expect(unreadCountFor(state, 'maya')).toBe(unreadCountFor(base, 'maya'));
+    expect(unreadCountFor(state, 'jordan')).toBe(jordanUnread + 1);
+    const note = state.notifications.find((n) => n.id === 'n-reply-4000-jordan');
+    expect(note?.type).toBe('comment');
+    expect(note?.matchId).toBe('fx-liv-ars');
+    expect(note?.recipientId).toBe('jordan');
+  });
+
+  it('merges demo match alerts without duplicating seed goal/kickoff rows', () => {
+    const base = defaults();
+    const mayaUnread = unreadCountFor(base, 'maya');
+    const next = mergeMatchAlerts(base, [
+      {
+        type: 'goal',
+        recipientId: 'maya',
+        matchId: 'fx-liv-ars',
+        relatedMatchIds: ['fx-liv-ars', '9001'],
+        title: 'GOAL — LIV 2-1 ARS',
+        body: 'already seeded',
+      },
+      {
+        type: 'kickoff',
+        recipientId: 'jordan',
+        matchId: 'fx-liv-ars',
+        relatedMatchIds: ['fx-liv-ars'],
+        title: 'Kickoff — LIV vs ARS',
+        body: 'Anfield is live.',
+      },
+    ]);
+    expect(unreadCountFor(next, 'maya')).toBe(mayaUnread);
+    expect(next.notifications.some((n) => n.id === 'n-demo-kickoff-fx-liv-ars-jordan')).toBe(true);
+    const again = mergeMatchAlerts(next, [
+      {
+        type: 'kickoff',
+        recipientId: 'jordan',
+        matchId: 'fx-liv-ars',
+        relatedMatchIds: ['fx-liv-ars'],
+        title: 'Kickoff — LIV vs ARS',
+        body: 'Anfield is live.',
+      },
+    ]);
+    expect(again.notifications.filter((n) => n.recipientId === 'jordan' && n.type === 'kickoff')).toHaveLength(1);
+  });
+
+  it('keeps stored mock match ids on hydrate (no rewrite)', () => {
+    const blob = {
+      schemaVersion: 1,
+      currentUserId: 'maya',
+      posts: [{ id: 'keep-match', authorId: 'maya', text: 'old', createdAt: '2026-01-01T00:00:00.000Z', matchId: 'fx-liv-ars' }],
+    };
+    const next = hydratePersisted(JSON.stringify(blob));
+    expect(next.posts[0]?.matchId).toBe('fx-liv-ars');
+  });
+
+  it('treats mock and live team ids as the same favorite', () => {
+    let state = signInDemo(defaults(), 'maya');
+    expect(state.favorites.maya.teams).toContain('ars');
+    state = toggleFavoriteTeam(state, '42', ['42', 'ars']);
+    expect(state.favorites.maya.teams).not.toContain('ars');
+    expect(state.favorites.maya.teams).not.toContain('42');
+    state = toggleFavoriteTeam(state, '42', ['42', 'ars']);
+    expect(state.favorites.maya.teams).toContain('42');
   });
 });

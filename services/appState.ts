@@ -1,15 +1,22 @@
 import type { AppNotification, Comment, Post, User } from '@/data/types';
 import { demoUsers, seedComments, seedFollowing, seedNotifications, seedPosts } from '@/data/mocks/social';
+import type { MatchAlertDraft } from '@/lib/matchSocial';
 
 export const STATE_SCHEMA_VERSION = 1;
 
 const KNOWN_USER_IDS = new Set(demoUsers.map((u) => u.id));
 
+export interface FavoriteSlice {
+  teams: string[];
+  leagues: string[];
+  players: string[];
+}
+
 export interface Persisted {
   schemaVersion: number;
   currentUserId: string | null;
   following: Record<string, string[]>;
-  favorites: Record<string, { teams: string[]; leagues: string[] }>;
+  favorites: Record<string, FavoriteSlice>;
   profiles: Record<string, Partial<User>>;
   posts: Post[];
   likes: Record<string, string[]>;
@@ -20,7 +27,7 @@ export interface Persisted {
 export function defaults(): Persisted {
   const favorites: Persisted['favorites'] = {};
   for (const u of demoUsers) {
-    favorites[u.id] = { teams: [...u.favoriteTeamIds], leagues: [...u.favoriteLeagueIds] };
+    favorites[u.id] = { teams: [...u.favoriteTeamIds], leagues: [...u.favoriteLeagueIds], players: [] };
   }
   return {
     schemaVersion: STATE_SCHEMA_VERSION,
@@ -51,6 +58,28 @@ function pickArray<T>(value: unknown, fallback: T[]): T[] {
   return Array.isArray(value) ? (value as T[]) : fallback;
 }
 
+function pickIdList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+}
+
+export function favoriteSlice(value: unknown): FavoriteSlice {
+  const raw = isPlainObject(value) ? value : {};
+  return {
+    teams: pickIdList(raw.teams),
+    leagues: pickIdList(raw.leagues),
+    players: pickIdList(raw.players),
+  };
+}
+
+function pickFavorites(value: unknown, fallback: Persisted['favorites']): Persisted['favorites'] {
+  const merged = pickRecord(value, fallback);
+  const out: Persisted['favorites'] = {};
+  for (const [userId, slice] of Object.entries({ ...fallback, ...merged })) {
+    out[userId] = favoriteSlice(slice);
+  }
+  return out;
+}
+
 /**
  * Parse AsyncStorage JSON.
  * Corrupt JSON → full defaults.
@@ -72,7 +101,7 @@ export function hydratePersisted(raw: string | null): Persisted {
     schemaVersion: STATE_SCHEMA_VERSION,
     currentUserId: knownUserId(parsed.currentUserId),
     following: pickRecord(parsed.following, base.following),
-    favorites: pickRecord(parsed.favorites, base.favorites),
+    favorites: pickFavorites(parsed.favorites, base.favorites),
     profiles: pickRecord(parsed.profiles, base.profiles),
     likes: pickRecord(parsed.likes, base.likes),
     posts: pickArray(parsed.posts, base.posts),
@@ -138,33 +167,53 @@ export function unfollow(state: Persisted, userId: string): Persisted {
   };
 }
 
-export function toggleFavoriteTeam(state: Persisted, teamId: string): Persisted {
+function toggleIdList(list: string[], id: string, related: string[] = []): string[] {
+  const group = new Set([id, ...related]);
+  const has = list.some((item) => group.has(item));
+  if (has) return list.filter((item) => !group.has(item));
+  return [...list, id];
+}
+
+export function toggleFavoriteTeam(state: Persisted, teamId: string, relatedIds: string[] = []): Persisted {
   if (!state.currentUserId) return state;
-  const cur = state.favorites[state.currentUserId] ?? { teams: [], leagues: [] };
-  const has = cur.teams.includes(teamId);
+  const cur = favoriteSlice(state.favorites[state.currentUserId]);
   return {
     ...state,
     favorites: {
       ...state.favorites,
       [state.currentUserId]: {
         ...cur,
-        teams: has ? cur.teams.filter((id) => id !== teamId) : [...cur.teams, teamId],
+        teams: toggleIdList(cur.teams, teamId, relatedIds),
       },
     },
   };
 }
 
-export function toggleFavoriteLeague(state: Persisted, leagueId: string): Persisted {
+export function toggleFavoriteLeague(state: Persisted, leagueId: string, relatedIds: string[] = []): Persisted {
   if (!state.currentUserId) return state;
-  const cur = state.favorites[state.currentUserId] ?? { teams: [], leagues: [] };
-  const has = cur.leagues.includes(leagueId);
+  const cur = favoriteSlice(state.favorites[state.currentUserId]);
   return {
     ...state,
     favorites: {
       ...state.favorites,
       [state.currentUserId]: {
         ...cur,
-        leagues: has ? cur.leagues.filter((id) => id !== leagueId) : [...cur.leagues, leagueId],
+        leagues: toggleIdList(cur.leagues, leagueId, relatedIds),
+      },
+    },
+  };
+}
+
+export function toggleFavoritePlayer(state: Persisted, playerId: string, relatedIds: string[] = []): Persisted {
+  if (!state.currentUserId) return state;
+  const cur = favoriteSlice(state.favorites[state.currentUserId]);
+  return {
+    ...state,
+    favorites: {
+      ...state.favorites,
+      [state.currentUserId]: {
+        ...cur,
+        players: toggleIdList(cur.players, playerId, relatedIds),
       },
     },
   };
@@ -178,17 +227,25 @@ export function updateProfile(state: Persisted, next: Partial<Pick<User, 'name' 
   };
 }
 
-export function addPost(state: Persisted, text: string, imageUri?: string, now = Date.now()): Persisted {
+export function addPost(
+  state: Persisted,
+  text: string,
+  imageUri?: string,
+  now = Date.now(),
+  matchId?: string,
+): Persisted {
   if (!state.currentUserId) return state;
   const authorId = state.currentUserId;
   const authorName =
     state.profiles[authorId]?.name ?? demoUsers.find((u) => u.id === authorId)?.name ?? 'A fan';
+  const attached = matchId?.trim() || undefined;
   const post: Post = {
     id: `p-${now}`,
     authorId,
     text: text.trim(),
     imageUri,
     createdAt: new Date(now).toISOString(),
+    matchId: attached,
   };
   const followerIds = Object.entries(state.following)
     .filter(([id, ids]) => id !== authorId && ids.includes(authorId))
@@ -202,6 +259,7 @@ export function addPost(state: Persisted, text: string, imageUri?: string, now =
     read: false,
     recipientId,
     userId: authorId,
+    matchId: attached,
   }));
   return {
     ...state,
@@ -218,17 +276,96 @@ export function toggleLike(state: Persisted, postId: string): Persisted {
   return { ...state, likes: { ...state.likes, [state.currentUserId]: [...mine] } };
 }
 
-export function addComment(state: Persisted, matchId: string, text: string, parentId?: string, now = Date.now()): Persisted {
+export function addComment(
+  state: Persisted,
+  matchId: string,
+  text: string,
+  parentId?: string,
+  now = Date.now(),
+  relatedMatchIds: string[] = [matchId],
+): Persisted {
   if (!state.currentUserId) return state;
+  const authorId = state.currentUserId;
+  const authorName =
+    state.profiles[authorId]?.name ?? demoUsers.find((u) => u.id === authorId)?.name ?? 'A fan';
   const comment: Comment = {
     id: `c-${now}`,
     matchId,
-    authorId: state.currentUserId,
+    authorId,
     text: text.trim(),
     createdAt: new Date(now).toISOString(),
     parentId,
   };
-  return { ...state, comments: [...state.comments, comment] };
+  const matchSet = new Set(relatedMatchIds.length ? relatedMatchIds : [matchId]);
+  matchSet.add(matchId);
+  const notifications: AppNotification[] = [];
+  const parent = parentId ? state.comments.find((c) => c.id === parentId) : undefined;
+  if (parent && parent.authorId !== authorId) {
+    notifications.push({
+      id: `n-reply-${now}-${parent.authorId}`,
+      type: 'comment',
+      title: 'Reply in match chat',
+      body: `${authorName}: ${text.trim().slice(0, 80)}`,
+      createdAt: new Date(now).toISOString(),
+      read: false,
+      recipientId: parent.authorId,
+      matchId,
+      userId: authorId,
+    });
+  } else if (!parent) {
+    const participants = new Set<string>();
+    for (const c of state.comments) {
+      if (matchSet.has(c.matchId)) participants.add(c.authorId);
+    }
+    for (const p of state.posts) {
+      if (p.matchId && matchSet.has(p.matchId)) participants.add(p.authorId);
+    }
+    participants.delete(authorId);
+    for (const recipientId of participants) {
+      notifications.push({
+        id: `n-chat-${now}-${recipientId}`,
+        type: 'comment',
+        title: 'New match discussion',
+        body: `${authorName}: ${text.trim().slice(0, 80)}`,
+        createdAt: new Date(now).toISOString(),
+        read: false,
+        recipientId,
+        matchId,
+        userId: authorId,
+      });
+    }
+  }
+  return {
+    ...state,
+    comments: [...state.comments, comment],
+    notifications: [...notifications, ...state.notifications],
+  };
+}
+
+export function mergeMatchAlerts(state: Persisted, drafts: MatchAlertDraft[], now = Date.now()): Persisted {
+  if (!drafts.length) return state;
+  const extra: AppNotification[] = [];
+  for (const draft of drafts) {
+    const related = new Set(draft.relatedMatchIds ?? [draft.matchId]);
+    related.add(draft.matchId);
+    const exists =
+      state.notifications.some(
+        (n) => n.type === draft.type && n.recipientId === draft.recipientId && n.matchId && related.has(n.matchId),
+      ) || extra.some((n) => n.type === draft.type && n.recipientId === draft.recipientId && n.matchId === draft.matchId);
+    if (exists) continue;
+    extra.push({
+      id: `n-demo-${draft.type}-${draft.matchId}-${draft.recipientId}`,
+      type: draft.type,
+      title: draft.title,
+      body: draft.body,
+      createdAt: new Date(now).toISOString(),
+      read: false,
+      recipientId: draft.recipientId,
+      matchId: draft.matchId,
+    });
+  }
+  if (!extra.length) return state;
+  return { ...state, notifications: [...extra, ...state.notifications] };
 }
 
 export function markNotificationsRead(state: Persisted): Persisted {

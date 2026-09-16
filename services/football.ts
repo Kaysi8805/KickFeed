@@ -1,18 +1,23 @@
 import type {
-  Continent,
-  Country,
   Fixture,
   League,
   Lineup,
+  MatchEvent,
   MatchStatus,
+  Player,
+  PlayerAppearance,
+  PlayerPosition,
+  PlayerStats,
   SeedFixture,
-  StandingRow,
-  Scorer,
-  Team,
 } from '@/data/types';
 import { continents, countries, leagues, leagueRosters, teams } from '@/data/mocks/catalog';
 import { seedFixtures } from '@/data/mocks/fixtures';
+import { allPlayers, findPlayerById, findPlayerByName, foldName, squadFor } from '@/data/mocks/players';
 import { scorersFor, standingsFor } from '@/data/mocks/stats';
+import { footballApiKeyFromEnv } from '@/services/footballApi';
+import { createLiveFootballProvider } from '@/services/footballLive';
+import type { FootballProvider } from '@/services/footballTypes';
+import { MOCK_FOOTBALL_STATUS, noopAsync } from '@/services/footballTypes';
 
 const teamMap = new Map(teams.map((t) => [t.id, t]));
 const leagueMap = new Map(leagues.map((l) => [l.id, l]));
@@ -29,6 +34,46 @@ function fallbackFinishedScore(id: string): { home: number; away: number } {
   const away = (n >>> 8) % 4;
   if (home === 0 && away === 0) return { home: 1, away: 0 };
   return { home, away };
+}
+
+function hash(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i += 1) n = (n * 31 + s.charCodeAt(i)) >>> 0;
+  return n;
+}
+
+function withPlayerId(event: MatchEvent): MatchEvent {
+  if (event.playerId) return event;
+  const player = findPlayerByName(event.teamId, event.playerName);
+  return player ? { ...event, playerId: player.id } : event;
+}
+
+function takePos(squad: Player[], pos: PlayerPosition, n: number, used: Set<string>): Player[] {
+  const picked = squad.filter((p) => p.pos === pos && !used.has(p.id)).slice(0, n);
+  picked.forEach((p) => used.add(p.id));
+  return picked;
+}
+
+function startingXi(teamId: string): Lineup {
+  const squad = squadFor(teamId);
+  const used = new Set<string>();
+  const xi = [
+    ...takePos(squad, 'GK', 1, used),
+    ...takePos(squad, 'DF', 4, used),
+    ...takePos(squad, 'MF', 3, used),
+    ...takePos(squad, 'FW', 3, used),
+  ];
+  for (const p of squad) {
+    if (xi.length >= 11) break;
+    if (!used.has(p.id)) {
+      xi.push(p);
+      used.add(p.id);
+    }
+  }
+  return {
+    formation: '4-3-3',
+    players: xi.map((p) => ({ name: p.name, number: p.number, pos: p.pos, playerId: p.id })),
+  };
 }
 
 /**
@@ -100,50 +145,77 @@ export function hydrateFixture(seed: SeedFixture, now = Date.now()): Fixture {
     minute,
     homeScore,
     awayScore,
-    events: visibleEvents,
+    events: visibleEvents.map(withPlayerId),
     venue: seed.venue,
   };
 }
 
-const FIRST = ['Alex', 'Marco', 'Luis', 'Yuki', 'Ibrahim', 'Theo', 'Rafa', 'Nico', 'Owen', 'Kai'];
-const LAST = ['Santos', 'Berg', 'Okoye', 'Nakamura', 'Rossi', 'Hughes', 'Kovac', 'Duarte', 'Nwosu', 'Lind'];
-
-function lineupFor(_teamId: string, seed: number): Lineup {
-  const players = [
-    { name: `${FIRST[seed % FIRST.length]} ${LAST[seed % LAST.length]}`, number: 1, pos: 'GK' as const },
-    ...Array.from({ length: 10 }, (_, i) => {
-      const n = seed + i + 1;
-      const pos = i < 4 ? 'DF' : i < 7 ? 'MF' : 'FW';
-      return {
-        name: `${FIRST[n % FIRST.length]} ${LAST[(n + 3) % LAST.length]}`,
-        number: [23, 4, 5, 2, 3, 8, 6, 10, 7, 9][i],
-        pos: pos as Lineup['players'][number]['pos'],
-      };
-    }),
-  ];
-  return { formation: '4-3-3', players };
+export function teamCompetitions(teamId: string): League[] {
+  return leagues.filter((l) => (leagueRosters[l.id] ?? []).includes(teamId));
 }
 
-/**
- * Football data access. v1 is mock-only.
- * Swap `football` for a REST/GraphQL adapter that implements this shape.
- */
-export interface FootballProvider {
-  getContinents(): Continent[];
-  getContinent(id: string): Continent | undefined;
-  getCountries(continentId?: string): Country[];
-  getCountry(id: string): Country | undefined;
-  getLeagues(countryId?: string): League[];
-  getFeaturedLeagues(): League[];
-  getLeague(id: string): League | undefined;
-  getTeams(leagueId?: string): Team[];
-  getTeam(id: string): Team | undefined;
-  getFixtures(opts?: { leagueId?: string; teamId?: string }): Fixture[];
-  getFixture(id: string): Fixture | undefined;
-  getStandings(leagueId: string): StandingRow[];
-  getTopScorers(leagueId: string): Scorer[];
-  getLineups(fixture: Fixture): { home: Lineup; away: Lineup };
+export function primaryLeague(teamId: string): League | undefined {
+  return primaryLeagueFrom(football, teamId);
 }
+
+function appearancesFor(player: Player, now = Date.now()): PlayerAppearance[] {
+  const fixtures = seedFixtures
+    .map((s) => hydrateFixture(s, now))
+    .filter((f) => f.homeTeamId === player.teamId || f.awayTeamId === player.teamId)
+    .filter((f) => f.status !== 'upcoming')
+    .sort((a, b) => Date.parse(b.kickoff) - Date.parse(a.kickoff));
+
+  const out: PlayerAppearance[] = [];
+  for (const f of fixtures) {
+    const starter = startingXi(player.teamId).players.some((p) => p.playerId === player.id);
+    const events = f.events.filter(
+      (e) => e.playerId === player.id || (e.teamId === player.teamId && foldName(e.playerName) === foldName(player.shortName)),
+    );
+    if (!starter && events.length === 0) continue;
+    const h = hash(`${player.id}:${f.id}`);
+    const goals = events.filter((e) => e.type === 'goal').length;
+    out.push({
+      fixtureId: f.id,
+      starter,
+      minutes: starter ? Math.min(90, 78 + (h % 13)) : 12 + (h % 28),
+      goals,
+      assists: events.some((e) => /assist/i.test(e.detail ?? '')) ? 1 : 0,
+      rating: Number((6.3 + (h % 24) / 10 + goals * 0.35).toFixed(1)),
+    });
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+
+function statsFor(player: Player): PlayerStats {
+  const apps = appearancesFor(player);
+  const h = hash(player.id);
+  let goals = apps.reduce((n, a) => n + a.goals, 0);
+  let assists = apps.reduce((n, a) => n + a.assists, 0);
+  for (const league of teamCompetitions(player.teamId)) {
+    const row = scorersFor(league.id).find(
+      (s) => s.playerId === player.id || (s.teamId === player.teamId && foldName(s.playerName) === foldName(player.shortName)),
+    );
+    if (row) {
+      goals = Math.max(goals, row.goals);
+      assists = Math.max(assists, row.assists);
+    }
+  }
+  if (goals === 0 && player.pos === 'FW') goals = 1 + (h % 6);
+  if (assists === 0 && (player.pos === 'MF' || player.pos === 'FW')) assists = h % 5;
+  const appearances = Math.max(apps.length, player.pos === 'GK' ? 8 + (h % 4) : 6 + (h % 8));
+  return {
+    appearances,
+    goals,
+    assists,
+    minutes: appearances * (82 + (h % 8)),
+    yellows: h % 5,
+    reds: h % 17 === 0 ? 1 : 0,
+    rating: Number((6.4 + (h % 22) / 10).toFixed(1)),
+  };
+}
+
+export type { FootballEntityKind, FootballProvider, FootballSource, FootballStatus } from '@/services/footballTypes';
 
 export const mockFootballProvider: FootballProvider = {
   getContinents: () => continents,
@@ -160,6 +232,18 @@ export const mockFootballProvider: FootballProvider = {
     return teams.filter((t) => ids.has(t.id));
   },
   getTeam: (id) => teamMap.get(id),
+  getPlayer: (id) => findPlayerById(id),
+  getPlayers: () => allPlayers(),
+  getSquad: (teamId) => squadFor(teamId),
+  getTeamCompetitions: (teamId) => teamCompetitions(teamId),
+  getPlayerStats: (playerId) => {
+    const player = findPlayerById(playerId);
+    return player ? statsFor(player) : undefined;
+  },
+  getPlayerAppearances: (playerId) => {
+    const player = findPlayerById(playerId);
+    return player ? appearancesFor(player) : [];
+  },
   getFixtures: (opts) => {
     const now = Date.now();
     return seedFixtures
@@ -178,9 +262,31 @@ export const mockFootballProvider: FootballProvider = {
   getStandings: (leagueId) => standingsFor(leagueId),
   getTopScorers: (leagueId) => scorersFor(leagueId),
   getLineups: (fixture) => ({
-    home: lineupFor(fixture.homeTeamId, fixture.homeTeamId.length),
-    away: lineupFor(fixture.awayTeamId, fixture.awayTeamId.length + 4),
+    home: startingXi(fixture.homeTeamId),
+    away: startingXi(fixture.awayTeamId),
   }),
+  getStatus: () => MOCK_FOOTBALL_STATUS,
+  hydrate: noopAsync,
+  refresh: noopAsync,
+  subscribe: () => () => undefined,
+  ensureSquad: noopAsync,
+  ensureMatchDetail: noopAsync,
+  ensureScorers: noopAsync,
+  relatedIds: (_kind, id) => [id],
 };
 
-export const football: FootballProvider = mockFootballProvider;
+export function selectFootballProvider(
+  apiKey = footballApiKeyFromEnv(),
+  fallback: FootballProvider = mockFootballProvider,
+): FootballProvider {
+  if (!apiKey) return fallback;
+  return createLiveFootballProvider({ apiKey, fallback });
+}
+
+/** Mock unless `EXPO_PUBLIC_FOOTBALL_API_KEY` is set. */
+export const football: FootballProvider = selectFootballProvider();
+
+export function primaryLeagueFrom(provider: FootballProvider, teamId: string): League | undefined {
+  const comps = provider.getTeamCompetitions(teamId);
+  return comps.find((l) => l.featured) ?? comps[0];
+}

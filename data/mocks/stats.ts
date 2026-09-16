@@ -1,5 +1,6 @@
 import type { FormResult, Scorer, StandingRow } from '../types';
 import { leagueRosters } from './catalog';
+import { findPlayerByName, squadFor } from './players';
 
 function hash(s: string): number {
   let n = 0;
@@ -83,13 +84,23 @@ const genericNames = [
 ];
 
 export function scorersFor(leagueId: string): Scorer[] {
-  if (scorersByLeague[leagueId]) return scorersByLeague[leagueId];
+  if (scorersByLeague[leagueId]) {
+    return scorersByLeague[leagueId].map((s) => ({
+      ...s,
+      playerId: findPlayerByName(s.teamId, s.playerName)?.id,
+    }));
+  }
   const ids = leagueRosters[leagueId] ?? [];
-  return ids.slice(0, 5).map((teamId, i) => ({
-    id: `s-${leagueId}-${teamId}`,
-    playerName: genericNames[(hash(teamId) + i) % genericNames.length],
-    teamId,
-    goals: 8 - i,
-    assists: 4 - Math.min(i, 3),
-  }));
+  return ids.slice(0, 5).map((teamId, i) => {
+    const squad = squadFor(teamId);
+    const fw = squad.filter((p) => p.pos === 'FW')[i % Math.max(1, squad.filter((p) => p.pos === 'FW').length)] ?? squad[0];
+    return {
+      id: `s-${leagueId}-${teamId}`,
+      playerId: fw?.id,
+      playerName: fw?.name ?? genericNames[(hash(teamId) + i) % genericNames.length],
+      teamId,
+      goals: 8 - i,
+      assists: 4 - Math.min(i, 3),
+    };
+  });
 }

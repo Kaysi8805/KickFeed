@@ -1,13 +1,19 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { CatalogStatus } from '@/components/football/CatalogStatus';
 import { MatchRow } from '@/components/match/MatchRow';
 import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
+import { entityBackHref, entityHref } from '@/lib/entityNav';
+import { safeBack } from '@/lib/navBack';
+import { routeId } from '@/lib/routeParams';
+import { isFavoriteId } from '@/lib/favoriteIds';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
@@ -15,16 +21,29 @@ import { colors, radius, spacing, type } from '@/theme';
 type Tab = 'table' | 'scorers' | 'fixtures';
 
 export default function LeagueScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id: string | string[] }>();
+  const id = routeId(rawId);
+  const catalog = useFootballCatalog();
   const { favoriteLeagueIds, toggleFavoriteLeague } = useApp();
   const [tab, setTab] = useState<Tab>('table');
-  const league = football.getLeague(id);
+  const league = id ? football.getLeague(id) : undefined;
+
+  useEffect(() => {
+    if (league && tab === 'scorers') void football.ensureScorers(league.id);
+  }, [league, tab]);
 
   if (!league) {
     return (
       <Screen>
-        <HeaderBar title="League" onBack={() => router.back()} />
-        <EmptyState title="Unknown league" body="This competition isn’t in the mock catalog." />
+        <HeaderBar title="League" onBack={() => safeBack(entityBackHref('league', id))} />
+        <EmptyState
+          title="Unknown league"
+          body={
+            catalog.source === 'live'
+              ? 'Batch 3 live scores cover England (Premier League + Championship). Other competitions stay mock until a later geo batch.'
+              : 'This competition isn’t in the mock catalog.'
+          }
+        />
       </Screen>
     );
   }
@@ -33,14 +52,14 @@ export default function LeagueScreen() {
   const table = football.getStandings(league.id);
   const scorers = football.getTopScorers(league.id);
   const fixtures = football.getFixtures({ leagueId: league.id });
-  const fav = favoriteLeagueIds.includes(league.id);
+  const fav = isFavoriteId(favoriteLeagueIds, league.id, 'league');
 
   return (
     <Screen padded={false}>
       <View style={styles.pad}>
         <HeaderBar
           title={league.shortName}
-          onBack={() => router.back()}
+          onBack={() => safeBack(entityBackHref('league', league.id))}
           right={
             <Pressable onPress={() => toggleFavoriteLeague(league.id)}>
               <Text style={styles.star}>{fav ? '★ Favorited' : '☆ Favorite'}</Text>
@@ -51,6 +70,7 @@ export default function LeagueScreen() {
         <Text style={styles.meta}>
           {country?.flag} {country?.name} · {league.type}
         </Text>
+        <CatalogStatus />
         <Segmented
           value={tab}
           onChange={setTab}
@@ -63,7 +83,9 @@ export default function LeagueScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         {tab === 'table' ? (
-          table.length === 0 ? (
+          catalog.loading && table.length === 0 ? (
+            <EmptyState title="Loading table" body="Standings are cached for a few minutes to stay inside the free-tier limit." />
+          ) : table.length === 0 ? (
             <EmptyState title="No table" body="Cup competitions may not publish a league table." />
           ) : (
             <View style={styles.table}>
@@ -78,7 +100,11 @@ export default function LeagueScreen() {
                 const team = football.getTeam(row.teamId);
                 if (!team) return null;
                 return (
-                  <View key={row.teamId} style={styles.trow}>
+                  <Pressable
+                    key={row.teamId}
+                    onPress={() => router.push(entityHref('team', team.id))}
+                    style={({ pressed }) => [styles.trow, pressed && { opacity: 0.86 }]}
+                  >
                     <Text style={[styles.td, { flex: 0.4 }]}>{i + 1}</Text>
                     <View style={[styles.club, { flex: 2 }]}>
                       <Crest team={team} size={22} />
@@ -89,7 +115,7 @@ export default function LeagueScreen() {
                     <Text style={styles.td}>{row.played}</Text>
                     <Text style={styles.td}>{row.gf - row.ga}</Text>
                     <Text style={[styles.td, styles.pts]}>{row.points}</Text>
-                  </View>
+                  </Pressable>
                 );
               })}
               <View style={styles.formBlock}>
@@ -97,7 +123,11 @@ export default function LeagueScreen() {
                 {table.slice(0, 6).map((row) => {
                   const team = football.getTeam(row.teamId);
                   return (
-                    <View key={`f-${row.teamId}`} style={styles.formRow}>
+                    <Pressable
+                      key={`f-${row.teamId}`}
+                      onPress={() => team && router.push(entityHref('team', team.id))}
+                      style={styles.formRow}
+                    >
                       <Text style={styles.formName}>{team?.code}</Text>
                       <View style={styles.dots}>
                         {row.form.map((r, idx) => (
@@ -112,7 +142,7 @@ export default function LeagueScreen() {
                           />
                         ))}
                       </View>
-                    </View>
+                    </Pressable>
                   );
                 })}
               </View>
@@ -121,21 +151,38 @@ export default function LeagueScreen() {
         ) : null}
 
         {tab === 'scorers' ? (
+          scorers.length === 0 ? (
+            <EmptyState
+              title="No scorers yet"
+              body="The free tier may omit this list, or we skipped a request to save quota."
+            />
+          ) : (
           scorers.map((s, i) => {
             const team = football.getTeam(s.teamId);
             return (
               <View key={s.id} style={styles.scorer}>
                 <Text style={styles.rank}>{i + 1}</Text>
-                {team ? <Crest team={team} size={28} /> : null}
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.sname}>{s.playerName}</Text>
-                  <Text style={styles.smeta}>{team?.shortName}</Text>
-                </View>
+                {team ? (
+                  <Pressable onPress={() => router.push(entityHref('team', team.id))}>
+                    <Crest team={team} size={28} />
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  style={{ flex: 1 }}
+                  disabled={!s.playerId}
+                  onPress={() => s.playerId && router.push(entityHref('player', s.playerId))}
+                >
+                  <Text style={[styles.sname, s.playerId ? styles.link : null]}>{s.playerName}</Text>
+                  <Pressable disabled={!team} onPress={() => team && router.push(entityHref('team', team.id))}>
+                    <Text style={styles.smeta}>{team?.shortName}</Text>
+                  </Pressable>
+                </Pressable>
                 <Text style={styles.goals}>{s.goals}</Text>
                 <Text style={styles.assists}>{s.assists} A</Text>
               </View>
             );
           })
+          )
         ) : null}
 
         {tab === 'fixtures'
@@ -184,6 +231,7 @@ const styles = StyleSheet.create({
   },
   rank: { ...type.subtitle, color: colors.textDim, width: 22 },
   sname: { ...type.subtitle, fontSize: 14, color: colors.text },
+  link: { color: colors.lime },
   smeta: { ...type.caption, color: colors.textMuted, fontWeight: '500' },
   goals: { ...type.title, fontSize: 20, color: colors.lime },
   assists: { ...type.caption, color: colors.textDim, width: 36, textAlign: 'right' },
