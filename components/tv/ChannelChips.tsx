@@ -41,8 +41,10 @@ export function CountryChips({
           <Pressable
             key={c.id}
             onPress={() => onChange(c.id)}
+            hitSlop={4}
             style={[styles.country, active && styles.countryActive]}
             accessibilityRole="button"
+            accessibilityState={{ selected: active }}
             accessibilityLabel={c.shortName}
           >
             <Text style={[styles.countryText, active && styles.countryTextActive]}>
@@ -73,8 +75,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   countryActive: { backgroundColor: colors.pitchBright, borderColor: colors.pitchBright },
   countryText: { ...type.caption, color: colors.textMuted },

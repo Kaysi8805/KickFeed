@@ -22,11 +22,11 @@ export function SearchBarPrompt() {
     <Pressable
       onPress={() => router.push('/search')}
       accessibilityRole="button"
-      accessibilityLabel="Search teams, players, leagues, and fans"
+      accessibilityLabel="Search clubs, players, leagues, and fans"
       style={styles.bar}
     >
       <Ionicons name="search" size={18} color={colors.textDim} />
-      <Text style={styles.placeholder}>Search teams, players, leagues</Text>
+      <Text style={styles.placeholder}>Search clubs, players, leagues, fans</Text>
     </Pressable>
   );
 }
@@ -50,6 +50,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     paddingHorizontal: spacing.md,
     paddingVertical: 12,
+    minHeight: 44,
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
   },

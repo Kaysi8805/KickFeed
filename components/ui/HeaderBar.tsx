@@ -16,7 +16,13 @@ export function HeaderBar({
   return (
     <View style={styles.row}>
       {onBack ? (
-        <Pressable onPress={onBack} hitSlop={10} style={styles.back} accessibilityLabel="Back">
+        <Pressable
+          onPress={onBack}
+          hitSlop={6}
+          style={styles.back}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
       ) : null}
@@ -36,5 +42,11 @@ const styles = StyleSheet.create({
   },
   title: { ...type.title, color: colors.text, flex: 1 },
   right: { minWidth: 36, alignItems: 'flex-end' },
-  back: { marginRight: 4 },
+  back: {
+    width: 44,
+    height: 44,
+    marginRight: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

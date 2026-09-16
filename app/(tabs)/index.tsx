@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { CatalogStatus } from '@/components/football/CatalogStatus';
 import { PostCard } from '@/components/feed/PostCard';
 import { MatchRow } from '@/components/match/MatchRow';
 import { SearchBarPrompt } from '@/components/search/SearchEntry';
@@ -12,7 +13,7 @@ import { favoriteLiveFixtures, isSameMatch, sortFeedPosts } from '@/lib/matchSoc
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
-import { colors, radius, spacing, type } from '@/theme';
+import { colors, spacing, type } from '@/theme';
 
 export default function FeedScreen() {
   useLiveTick();
@@ -60,6 +61,9 @@ export default function FeedScreen() {
         </View>
       </View>
       <SearchBarPrompt />
+      <View style={styles.statusPad}>
+        <CatalogStatus />
+      </View>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {liveFav.length > 0 ? (
           <View style={styles.block}>
@@ -91,10 +95,16 @@ export default function FeedScreen() {
         {feed.length === 0 && aroundMatch.length === 0 ? (
           <EmptyState
             title="Your feed is a quiet stadium"
-            body="Follow fans from the Following tab, then come back for posts about tonight’s matches."
+            body="Follow fans from Following, then come back for posts about tonight’s matches."
+            actionLabel="Find fans to follow"
+            onAction={() => router.push('/following')}
           />
         ) : feed.length === 0 ? (
-          <Text style={styles.muted}>More friend posts will land here. Match chatter is up top.</Text>
+          <EmptyState
+            compact
+            title="No friend posts yet"
+            body="More friend posts will land here. Match chatter is up top."
+          />
         ) : (
           feed.map((post) => {
             const author = users.find((u) => u.id === post.authorId);
@@ -157,7 +167,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: 32 },
+  statusPad: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
   block: { marginBottom: spacing.md },
-  section: { ...type.micro, color: colors.textMuted, marginBottom: spacing.sm, marginTop: spacing.sm },
-  muted: { ...type.caption, color: colors.textMuted, fontWeight: '500', marginBottom: spacing.md },
+  section: {
+    ...type.micro,
+    color: colors.limeMuted,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
+  },
 });

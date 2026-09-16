@@ -157,8 +157,13 @@ Karol’s batches:
 - **Batch 3 — done.** Real scores for **England** (API-Football behind `FootballProvider`; demo auth/social still mock). Keyed → PL + Championship; no key → mocks.
 - **Batch 4 — done.** Match-centric social on real England fixtures (match hub, compose attach, feed surfacing, in-app match notifications). Attachments use live match ids when keyed and mock ids otherwise.
 - **Batch 5 — done.** TV / broadcast schedules for launch geos (UK + SK + US) with editorial listings and a `TvProvider` swap path.
-- **Batch 6 — done (this release).** Score predictions (lock at kickoff) and Man of the Match voting on the match hub. Demo auth; works on the mock catalog and on live England match ids when a key is set.
-- **Later (Batch 7+).** Real auth, DMs, more live geos beyond England, licensed TV listings, prediction leaderboards / season-long games. Not gambling or paid prediction markets.
+- **Batch 6 — done.** Score predictions (lock at kickoff) and Man of the Match voting on the match hub. Demo auth; works on the mock catalog and on live England match ids when a key is set.
+- **Batch 7 — done (this release).** UX polish only: consistent empty / loading / error copy, clearer Predict-locked and MOTM-voted states, slightly larger tap targets. No new screens or APIs.
+- **Later (Batch 8+).** Real auth, DMs, more live geos beyond England, licensed TV listings, prediction leaderboards / season-long games. Not gambling or paid prediction markets.
+
+## UX polish (Batch 7)
+
+Copy and empty-state pass on Feed, Matches, Search, Following, and the match hub (Hub / Predict / MOTM / TV). Compact empty states sit inside lists; full empty states stay for true blank screens. Predict shows a locked pill after kickoff; MOTM shows “Voting hasn’t opened” before live and a **Voted** badge after you pick. Search no-results copy no longer says “matches” (fixtures). Tap targets on back, steppers, send, and country chips sit closer to 44pt. Tokens unchanged (`theme/index.ts`).
 
 ## Predictions & MOTM (Batch 6)
 
