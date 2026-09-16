@@ -48,7 +48,7 @@ interface AppContextValue {
   toggleFavoriteTeam: (teamId: string) => void;
   toggleFavoriteLeague: (leagueId: string) => void;
   toggleFavoritePlayer: (playerId: string) => void;
-  updateProfile: (patch: Partial<Pick<User, 'name' | 'bio'>>) => void;
+  updateProfile: (patch: Partial<Pick<User, 'name' | 'bio' | 'tvCountryId'>>) => void;
   addPost: (text: string, imageUri?: string, matchId?: string) => void;
   toggleLike: (postId: string) => void;
   addComment: (matchId: string, text: string, parentId?: string) => void;

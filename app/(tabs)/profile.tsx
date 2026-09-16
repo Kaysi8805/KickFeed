@@ -6,11 +6,13 @@ import { PostCard } from '@/components/feed/PostCard';
 import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
 import { Screen } from '@/components/ui/Screen';
-import { useApp } from '@/services/AppProvider';
-import { football } from '@/services/football';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
+import { useApp } from '@/services/AppProvider';
 import { registerForPushNotifications } from '@/services/notifications';
+import { football } from '@/services/football';
+import { tv } from '@/services/tv';
 import { entityHref } from '@/lib/entityNav';
+import { resolveTvCountryId } from '@/lib/tvCountry';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function ProfileScreen() {
@@ -32,6 +34,7 @@ export default function ProfileScreen() {
   const mine = posts.filter((p) => p.authorId === currentUser.id);
   const teams = currentUser.favoriteTeamIds.map((id) => football.getTeam(id)).filter(Boolean);
   const players = favoritePlayerIds.map((id) => football.getPlayer(id)).filter(Boolean);
+  const tvCountry = tv.getCountry(resolveTvCountryId(currentUser.tvCountryId));
 
   async function enableDeviceAlerts() {
     setPushBusy(true);
@@ -98,6 +101,14 @@ export default function ProfileScreen() {
               <Text style={styles.btnText}>Favorites</Text>
             </Pressable>
           </View>
+          {tvCountry ? (
+            <Pressable style={styles.tvRow} onPress={() => router.push('/tv')}>
+              <Text style={styles.tvLabel}>
+                TV · {tvCountry.flag} {tvCountry.name}
+              </Text>
+              <Text style={styles.tvLink}>Schedule →</Text>
+            </Pressable>
+          ) : null}
         </View>
         <Text style={styles.section}>Your posts</Text>
         {mine.length === 0 ? (
@@ -181,6 +192,20 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   btnText: { ...type.caption, color: colors.text },
+  tvRow: {
+    marginTop: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.surface,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  tvLabel: { ...type.caption, color: colors.text },
+  tvLink: { ...type.caption, color: colors.lime },
   section: { ...type.micro, color: colors.textMuted, marginBottom: spacing.sm },
   muted: { ...type.body, color: colors.textMuted, marginBottom: spacing.lg },
   switcher: {

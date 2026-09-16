@@ -158,6 +158,42 @@ export interface User {
   initials: string;
   favoriteTeamIds: string[];
   favoriteLeagueIds: string[];
+  /** Launch-geo TV market (`gbr` / `svk` / `usa`, …). Missing → device locale, else Slovakia. */
+  tvCountryId?: string;
+}
+
+export type TvChannelKind = 'tv' | 'streaming';
+
+export interface TvCountry {
+  id: string;
+  name: string;
+  shortName: string;
+  flag: string;
+  timeZone: string;
+  localeRegions: string[];
+  timeZones: string[];
+}
+
+export interface TvChannel {
+  id: string;
+  name: string;
+  shortName: string;
+  kind: TvChannelKind;
+}
+
+export interface TvAiring {
+  channel: TvChannel;
+  note?: string;
+}
+
+export interface TvCountryBroadcasts {
+  country: TvCountry;
+  airings: TvAiring[];
+}
+
+export interface TvScheduleEntry {
+  fixture: Fixture;
+  airings: TvAiring[];
 }
 
 export interface Post {

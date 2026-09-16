@@ -7,10 +7,11 @@ v1 is **demo-auth local**: seeded fan profiles, mock social, and **mock football
 ## Features
 
 - **Demo auth** — pick a seeded fan profile (Maya, Omar, Luca, …). No email/password or OAuth yet.
-- **Profiles & favorites** — name, photo initials, bio, favorite clubs, competitions, and players. Favorites drive Home live scores and Following.
+- **Profiles & favorites** — name, photo initials, bio, favorite clubs, competitions, and players. **TV country** (UK / SK / US) defaults from the device locale, else Slovakia. Favorites drive Home live scores and Following.
 - **Social feed & follows** — follow demo users, post text (optional photo), optionally **attach a live/today/upcoming fixture**, like posts, see friends + own posts. Home and Following highlight match-attached posts and live matches for clubs/players you follow.
 - **Global search** — dedicated Search screen from the Feed bar and tab headers. Query clubs, players, competitions, and demo fans; results open the existing entity pages.
-- **Live scores & fixtures** — Live / Today / Upcoming. With a key, England Premier League + Championship from API-Football; without a key, the mock worldwide catalog. Match pages with score, events, lineups (when the free tier returns them), and stats stubs.
+- **Live scores & fixtures** — Live / Today / Upcoming. With a key, England Premier League + Championship from API-Football; without a key, the mock worldwide catalog. Match pages with score, events, lineups (when the free tier returns them), stats stubs, and **TV channels for the user’s country**.
+- **TV / broadcast schedule** — FotMob-style listings for launch geos (**UK, Slovakia, United States**). Browse today’s and upcoming England kickoffs with channel chips; tap through to the match. Editorial/mock data — not a licensed rights guide.
 - **Clubs & players** — Team pages (crest, league table context, fixtures, clickable squad, favorite) and player pages (mock season stats, recent appearances, follow/favorite, link back to club).
 - **Worldwide leagues** — continents → countries → competitions. Batch 3 live standings/scorers are England-only; other geos stay on the mock tree. Featured Premier League (and Championship when live).
 - **Match hub** — discussion thread, participants, empty states, and feed posts attached to that match id. Composer can deep-link from the match page.
@@ -73,18 +74,21 @@ Use **Profile → Switch demo user** to pick another seeded fan. **Profile → E
 app/                 Expo Router screens (tabs + stack)
   team/[id]          Club detail (squad, fixtures, favorite)
   player/[id]        Player detail (stats, appearances, follow)
-  match/[id]         Match hub (events, discussion, attached posts)
+  match/[id]         Match hub (events, discussion, attached posts, TV)
+  tv                 TV schedule by country (UK / SK / US)
   search             Global search (clubs, players, leagues, fans)
-components/          UI, feed cards, match rows, entity links, search entry
+components/          UI, feed cards, match rows, entity links, search entry, TV chips
 lib/matchSocial.ts   Attach/match-post helpers (live vs mock ids)
+lib/tvCountry.ts     Locale → launch geo, kickoff labels in that timezone
 data/types.ts        Shared domain types
-data/mocks/          Seeded users, teams, squads, leagues, fixtures, posts
+data/mocks/          Seeded users, teams, squads, leagues, fixtures, posts, TV listings
 services/auth.ts     Demo auth + stubs for email/OAuth
 services/football.ts     FootballProvider + mock + auto-select live adapter
 services/footballLive.ts API-Football England adapter (in-memory TTL cache)
 services/footballMap.ts  API entity → KickFeed types
+services/tv.ts           TvProvider + editorial mock listings (licensed swap later)
 services/notifications.ts  Expo Notifications register/schedule stubs
-services/AppProvider.tsx   App state (follows, favorites, posts)
+services/AppProvider.tsx   App state (follows, favorites, posts, TV country)
 theme/               Color, type, and spacing tokens
 ```
 
@@ -129,6 +133,18 @@ Mock fixtures use `SeedFixture.kickoffOffsetMin` relative to “now” when `hyd
 
 A live API returns real statuses (`NS` / `1H` / `HT` / `2H` / `FT`, …) instead of this clock.
 
+## TV schedules (Batch 5)
+
+FotMob-style **where to watch**, for launch geos only: **United Kingdom, Slovakia, and the United States**. The country list is `tvCountries` in `data/mocks/tv.ts` — append a geo there, add editorial rows, and the match page + `/tv` screen pick it up.
+
+`services/tv.ts` exports `TvProvider` (broadcasts by match id; listings by country + date). v1 is **editorial/mock** seeded for featured Premier League fixtures, with a PL / Championship league fallback so live England ids still resolve when a key is set. Listings key off mock fixture ids (`fx-liv-ars`) plus club pairs; `relatedIds` / `resolveMatchDeepLink` alias those onto live API ids. **Do not scrape FotMob, Flashscore, or broadcaster sites.**
+
+Default country: Profile → Edit profile → TV country, else the device locale/timezone (`en-GB` → UK, `sk-SK` / `Europe/Bratislava` → SK, `en-US` → US), else **Slovakia**. Open a match to see channel chips; Matches header (TV icon) or Profile opens the schedule. Kickoff times render in that geo’s timezone.
+
+### Swap in a licensed TV feed later
+
+Keep `TvProvider` stable (`getBroadcastsByMatch`, `getListingsByCountry`, `getCountries`). Replace `createEditorialTvProvider` / `export const tv` with an adapter that talks to a licensed listings API. Do not put TV behind the football API key — API-Football’s free tier is scores-only, and KickFeed does not depend on a paid TV add-on. CI and first-run demo stay on the editorial path (no extra secrets).
+
 ## Roadmap
 
 Karol’s batches:
@@ -137,8 +153,9 @@ Karol’s batches:
 - **Batch 1 — done.** Teams, players, and competitions are first-class and clickable throughout the app.
 - **Batch 2 — done.** Global search plus follow/favorite **players**.
 - **Batch 3 — done.** Real scores for **England** (API-Football behind `FootballProvider`; demo auth/social still mock). Keyed → PL + Championship; no key → mocks.
-- **Batch 4 — done (this release).** Match-centric social on real England fixtures (match hub, compose attach, feed surfacing, in-app match notifications). Attachments use live match ids when keyed and mock ids otherwise.
-- **Batch 5 — next.** TV schedules for launch geos. Remaining geos, real auth, DMs, and predictions stay later.
+- **Batch 4 — done.** Match-centric social on real England fixtures (match hub, compose attach, feed surfacing, in-app match notifications). Attachments use live match ids when keyed and mock ids otherwise.
+- **Batch 5 — done (this release).** TV / broadcast schedules for launch geos (UK + SK + US) with editorial listings and a `TvProvider` swap path.
+- **Batch 6 — next.** Predictions / MOTM per the product roadmap. Remaining geos, real auth, and DMs stay later.
 
 ## Theme
 
