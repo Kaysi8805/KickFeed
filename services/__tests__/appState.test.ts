@@ -240,6 +240,35 @@ describe('score predictions', () => {
     expect(next.motmVotes.length).toBeGreaterThan(0);
     expect(next.predictions.some((p) => p.userId === 'maya')).toBe(false);
   });
+
+  it('keeps intentional empty prediction/MOTM arrays instead of reseeding', () => {
+    const next = hydratePersisted(
+      JSON.stringify({ schemaVersion: 2, currentUserId: 'maya', predictions: [], motmVotes: [] }),
+    );
+    expect(next.predictions).toEqual([]);
+    expect(next.motmVotes).toEqual([]);
+  });
+
+  it('does not reseed when every stored engagement row fails to parse', () => {
+    const next = hydratePersisted(
+      JSON.stringify({
+        schemaVersion: 2,
+        currentUserId: 'maya',
+        predictions: [{ matchId: 1 }],
+        motmVotes: [{ playerName: 'Salah' }],
+      }),
+    );
+    expect(next.predictions).toEqual([]);
+    expect(next.motmVotes).toEqual([]);
+  });
+
+  it('soft-skips a prediction when the fixture is omitted', () => {
+    let state = signInDemo(defaults(), 'maya');
+    const before = state.predictions.length;
+    state = setPrediction(state, 'fx-bha-mun', 2, 1, now);
+    expect(state.predictions).toHaveLength(before);
+    expect(state.predictions.some((p) => p.userId === 'maya' && p.matchId === 'fx-bha-mun')).toBe(false);
+  });
 });
 
 describe('MOTM votes', () => {
@@ -276,6 +305,14 @@ describe('MOTM votes', () => {
     let state = signInDemo(defaults(), 'maya');
     state = setMotmVote(state, 'fx-bha-mun', salah, 7_000, 'upcoming');
     expect(state.motmVotes.some((v) => v.userId === 'maya' && v.matchId === 'fx-bha-mun')).toBe(false);
+  });
+
+  it('soft-skips a vote when match status is omitted', () => {
+    let state = signInDemo(defaults(), 'maya');
+    const before = state.motmVotes.length;
+    state = setMotmVote(state, 'fx-liv-ars', salah, 7_500);
+    expect(state.motmVotes).toHaveLength(before);
+    expect(state.motmVotes.some((v) => v.userId === 'maya' && v.matchId === 'fx-liv-ars')).toBe(false);
   });
 
   it('rejects a second vote when the same match is stored under a live alias id', () => {

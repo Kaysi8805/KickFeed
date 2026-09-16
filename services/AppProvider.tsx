@@ -173,8 +173,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ),
         ),
       setPrediction: (fixture, homeScore, awayScore) =>
-        patch((p) =>
-          setPredictionState(
+        patch((p) => {
+          if (!fixture?.id) return p;
+          return setPredictionState(
             p,
             attachMatchId(football, fixture.id),
             homeScore,
@@ -182,11 +183,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             Date.now(),
             { status: fixture.status, kickoff: fixture.kickoff },
             relatedFixtureIds(football, fixture.id),
-          ),
-        ),
+          );
+        }),
       setMotmVote: (fixture, candidate) =>
-        patch((p) =>
-          setMotmVoteState(
+        patch((p) => {
+          if (!fixture?.id) return p;
+          return setMotmVoteState(
             p,
             attachMatchId(football, fixture.id),
             {
@@ -198,8 +200,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             Date.now(),
             fixture.status,
             relatedFixtureIds(football, fixture.id),
-          ),
-        ),
+          );
+        }),
       markNotificationsRead: () => patch(markNotificationsReadState),
       followerCount: (userId) => Object.values(state.following).filter((ids) => ids.includes(userId)).length,
     }),

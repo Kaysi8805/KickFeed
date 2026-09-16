@@ -101,14 +101,21 @@ function parseMotmVote(value: unknown): MotmVote | null {
   };
 }
 
-function pickPredictions(value: unknown, fallback: ScorePrediction[]): ScorePrediction[] {
+/**
+ * Missing / non-array → fallback (v1 blobs without these keys still get community seeds).
+ * A present array is authoritative, including [] — never reseed over a cleared or empty save.
+ */
+function pickParsedRows<T>(value: unknown, fallback: T[], parse: (row: unknown) => T | null): T[] {
   if (!Array.isArray(value)) return fallback;
-  return value.map(parsePrediction).filter((row): row is ScorePrediction => !!row);
+  return value.map(parse).filter((row): row is T => row != null);
+}
+
+function pickPredictions(value: unknown, fallback: ScorePrediction[]): ScorePrediction[] {
+  return pickParsedRows(value, fallback, parsePrediction);
 }
 
 function pickMotmVotes(value: unknown, fallback: MotmVote[]): MotmVote[] {
-  if (!Array.isArray(value)) return fallback;
-  return value.map(parseMotmVote).filter((row): row is MotmVote => !!row);
+  return pickParsedRows(value, fallback, parseMotmVote);
 }
 
 export function favoriteSlice(value: unknown): FavoriteSlice {
@@ -465,7 +472,7 @@ export function setPrediction(
   relatedMatchIds: string[] = [matchId],
 ): Persisted {
   if (!state.currentUserId) return state;
-  if (fixture && !isPredictionOpen(fixture, now)) return state;
+  if (!isPredictionOpen(fixture, now)) return state;
   const userId = state.currentUserId;
   const related = relatedSet(matchId, relatedMatchIds);
   const stamp = new Date(now).toISOString();
@@ -514,7 +521,7 @@ export function setMotmVote(
   relatedMatchIds: string[] = [matchId],
 ): Persisted {
   if (!state.currentUserId) return state;
-  if (status && !isMotmOpen(status)) return state;
+  if (!isMotmOpen(status)) return state;
   if (!input.playerKey.trim() || !input.playerName.trim() || !input.teamId.trim()) return state;
   const userId = state.currentUserId;
   const related = relatedSet(matchId, relatedMatchIds);

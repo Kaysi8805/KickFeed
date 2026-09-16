@@ -38,16 +38,31 @@ export function clampScore(value: number): number {
   return Math.max(0, Math.min(PREDICTION_SCORE_MAX, Math.trunc(value)));
 }
 
-/** Score picks stay open only before kickoff while the fixture is still upcoming. */
-export function isPredictionOpen(fixture: Pick<Fixture, 'status' | 'kickoff'>, now = Date.now()): boolean {
-  if (fixture.status !== 'upcoming') return false;
+/** Score picks stay open only before kickoff while the fixture is still upcoming. Missing fixture → closed. */
+export function isPredictionOpen(
+  fixture: Pick<Fixture, 'status' | 'kickoff'> | null | undefined,
+  now = Date.now(),
+): boolean {
+  if (!fixture || fixture.status !== 'upcoming' || !fixture.kickoff) return false;
   const kickoff = Date.parse(fixture.kickoff);
   if (!Number.isFinite(kickoff)) return false;
   return kickoff > now;
 }
 
-export function isMotmOpen(status: MatchStatus): boolean {
+export function isMotmOpen(status: MatchStatus | null | undefined): boolean {
   return status === 'live' || status === 'ht' || status === 'finished';
+}
+
+/** Hub surfaces completed engagement only when it matches the fixture phase — no Predict/MOTM CTAs. */
+export function hubEngageState(
+  status: MatchStatus | null | undefined,
+  hasPrediction: boolean,
+  hasMotmVote: boolean,
+): { prediction: boolean; motm: boolean } {
+  return {
+    prediction: !!hasPrediction,
+    motm: !!hasMotmVote && isMotmOpen(status),
+  };
 }
 
 export function playerKeyFor(playerId: string | undefined, teamId: string, number: number, name: string): string {
@@ -92,7 +107,11 @@ function dedupeCandidates(rows: MotmCandidate[]): MotmCandidate[] {
  * MOTM ballot: starting XIs when lineups exist, otherwise both squads.
  * Live England may omit lineups on the free tier — squads fill that gap after `ensureSquad`.
  */
-export function motmCandidates(provider: EngagementCatalog, fixture: Fixture): MotmCandidate[] {
+export function motmCandidates(
+  provider: EngagementCatalog,
+  fixture: Fixture | null | undefined,
+): MotmCandidate[] {
+  if (!fixture) return [];
   const lineups = provider.getLineups(fixture);
   const fromXi = [
     ...lineups.home.players.map((p) => fromLineupPlayer(p, fixture.homeTeamId)),

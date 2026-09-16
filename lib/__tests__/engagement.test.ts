@@ -3,6 +3,7 @@ import { seedMotmVotes, seedPredictions } from '@/data/mocks/engagement';
 import {
   aggregatePredictions,
   clampScore,
+  hubEngageState,
   isMotmOpen,
   isPredictionOpen,
   motmCandidates,
@@ -27,6 +28,8 @@ describe('prediction lock', () => {
     expect(isPredictionOpen({ status: 'live', kickoff: '2026-09-16T13:00:00.000Z' }, now)).toBe(false);
     expect(isPredictionOpen({ status: 'ht', kickoff: '2026-09-16T11:00:00.000Z' }, now)).toBe(false);
     expect(isPredictionOpen({ status: 'finished', kickoff: '2026-09-16T10:00:00.000Z' }, now)).toBe(false);
+    expect(isPredictionOpen(undefined, now)).toBe(false);
+    expect(isPredictionOpen(null, now)).toBe(false);
   });
 
   it('clamps scores to 0–9 integers', () => {
@@ -43,6 +46,19 @@ describe('MOTM window', () => {
     expect(isMotmOpen('live')).toBe(true);
     expect(isMotmOpen('ht')).toBe(true);
     expect(isMotmOpen('finished')).toBe(true);
+    expect(isMotmOpen(undefined)).toBe(false);
+    expect(isMotmOpen(null)).toBe(false);
+  });
+});
+
+describe('hub engage gating', () => {
+  it('only surfaces completed Predict/MOTM that match the fixture phase', () => {
+    expect(hubEngageState('upcoming', true, true)).toEqual({ prediction: true, motm: false });
+    expect(hubEngageState('upcoming', false, false)).toEqual({ prediction: false, motm: false });
+    expect(hubEngageState('live', true, false)).toEqual({ prediction: true, motm: false });
+    expect(hubEngageState('live', false, true)).toEqual({ prediction: false, motm: true });
+    expect(hubEngageState('finished', true, true)).toEqual({ prediction: true, motm: true });
+    expect(hubEngageState(undefined, true, true)).toEqual({ prediction: true, motm: false });
   });
 });
 
@@ -88,6 +104,11 @@ describe('MOTM candidates', () => {
     const ballot = motmCandidates(empty, fixture);
     expect(ballot.length).toBeGreaterThan(22);
     expect(ballot.some((p) => p.key === 'p-liv-11')).toBe(true);
+  });
+
+  it('returns an empty ballot when the fixture is omitted', () => {
+    expect(motmCandidates(mockFootballProvider, undefined)).toEqual([]);
+    expect(motmCandidates(mockFootballProvider, null)).toEqual([]);
   });
 
   it('builds a stable key when a lineup row has no player id', () => {

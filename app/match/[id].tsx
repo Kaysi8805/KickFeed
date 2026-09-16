@@ -30,6 +30,7 @@ import { routeId } from '@/lib/routeParams';
 import { useLiveTick } from '@/lib/useLiveTick';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import {
+  hubEngageState,
   isMotmOpen,
   motmCandidates,
   motmVoteForUser,
@@ -141,6 +142,7 @@ export default function MatchDetailScreen() {
   const myPrediction = predictionForUser(matchPredictions, currentUser?.id, relatedIds);
   const myMotm = motmVoteForUser(matchMotmVotes, currentUser?.id, relatedIds);
   const ballot = motmCandidates(football, fixture);
+  const hubEngage = hubEngageState(fixture.status, !!myPrediction, !!myMotm);
 
   return (
     <Screen padded={false}>
@@ -337,22 +339,18 @@ export default function MatchDetailScreen() {
 
         {tab === 'chat' ? (
           <View style={styles.block}>
-            {myPrediction || myMotm ? (
+            {hubEngage.prediction || hubEngage.motm ? (
               <View style={styles.engageCard}>
-                {myPrediction ? (
+                {hubEngage.prediction && myPrediction ? (
                   <Pressable onPress={() => setTab('predict')}>
                     <Text style={styles.engageLine}>
                       You predicted {scoreline(myPrediction.homeScore, myPrediction.awayScore)}
                     </Text>
                   </Pressable>
                 ) : null}
-                {myMotm ? (
+                {hubEngage.motm && myMotm ? (
                   <Pressable onPress={() => setTab('motm')}>
                     <Text style={styles.engageLine}>Your MOTM: {myMotm.playerName}</Text>
-                  </Pressable>
-                ) : isMotmOpen(fixture.status) ? (
-                  <Pressable onPress={() => setTab('motm')}>
-                    <Text style={styles.engageLine}>Vote Man of the Match</Text>
                   </Pressable>
                 ) : null}
               </View>
