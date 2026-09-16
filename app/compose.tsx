@@ -30,6 +30,14 @@ export default function ComposeScreen() {
   );
   const selected = matchId ? football.getFixture(attachMatchId(football, matchId)) : undefined;
 
+  function leaveCompose(attached?: string) {
+    if (attached) {
+      router.replace(`/match/${attached}?tab=chat` as Href);
+      return;
+    }
+    router.replace('/' as Href);
+  }
+
   async function pickImage() {
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
     if (!res.canceled) setImageUri(res.assets[0]?.uri);
@@ -38,13 +46,7 @@ export default function ComposeScreen() {
   return (
     <Screen padded={false}>
       <View style={styles.pad}>
-        <HeaderBar
-          title="New post"
-          onBack={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace('/' as Href);
-          }}
-        />
+        <HeaderBar title="New post" onBack={() => leaveCompose()} />
       </View>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Text style={styles.as}>Posting as {currentUser?.name}</Text>
@@ -117,13 +119,7 @@ export default function ComposeScreen() {
                   ? `Posted on ${fixtureScoreLabel(football, selected)}.`
                   : 'Your post is live in the demo feed.',
               );
-              if (attached) {
-                router.replace(`/match/${attached}?tab=chat` as Href);
-              } else if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace('/' as Href);
-              }
+              leaveCompose(attached);
             }}
             style={[styles.post, !text.trim() && { opacity: 0.4 }]}
           >

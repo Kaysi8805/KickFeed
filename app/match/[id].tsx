@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -66,7 +66,7 @@ export default function MatchDetailScreen() {
   if (!fixture || !home || !away) {
     return (
       <Screen>
-        <HeaderBar title="Match" onBack={() => router.back()} />
+        <HeaderBar title="Match" onBack={() => (router.canGoBack() ? router.back() : router.replace('/' as Href))} />
         <EmptyState
           title="Match not found"
           body={
@@ -98,7 +98,7 @@ export default function MatchDetailScreen() {
       <View style={styles.pad}>
         <HeaderBar
           title={league?.shortName ?? 'Match'}
-          onBack={() => router.back()}
+          onBack={() => (router.canGoBack() ? router.back() : router.replace('/' as Href))}
           right={
             <Pressable onPress={() => router.push({ pathname: '/compose', params: { matchId: fixture.id } })}>
               <Text style={styles.leagueLink}>Post</Text>

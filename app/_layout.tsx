@@ -39,7 +39,7 @@ function RootNav() {
         <Stack.Screen name="user/[id]" />
         <Stack.Screen name="continent/[id]" />
         <Stack.Screen name="country/[id]" />
-        <Stack.Screen name="compose" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="compose" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
         <Stack.Screen name="search" />
