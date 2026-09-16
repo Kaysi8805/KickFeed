@@ -10,18 +10,21 @@ import { Screen } from '@/components/ui/Screen';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
-import { entityHref } from '@/lib/entityNav';
+import { entityBackHref, entityHref } from '@/lib/entityNav';
+import { safeBack } from '@/lib/navBack';
+import { routeId } from '@/lib/routeParams';
 
 export default function UserScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id: string | string[] }>();
+  const id = routeId(rawId);
   const { users, currentUser, followingIds, follow, unfollow, posts, likedPostIds, toggleLike, followerCount } =
     useApp();
-  const user = users.find((u) => u.id === id);
+  const user = id ? users.find((u) => u.id === id) : undefined;
 
   if (!user) {
     return (
       <Screen>
-        <HeaderBar title="Fan" onBack={() => router.back()} />
+        <HeaderBar title="Fan" onBack={() => safeBack(entityBackHref('user', id))} />
         <EmptyState title="Unknown profile" body="This demo user isn’t in the seed list." />
       </Screen>
     );
@@ -35,7 +38,7 @@ export default function UserScreen() {
   return (
     <Screen padded={false}>
       <View style={styles.pad}>
-        <HeaderBar title={user.name} onBack={() => router.back()} />
+        <HeaderBar title={user.name} onBack={() => safeBack(entityBackHref('user', user.id))} />
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.head}>

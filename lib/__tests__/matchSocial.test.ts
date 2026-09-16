@@ -8,6 +8,7 @@ import {
   feedPostRank,
   postsForMatch,
   relatedFixtureIds,
+  resolveMatchDeepLink,
   resolvePostFixture,
   sameTeamPair,
   sortFeedPosts,
@@ -111,6 +112,41 @@ describe('live catalog id stability', () => {
       1,
     );
     expect(resolvePostFixture(post({ id: 'p1', matchId: 'fx-liv-ars' }), live)?.id).toBe('9001');
+    const link = resolveMatchDeepLink(live, 'fx-liv-ars');
+    expect(link.via).toBe('alias');
+    expect(link.catalogId).toBe('9001');
+    expect(link.source).toBe('live');
+    expect(link.fixture?.id).toBe('9001');
+  });
+
+  it('does not serve a mock fixture on the live path when the club pair is missing or ambiguous', async () => {
+    const second: ApiFixture = {
+      ...livArs,
+      fixture: { ...livArs.fixture, id: 9002, date: '2026-09-23T19:00:00+00:00' },
+    };
+    const http: FootballHttp = vi.fn(async (path, params) => {
+      if (path === '/fixtures') return params?.league === 40 || params?.league === '40' ? [] : [livArs, second];
+      if (path === '/standings') return [];
+      if (path === '/players/topscorers') return [];
+      return [];
+    });
+    const live = createLiveFootballProvider({
+      fallback: mockFootballProvider,
+      http,
+      season: 2026,
+      now: () => Date.parse('2026-09-16T12:00:00.000Z'),
+    });
+    await live.hydrate();
+    expect(live.getFixture('fx-liv-ars')?.id).toBe('fx-liv-ars');
+    const ambiguous = resolveMatchDeepLink(live, 'fx-liv-ars');
+    expect(ambiguous.via).toBe('missing');
+    expect(ambiguous.fixture).toBeUndefined();
+    expect(ambiguous.catalogId).toBe('fx-liv-ars');
+    expect(resolvePostFixture(post({ id: 'p1', matchId: 'fx-liv-ars' }), live)).toBeUndefined();
+
+    const ghost = resolveMatchDeepLink(live, 'fx-rma-bar');
+    expect(ghost.via).toBe('missing');
+    expect(ghost.fixture).toBeUndefined();
   });
 
   it('builds goal-style drafts on live ids for users who favorite those clubs', async () => {

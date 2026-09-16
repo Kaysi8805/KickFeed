@@ -101,7 +101,13 @@ theme/               Color, type, and spacing tokens
 
 Compose can attach a fixture from `FootballProvider` (live/today/upcoming). New posts persist that provider’s match id: **live API ids when a key is set**, mock ids (`fx-liv-ars`, …) otherwise. Match hub (`/match/[id]` → Hub) shows attached feed posts plus the discussion thread. Home/Following surface those posts next to live matches for clubs and players you follow.
 
-Old mock-attached seed posts are resolved onto a live England fixture **best-effort** (same clubs via team aliases). Hydrate never rewrites stored ids, so a missed mapping cannot corrupt AsyncStorage.
+Old mock-attached seed posts remap onto a live England fixture only through an explicit **deep-link board** (`resolveMatchDeepLink` in `lib/matchSocial.ts`):
+
+- **exact** — the URL/stored id is in the active catalog (`getFixtures()`).
+- **alias** — live catalog has **exactly one** fixture with the same clubs (via team aliases). Seed ids like `fx-liv-ars` then open that live match.
+- **missing** — no unique pair (or the id is unknown). The live path does **not** render the mock fallback fixture, so deep links cannot show mock scores as if they were England live.
+
+Hydrate never writes this mapping back to AsyncStorage.
 
 In-app notifications cover match-chat replies and demo kickoff/goal alerts for fixtures tied to your favorites. Device push is still opt-in and no-op without an EAS `projectId`.
 

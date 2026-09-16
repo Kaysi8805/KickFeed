@@ -6,7 +6,9 @@ import { TeamLink } from '@/components/entity/TeamLink';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
-import { entityHref } from '@/lib/entityNav';
+import { entityBackHref, entityHref } from '@/lib/entityNav';
+import { safeBack } from '@/lib/navBack';
+import { routeId } from '@/lib/routeParams';
 import { isFavoriteId } from '@/lib/favoriteIds';
 import { kickoffLabel } from '@/lib/format';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
@@ -15,20 +17,21 @@ import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function PlayerDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id: string | string[] }>();
+  const id = routeId(rawId);
   const catalog = useFootballCatalog();
   const { favoritePlayerIds, toggleFavoritePlayer } = useApp();
-  const player = football.getPlayer(id);
+  const player = id ? football.getPlayer(id) : undefined;
 
   useEffect(() => {
-    const p = football.getPlayer(id);
+    const p = id ? football.getPlayer(id) : undefined;
     if (p) void football.ensureSquad(p.teamId);
   }, [id]);
 
   if (!player) {
     return (
       <Screen>
-        <HeaderBar title="Player" onBack={() => router.back()} />
+        <HeaderBar title="Player" onBack={() => safeBack(entityBackHref('player', id))} />
         <EmptyState
           title="Unknown player"
           body={
@@ -52,7 +55,7 @@ export default function PlayerDetailScreen() {
       <View style={styles.pad}>
         <HeaderBar
           title={player.shortName}
-          onBack={() => router.back()}
+          onBack={() => safeBack(entityBackHref('player', player.id))}
           right={
             <Pressable onPress={() => toggleFavoritePlayer(player.id)}>
               <Text style={styles.star}>{fav ? '★ Following' : '☆ Follow'}</Text>

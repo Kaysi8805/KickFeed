@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams, type Href } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -11,7 +11,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
-import { entityHref } from '@/lib/entityNav';
+import { entityBackHref, entityHref } from '@/lib/entityNav';
+import { safeBack } from '@/lib/navBack';
 import { timeAgo } from '@/lib/format';
 import {
   commentsForMatch,
@@ -19,7 +20,9 @@ import {
   fixtureScoreLabel,
   participantsFromUsers,
   postsForMatch,
+  resolveMatchDeepLink,
 } from '@/lib/matchSocial';
+import { routeId } from '@/lib/routeParams';
 import { useLiveTick } from '@/lib/useLiveTick';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
@@ -37,7 +40,7 @@ const eventIcon: Record<string, string> = {
 };
 
 function tabFromParam(value: string | string[] | undefined): Tab {
-  const raw = Array.isArray(value) ? value[0] : value;
+  const raw = routeId(value);
   if (raw === 'chat' || raw === 'lineups' || raw === 'stats' || raw === 'events') return raw;
   return 'events';
 }
@@ -45,7 +48,8 @@ function tabFromParam(value: string | string[] | undefined): Tab {
 export default function MatchDetailScreen() {
   useLiveTick();
   const catalog = useFootballCatalog();
-  const { id, tab: tabParam } = useLocalSearchParams<{ id: string; tab?: string }>();
+  const { id: rawId, tab: tabParam } = useLocalSearchParams<{ id: string | string[]; tab?: string | string[] }>();
+  const id = routeId(rawId);
   const { users, comments, posts, addComment, currentUser, likedPostIds, toggleLike } = useApp();
   const [tab, setTab] = useState<Tab>(() => tabFromParam(tabParam));
   const [draft, setDraft] = useState('');
@@ -55,11 +59,13 @@ export default function MatchDetailScreen() {
     setTab(tabFromParam(tabParam));
   }, [tabParam]);
 
-  useEffect(() => {
-    if (id) void football.ensureMatchDetail(id);
-  }, [id]);
+  const deepLink = id ? resolveMatchDeepLink(football, id) : undefined;
+  const fixture = deepLink?.fixture;
 
-  const fixture = football.getFixture(id);
+  useEffect(() => {
+    if (deepLink?.fixture) void football.ensureMatchDetail(deepLink.catalogId);
+  }, [deepLink?.catalogId, deepLink?.fixture]);
+
   const home = fixture ? football.getTeam(fixture.homeTeamId) : undefined;
   const away = fixture ? football.getTeam(fixture.awayTeamId) : undefined;
   const possession = useMemo(() => {
@@ -67,15 +73,15 @@ export default function MatchDetailScreen() {
     return { home: h, away: 100 - h };
   }, [home?.id]);
 
-  if (!fixture || !home || !away) {
+  if (!id || !fixture || !home || !away) {
     return (
       <Screen>
-        <HeaderBar title="Match" onBack={() => (router.canGoBack() ? router.back() : router.replace('/' as Href))} />
+        <HeaderBar title="Match" onBack={() => safeBack(entityBackHref('match', id))} />
         <EmptyState
           title="Match not found"
           body={
             catalog.source === 'live'
-              ? 'This fixture isn’t in the cached England window (or the demo catalog).'
+              ? 'This id isn’t in the live England window (no unique club-pair alias from a demo match). Mock scores are not shown here.'
               : 'This fixture isn’t in the mock catalog.'
           }
         />
@@ -102,7 +108,7 @@ export default function MatchDetailScreen() {
       <View style={styles.pad}>
         <HeaderBar
           title={league?.shortName ?? 'Match'}
-          onBack={() => (router.canGoBack() ? router.back() : router.replace('/' as Href))}
+          onBack={() => safeBack(entityBackHref('match', fixture.id))}
           right={
             <Pressable onPress={() => router.push({ pathname: '/compose', params: { matchId: fixture.id } })}>
               <Text style={styles.leagueLink}>Post</Text>
@@ -130,6 +136,9 @@ export default function MatchDetailScreen() {
               <Text style={styles.venue}>{new Date(fixture.kickoff).toLocaleString()}</Text>
             ) : null}
             <Text style={styles.venue}>{fixture.venue}</Text>
+            {deepLink?.via === 'alias' ? (
+              <Text style={styles.venue}>Live England catalog · linked from demo match id</Text>
+            ) : null}
           </View>
           <Pressable style={styles.side} onPress={() => router.push(entityHref('team', away.id))}>
             <Crest team={away} size={56} />

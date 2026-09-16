@@ -7,7 +7,9 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { MatchPickRow } from '@/components/match/MatchPickRow';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
-import { attachableFixtures, attachMatchId, fixtureScoreLabel } from '@/lib/matchSocial';
+import { entityHref } from '@/lib/entityNav';
+import { attachableFixtures, attachMatchId, fixtureScoreLabel, resolveMatchDeepLink } from '@/lib/matchSocial';
+import { routeId } from '@/lib/routeParams';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { scheduleDemoNotification } from '@/services/notifications';
 import { useApp } from '@/services/AppProvider';
@@ -17,8 +19,8 @@ import { colors, radius, spacing, type } from '@/theme';
 export default function ComposeScreen() {
   const catalog = useFootballCatalog();
   const { addPost, currentUser } = useApp();
-  const params = useLocalSearchParams<{ matchId?: string }>();
-  const preset = typeof params.matchId === 'string' ? params.matchId : undefined;
+  const params = useLocalSearchParams<{ matchId?: string | string[] }>();
+  const preset = routeId(params.matchId);
   const [text, setText] = useState('');
   const [imageUri, setImageUri] = useState<string | undefined>();
   const [matchId, setMatchId] = useState<string | undefined>(preset);
@@ -28,11 +30,13 @@ export default function ComposeScreen() {
     () => attachableFixtures(football),
     [catalog.lastSyncedAt, catalog.ready, catalog.source],
   );
-  const selected = matchId ? football.getFixture(attachMatchId(football, matchId)) : undefined;
+  const selected = matchId
+    ? resolveMatchDeepLink(football, attachMatchId(football, matchId)).fixture
+    : undefined;
 
   function leaveCompose(attached?: string) {
     if (attached) {
-      router.replace(`/match/${attached}?tab=chat` as Href);
+      router.replace(`${entityHref('match', attached)}?tab=chat` as Href);
       return;
     }
     router.replace('/' as Href);

@@ -9,7 +9,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
-import { entityHref } from '@/lib/entityNav';
+import { entityBackHref, entityHref } from '@/lib/entityNav';
+import { safeBack } from '@/lib/navBack';
+import { routeId } from '@/lib/routeParams';
 import { isFavoriteId } from '@/lib/favoriteIds';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
@@ -19,11 +21,12 @@ import { colors, radius, spacing, type } from '@/theme';
 type Tab = 'table' | 'scorers' | 'fixtures';
 
 export default function LeagueScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id: string | string[] }>();
+  const id = routeId(rawId);
   const catalog = useFootballCatalog();
   const { favoriteLeagueIds, toggleFavoriteLeague } = useApp();
   const [tab, setTab] = useState<Tab>('table');
-  const league = football.getLeague(id);
+  const league = id ? football.getLeague(id) : undefined;
 
   useEffect(() => {
     if (league && tab === 'scorers') void football.ensureScorers(league.id);
@@ -32,7 +35,7 @@ export default function LeagueScreen() {
   if (!league) {
     return (
       <Screen>
-        <HeaderBar title="League" onBack={() => router.back()} />
+        <HeaderBar title="League" onBack={() => safeBack(entityBackHref('league', id))} />
         <EmptyState
           title="Unknown league"
           body={
@@ -56,7 +59,7 @@ export default function LeagueScreen() {
       <View style={styles.pad}>
         <HeaderBar
           title={league.shortName}
-          onBack={() => router.back()}
+          onBack={() => safeBack(entityBackHref('league', league.id))}
           right={
             <Pressable onPress={() => toggleFavoriteLeague(league.id)}>
               <Text style={styles.star}>{fav ? '★ Favorited' : '☆ Favorite'}</Text>

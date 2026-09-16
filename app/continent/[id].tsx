@@ -4,18 +4,22 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
+import { entityBackHref } from '@/lib/entityNav';
+import { safeBack } from '@/lib/navBack';
+import { routeId } from '@/lib/routeParams';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function ContinentScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const continent = football.getContinent(id);
-  const countries = football.getCountries(id);
+  const { id: rawId } = useLocalSearchParams<{ id: string | string[] }>();
+  const id = routeId(rawId);
+  const continent = id ? football.getContinent(id) : undefined;
+  const countries = id ? football.getCountries(id) : [];
 
   if (!continent) {
     return (
       <Screen>
-        <HeaderBar title="Continent" onBack={() => router.back()} />
+        <HeaderBar title="Continent" onBack={() => safeBack(entityBackHref('continent', id))} />
         <EmptyState title="Unknown region" body="That continent isn’t in the mock tree." />
       </Screen>
     );
@@ -24,7 +28,7 @@ export default function ContinentScreen() {
   return (
     <Screen padded={false}>
       <View style={styles.pad}>
-        <HeaderBar title={continent.name} onBack={() => router.back()} />
+        <HeaderBar title={continent.name} onBack={() => safeBack(entityBackHref('continent', continent.id))} />
         <Text style={styles.blurb}>{continent.blurb}</Text>
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>

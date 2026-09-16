@@ -29,52 +29,81 @@ export function sameTeamPair(provider: MatchCatalog, a: Fixture, b: Fixture): bo
   );
 }
 
-function kickoffDistance(a: Fixture, b: Fixture): number {
-  return Math.abs(Date.parse(a.kickoff) - Date.parse(b.kickoff));
+/**
+ * Deep-link board: map a stored / URL match id onto the active catalog.
+ *
+ * - exact: id is in getFixtures() (live England window when keyed, mock clock otherwise)
+ * - alias: live catalog has exactly one fixture with the same clubs (team aliases).
+ *   Used for seed posts still attached to mock ids (`fx-liv-ars`). Unique pair only —
+ *   two LIV–ARS rows in the window do not remap (avoids the wrong match).
+ * - missing: do not render a mock fixture on the live path (wrong catalog / scores).
+ *
+ * Hydrate never writes this mapping back to AsyncStorage.
+ */
+export type MatchDeepLinkVia = 'exact' | 'alias' | 'missing';
+
+export interface MatchDeepLink {
+  requestedId: string;
+  catalogId: string;
+  fixture?: Fixture;
+  source: 'live' | 'mock';
+  via: MatchDeepLinkVia;
+}
+
+export function resolveMatchDeepLink(provider: MatchCatalog, requestedId: string): MatchDeepLink {
+  const source = provider.getStatus().source;
+  const catalog = provider.getFixtures();
+  const exact = catalog.find((f) => f.id === requestedId);
+  if (exact) {
+    return { requestedId, catalogId: exact.id, fixture: exact, source, via: 'exact' };
+  }
+  if (source !== 'live') {
+    const mock = provider.getFixture(requestedId);
+    if (mock) {
+      return { requestedId, catalogId: mock.id, fixture: mock, source, via: 'exact' };
+    }
+    return { requestedId, catalogId: requestedId, source, via: 'missing' };
+  }
+  const stored = provider.getFixture(requestedId);
+  if (!stored) {
+    return { requestedId, catalogId: requestedId, source, via: 'missing' };
+  }
+  const candidates = catalog.filter((f) => sameTeamPair(provider, stored, f));
+  if (candidates.length === 1) {
+    const hit = candidates[0]!;
+    return { requestedId, catalogId: hit.id, fixture: hit, source, via: 'alias' };
+  }
+  return { requestedId, catalogId: requestedId, source, via: 'missing' };
 }
 
 /**
- * Prefer a catalog (live England / mock window) id when a stored mock attachment
- * can be matched by team pair. Never invent ids — unknown values stay as-is.
+ * Prefer a catalog id when a stored mock attachment uniquely aliases.
+ * Unknown / ambiguous values stay as-is — never invent ids.
  */
 export function canonicalMatchId(provider: MatchCatalog, storedId: string): string {
-  const catalog = provider.getFixtures();
-  if (catalog.some((f) => f.id === storedId)) return storedId;
-  const stored = provider.getFixture(storedId);
-  if (!stored) return storedId;
-  const matches = catalog.filter((f) => sameTeamPair(provider, stored, f));
-  if (matches.length === 0) return stored.id;
-  matches.sort((a, b) => kickoffDistance(a, stored) - kickoffDistance(b, stored));
-  return matches[0]!.id;
+  return resolveMatchDeepLink(provider, storedId).catalogId;
 }
 
 export function relatedFixtureIds(provider: MatchCatalog, id: string): string[] {
-  const ids = new Set<string>([id]);
-  const stored = provider.getFixture(id);
-  if (stored) ids.add(stored.id);
-  const canon = canonicalMatchId(provider, id);
-  ids.add(canon);
-  const fixture = provider.getFixture(canon) ?? stored;
-  if (!fixture) return [...ids];
-  for (const f of provider.getFixtures()) {
-    if (sameTeamPair(provider, fixture, f)) ids.add(f.id);
-  }
-  if (stored && stored.id !== fixture.id && sameTeamPair(provider, stored, fixture)) {
-    ids.add(stored.id);
-  }
+  const link = resolveMatchDeepLink(provider, id);
+  const ids = new Set<string>([id, link.catalogId]);
+  if (link.via === 'alias') ids.add(link.requestedId);
   return [...ids];
 }
 
 export function isSameMatch(provider: MatchCatalog, a: string, b: string): boolean {
   if (a === b) return true;
-  return relatedFixtureIds(provider, a).includes(b) || relatedFixtureIds(provider, b).includes(a);
+  const left = resolveMatchDeepLink(provider, a);
+  const right = resolveMatchDeepLink(provider, b);
+  if (left.catalogId === right.catalogId) return true;
+  if (left.catalogId === b || right.catalogId === a) return true;
+  return false;
 }
 
-/** Id to persist on a new post/comment: live catalog id when keyed, mock id otherwise. */
 export function attachMatchId(provider: MatchCatalog, fixtureId: string): string {
-  const fixture = provider.getFixture(fixtureId);
-  if (!fixture) return fixtureId;
-  return canonicalMatchId(provider, fixture.id);
+  const link = resolveMatchDeepLink(provider, fixtureId);
+  if (link.via === 'missing') return fixtureId;
+  return link.catalogId;
 }
 
 export function attachableFixtures(provider: MatchCatalog, now = Date.now(), limit = 24): Fixture[] {
@@ -139,8 +168,7 @@ export function commentsForMatch(comments: Comment[], matchId: string, provider:
 
 export function resolvePostFixture(post: Post, provider: MatchCatalog): Fixture | undefined {
   if (!post.matchId) return undefined;
-  const canon = canonicalMatchId(provider, post.matchId);
-  return provider.getFixture(canon) ?? provider.getFixture(post.matchId);
+  return resolveMatchDeepLink(provider, post.matchId).fixture;
 }
 
 /** Lower ranks surface first. Live favorite-match posts beat generic chatter. */
