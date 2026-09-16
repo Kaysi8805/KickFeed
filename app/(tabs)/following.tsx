@@ -4,11 +4,13 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { PostCard } from '@/components/feed/PostCard';
 import { MatchRow } from '@/components/match/MatchRow';
 import { SearchButton } from '@/components/search/SearchEntry';
 import { Screen } from '@/components/ui/Screen';
 import { entityHref } from '@/lib/entityNav';
 import { expandFavoriteIds } from '@/lib/favoriteIds';
+import { favoriteLiveFixtures, sortFeedPosts } from '@/lib/matchSocial';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
@@ -26,6 +28,9 @@ export default function FavoritesScreen() {
     favoriteLeagueIds,
     favoritePlayerIds,
     toggleFavoritePlayer,
+    posts,
+    likedPostIds,
+    toggleLike,
   } = useApp();
   const suggested = users.filter((u) => u.id !== currentUser?.id && !followingIds.includes(u.id));
   const following = users.filter((u) => followingIds.includes(u.id));
@@ -51,6 +56,16 @@ export default function FavoritesScreen() {
     )
     .filter((f) => f.status !== 'finished')
     .slice(0, 8);
+  const liveFav = favoriteLiveFixtures(football, favoriteTeamIds, favoritePlayerIds);
+  const matchPosts = sortFeedPosts(
+    posts.filter(
+      (p) =>
+        !!p.matchId && (p.authorId === currentUser?.id || followingIds.includes(p.authorId)),
+    ),
+    football,
+    favoriteTeamIds,
+    favoritePlayerIds,
+  ).slice(0, 8);
 
   return (
     <Screen padded={false}>
@@ -119,6 +134,17 @@ export default function FavoritesScreen() {
           )
         )}
 
+        <Text style={styles.section}>Live for you</Text>
+        {liveFav.length === 0 ? (
+          <Text style={styles.muted}>
+            {catalog.source === 'live'
+              ? 'Favorite an England club or player to pin live fixtures here.'
+              : 'Favorite a club or player to pin their live matches here.'}
+          </Text>
+        ) : (
+          liveFav.map((f) => <MatchRow key={f.id} fixture={f} compact />)
+        )}
+
         <Text style={styles.section}>Coming up for you</Text>
         {nextMatches.length === 0 ? (
           <Text style={styles.muted}>
@@ -128,6 +154,26 @@ export default function FavoritesScreen() {
           </Text>
         ) : (
           nextMatches.map((f) => <MatchRow key={f.id} fixture={f} compact />)
+        )}
+
+        <Text style={styles.section}>Match posts</Text>
+        {matchPosts.length === 0 ? (
+          <Text style={styles.muted}>Attach a fixture when you post — those land here for people you follow.</Text>
+        ) : (
+          matchPosts.map((post) => {
+            const author = users.find((u) => u.id === post.authorId);
+            if (!author) return null;
+            return (
+              <PostCard
+                key={post.id}
+                post={post}
+                author={author}
+                liked={likedPostIds.includes(post.id)}
+                onLike={() => toggleLike(post.id)}
+                compact
+              />
+            );
+          })
         )}
 
         <Text style={styles.section}>People you follow</Text>

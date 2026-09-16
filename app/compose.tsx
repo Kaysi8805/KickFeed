@@ -1,19 +1,34 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { MatchPickRow } from '@/components/match/MatchPickRow';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
+import { attachableFixtures, attachMatchId, fixtureScoreLabel } from '@/lib/matchSocial';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { scheduleDemoNotification } from '@/services/notifications';
 import { useApp } from '@/services/AppProvider';
+import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function ComposeScreen() {
+  const catalog = useFootballCatalog();
   const { addPost, currentUser } = useApp();
+  const params = useLocalSearchParams<{ matchId?: string }>();
+  const preset = typeof params.matchId === 'string' ? params.matchId : undefined;
   const [text, setText] = useState('');
   const [imageUri, setImageUri] = useState<string | undefined>();
+  const [matchId, setMatchId] = useState<string | undefined>(preset);
+  const [pickerOpen, setPickerOpen] = useState(!preset);
+
+  const options = useMemo(
+    () => attachableFixtures(football),
+    [catalog.lastSyncedAt, catalog.ready, catalog.source],
+  );
+  const selected = matchId ? football.getFixture(attachMatchId(football, matchId)) : undefined;
 
   async function pickImage() {
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
@@ -21,42 +36,98 @@ export default function ComposeScreen() {
   }
 
   return (
-    <Screen>
-      <HeaderBar title="New post" onBack={() => router.back()} />
-      <Text style={styles.as}>Posting as {currentUser?.name}</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="What’s happening in football?"
-        placeholderTextColor={colors.textDim}
-        multiline
-        value={text}
-        onChangeText={setText}
-      />
-      {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} contentFit="cover" /> : null}
-      <View style={styles.row}>
-        <Pressable onPress={pickImage} style={styles.ghost}>
-          <Text style={styles.ghostText}>Add photo</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => {
-            if (!text.trim()) return;
-            addPost(text.trim(), imageUri);
-            scheduleDemoNotification('KickFeed', 'Your post is live in the demo feed.');
-            router.back();
-          }}
-          style={[styles.post, !text.trim() && { opacity: 0.4 }]}
-        >
-          <Text style={styles.postText}>Post</Text>
-        </Pressable>
+    <Screen padded={false}>
+      <View style={styles.pad}>
+        <HeaderBar title="New post" onBack={() => router.back()} />
       </View>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <Text style={styles.as}>Posting as {currentUser?.name}</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="What’s happening in football?"
+          placeholderTextColor={colors.textDim}
+          multiline
+          value={text}
+          onChangeText={setText}
+        />
+        {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} contentFit="cover" /> : null}
+
+        <View style={styles.attach}>
+          <View style={styles.attachHead}>
+            <Text style={styles.section}>Attach a match</Text>
+            {matchId ? (
+              <Pressable onPress={() => { setMatchId(undefined); setPickerOpen(true); }}>
+                <Text style={styles.clear}>Clear</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          <Text style={styles.hint}>
+            {catalog.source === 'live'
+              ? 'Live, today, and upcoming England fixtures from the scores provider.'
+              : 'Live, today, and upcoming fixtures from the mock catalog.'}
+          </Text>
+          {selected ? (
+            <MatchPickRow
+              fixture={selected}
+              selected
+              onPress={() => setPickerOpen((v) => !v)}
+            />
+          ) : (
+            <Pressable onPress={() => setPickerOpen(true)} style={styles.ghostPick}>
+              <Text style={styles.ghostText}>Choose live / today / upcoming</Text>
+            </Pressable>
+          )}
+          {pickerOpen ? (
+            options.length === 0 ? (
+              <Text style={styles.hint}>No attachable fixtures in this window.</Text>
+            ) : (
+              options.map((f) => (
+                <MatchPickRow
+                  key={f.id}
+                  fixture={f}
+                  selected={matchId === f.id}
+                  onPress={() => {
+                    setMatchId(f.id);
+                    setPickerOpen(false);
+                  }}
+                />
+              ))
+            )
+          ) : null}
+        </View>
+
+        <View style={styles.row}>
+          <Pressable onPress={pickImage} style={styles.ghost}>
+            <Text style={styles.ghostText}>Add photo</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              if (!text.trim()) return;
+              addPost(text.trim(), imageUri, matchId);
+              scheduleDemoNotification(
+                'KickFeed',
+                matchId && selected
+                  ? `Posted on ${fixtureScoreLabel(football, selected)}.`
+                  : 'Your post is live in the demo feed.',
+              );
+              router.back();
+            }}
+            style={[styles.post, !text.trim() && { opacity: 0.4 }]}
+          >
+            <Text style={styles.postText}>Post</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  pad: { paddingHorizontal: spacing.lg },
+  scroll: { paddingHorizontal: spacing.lg, paddingBottom: 40 },
   as: { ...type.caption, color: colors.textMuted, marginBottom: spacing.md },
   input: {
-    minHeight: 140,
+    minHeight: 120,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.md,
@@ -71,6 +142,18 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: radius.lg,
     marginTop: spacing.sm,
+  },
+  attach: { marginTop: spacing.lg },
+  attachHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  section: { ...type.micro, color: colors.textMuted },
+  clear: { ...type.caption, color: colors.lime },
+  hint: { ...type.caption, color: colors.textDim, fontWeight: '500', marginVertical: spacing.sm, lineHeight: 18 },
+  ghostPick: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
   },
   row: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg, alignItems: 'center' },
   ghost: { padding: 8 },

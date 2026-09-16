@@ -3,6 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 
 import type { AppNotification, Comment, Post, User } from '@/data/types';
 import { demoUsers } from '@/data/mocks/social';
+import { attachMatchId, favoriteMatchAlertDrafts, relatedFixtureIds } from '@/lib/matchSocial';
 import {
   addComment as addCommentState,
   addPost as addPostState,
@@ -10,6 +11,7 @@ import {
   follow as followState,
   hydratePersisted,
   markNotificationsRead as markNotificationsReadState,
+  mergeMatchAlerts,
   notificationsFor,
   Persisted,
   signInDemo as signInDemoState,
@@ -47,7 +49,7 @@ interface AppContextValue {
   toggleFavoriteLeague: (leagueId: string) => void;
   toggleFavoritePlayer: (playerId: string) => void;
   updateProfile: (patch: Partial<Pick<User, 'name' | 'bio'>>) => void;
-  addPost: (text: string, imageUri?: string) => void;
+  addPost: (text: string, imageUri?: string, matchId?: string) => void;
   toggleLike: (postId: string) => void;
   addComment: (matchId: string, text: string, parentId?: string) => void;
   markNotificationsRead: () => void;
@@ -80,6 +82,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void football.hydrate();
   }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    const syncAlerts = () => {
+      setState((prev) => mergeMatchAlerts(prev, favoriteMatchAlertDrafts(prev.favorites, football)));
+    };
+    syncAlerts();
+    return football.subscribe(syncAlerts);
+  }, [ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -136,9 +147,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       toggleFavoritePlayer: (playerId) =>
         patch((p) => toggleFavoritePlayerState(p, playerId, football.relatedIds('player', playerId))),
       updateProfile: (next) => patch((p) => updateProfileState(p, next)),
-      addPost: (text, imageUri) => patch((p) => addPostState(p, text, imageUri)),
+      addPost: (text, imageUri, matchId) =>
+        patch((p) =>
+          addPostState(p, text, imageUri, Date.now(), matchId ? attachMatchId(football, matchId) : undefined),
+        ),
       toggleLike: (postId) => patch((p) => toggleLikeState(p, postId)),
-      addComment: (matchId, text, parentId) => patch((p) => addCommentState(p, matchId, text, parentId)),
+      addComment: (matchId, text, parentId) =>
+        patch((p) =>
+          addCommentState(
+            p,
+            attachMatchId(football, matchId),
+            text,
+            parentId,
+            Date.now(),
+            relatedFixtureIds(football, matchId),
+          ),
+        ),
       markNotificationsRead: () => patch(markNotificationsReadState),
       followerCount: (userId) => Object.values(state.following).filter((ids) => ids.includes(userId)).length,
     }),

@@ -34,14 +34,15 @@ export default function NotificationsScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         {notifications.length === 0 ? (
-          <EmptyState title="All quiet" body="Goals, kickoffs, and friend activity will land here." />
+          <EmptyState title="All quiet" body="Match chat replies, goals, kickoffs, and friend posts will land here." />
         ) : (
           notifications.map((n) => (
             <Pressable
               key={n.id}
               onPress={() => {
-                if (n.matchId) router.push(`/match/${n.matchId}`);
-                else if (n.userId) router.push(`/user/${n.userId}`);
+                if (n.matchId) {
+                  router.push(n.type === 'comment' ? `/match/${n.matchId}?tab=chat` : `/match/${n.matchId}`);
+                } else if (n.userId) router.push(`/user/${n.userId}`);
               }}
               style={[styles.card, !n.read && styles.unread]}
             >

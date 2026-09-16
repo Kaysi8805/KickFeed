@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { PostCard } from '@/components/feed/PostCard';
 import { LiveBadge } from '@/components/match/LiveBadge';
 import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
@@ -12,6 +13,13 @@ import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
 import { entityHref } from '@/lib/entityNav';
 import { timeAgo } from '@/lib/format';
+import {
+  commentsForMatch,
+  discussionParticipantIds,
+  fixtureScoreLabel,
+  participantsFromUsers,
+  postsForMatch,
+} from '@/lib/matchSocial';
 import { useLiveTick } from '@/lib/useLiveTick';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
@@ -28,12 +36,18 @@ const eventIcon: Record<string, string> = {
   var: '📺',
 };
 
+function tabFromParam(value: string | string[] | undefined): Tab {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === 'chat' || raw === 'lineups' || raw === 'stats' || raw === 'events') return raw;
+  return 'events';
+}
+
 export default function MatchDetailScreen() {
   useLiveTick();
   const catalog = useFootballCatalog();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { users, comments, addComment, currentUser } = useApp();
-  const [tab, setTab] = useState<Tab>('events');
+  const { id, tab: tabParam } = useLocalSearchParams<{ id: string; tab?: string }>();
+  const { users, comments, posts, addComment, currentUser, likedPostIds, toggleLike } = useApp();
+  const [tab, setTab] = useState<Tab>(() => tabFromParam(tabParam));
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<string | undefined>();
 
@@ -68,9 +82,16 @@ export default function MatchDetailScreen() {
   const league = football.getLeague(fixture.leagueId);
   const live = fixture.status === 'live' || fixture.status === 'ht';
   const lineups = football.getLineups(fixture);
-  const thread = comments.filter((c) => c.matchId === fixture.id);
+  const thread = commentsForMatch(comments, fixture.id, football);
   const roots = thread.filter((c) => !c.parentId);
   const replyTarget = thread.find((c) => c.id === replyTo);
+  const replyAuthor = replyTarget ? users.find((u) => u.id === replyTarget.authorId) : undefined;
+  const matchPosts = postsForMatch(posts, fixture.id, football);
+  const participants = participantsFromUsers(
+    discussionParticipantIds(comments, posts, fixture.id, football),
+    users,
+  );
+  const label = fixtureScoreLabel(football, fixture);
 
   return (
     <Screen padded={false}>
@@ -79,11 +100,9 @@ export default function MatchDetailScreen() {
           title={league?.shortName ?? 'Match'}
           onBack={() => router.back()}
           right={
-            league ? (
-              <Pressable onPress={() => router.push(entityHref('league', league.id))}>
-                <Text style={styles.leagueLink}>League</Text>
-              </Pressable>
-            ) : undefined
+            <Pressable onPress={() => router.push({ pathname: '/compose', params: { matchId: fixture.id } })}>
+              <Text style={styles.leagueLink}>Post</Text>
+            </Pressable>
           }
         />
       </View>
@@ -121,7 +140,7 @@ export default function MatchDetailScreen() {
             { key: 'events', label: 'Events' },
             { key: 'lineups', label: 'Lineups' },
             { key: 'stats', label: 'Stats' },
-            { key: 'chat', label: 'Chat' },
+            { key: 'chat', label: 'Hub' },
           ]}
         />
 
@@ -218,15 +237,67 @@ export default function MatchDetailScreen() {
 
         {tab === 'chat' ? (
           <View style={styles.block}>
+            {participants.length > 0 ? (
+              <View style={styles.people}>
+                <View style={styles.avatars}>
+                  {participants.slice(0, 6).map((u) => (
+                    <Pressable key={u.id} onPress={() => router.push(entityHref('user', u.id))} style={styles.avatarHit}>
+                      <Avatar initials={u.initials} color={u.avatarColor} size={28} />
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={styles.peopleLabel}>
+                  {participants.length} {participants.length === 1 ? 'fan' : 'fans'} in this match hub
+                </Text>
+              </View>
+            ) : null}
+
+            <Text style={styles.hubSection}>Feed posts</Text>
+            {matchPosts.length === 0 ? (
+              <EmptyState
+                title="No posts tagged yet"
+                body={`Attach ${label} when you compose so this match shows up on Home and Following.`}
+                action={
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/compose', params: { matchId: fixture.id } })}
+                    style={styles.hubCta}
+                  >
+                    <Text style={styles.hubCtaText}>Post about this match</Text>
+                  </Pressable>
+                }
+              />
+            ) : (
+              matchPosts.map((post) => {
+                const author = users.find((u) => u.id === post.authorId);
+                if (!author) return null;
+                return (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    author={author}
+                    liked={likedPostIds.includes(post.id)}
+                    onLike={() => toggleLike(post.id)}
+                    compact
+                  />
+                );
+              })
+            )}
+
+            <Text style={styles.hubSection}>Discussion</Text>
             {roots.length === 0 ? (
-              <EmptyState title="Start the discussion" body="Be first in the match thread." />
+              <EmptyState
+                title="Start the discussion"
+                body="Be first in this match thread — lineups, the ref, or that finish in the box."
+              />
             ) : (
               roots.map((c) => {
                 const author = users.find((u) => u.id === c.authorId);
                 const replies = thread.filter((r) => r.parentId === c.id);
                 return (
                   <View key={c.id} style={styles.comment}>
-                    <Avatar initials={author?.initials ?? '?'} color={author?.avatarColor ?? colors.surfaceAlt} size={32} />
+                    <Pressable onPress={() => author && router.push(entityHref('user', author.id))}>
+                      <Avatar initials={author?.initials ?? '?'} color={author?.avatarColor ?? colors.surfaceAlt} size={32} />
+                    </Pressable>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.cname}>
                         {author?.name ?? 'Fan'} <Text style={styles.ctime}>{timeAgo(c.createdAt)}</Text>
@@ -259,25 +330,30 @@ export default function MatchDetailScreen() {
         <View style={styles.composer}>
           {replyTarget ? (
             <Pressable onPress={() => setReplyTo(undefined)}>
-              <Text style={styles.replying}>Replying to a comment · tap to cancel</Text>
+              <Text style={styles.replying}>
+                Replying to {replyAuthor?.name ?? 'a comment'} · tap to cancel
+              </Text>
             </Pressable>
-          ) : null}
+          ) : (
+            <Text style={styles.composerHint}>{label}</Text>
+          )}
           <View style={styles.inputRow}>
             <TextInput
               style={styles.input}
-              placeholder={currentUser ? 'Talk about this match…' : 'Sign in to chat'}
+              placeholder={currentUser ? `Talk ${home.code} vs ${away.code}…` : 'Sign in to chat'}
               placeholderTextColor={colors.textDim}
               value={draft}
+              editable={!!currentUser}
               onChangeText={setDraft}
             />
             <Pressable
               onPress={() => {
-                if (!draft.trim()) return;
+                if (!currentUser || !draft.trim()) return;
                 addComment(fixture.id, draft.trim(), replyTo);
                 setDraft('');
                 setReplyTo(undefined);
               }}
-              style={styles.send}
+              style={[styles.send, (!currentUser || !draft.trim()) && styles.sendOff]}
             >
               <Ionicons name="send" size={16} color={colors.bg} />
             </Pressable>
@@ -334,6 +410,13 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   statN: { ...type.subtitle, color: colors.text },
   hint: { ...type.caption, color: colors.textDim, fontWeight: '500', marginTop: spacing.md, lineHeight: 18 },
+  people: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.sm },
+  avatars: { flexDirection: 'row' },
+  avatarHit: { marginRight: -8, borderWidth: 2, borderColor: colors.bg, borderRadius: 16 },
+  peopleLabel: { ...type.caption, color: colors.textMuted, flex: 1, marginLeft: 8 },
+  hubSection: { ...type.micro, color: colors.textMuted, marginTop: spacing.md, marginBottom: 4 },
+  hubCta: { backgroundColor: colors.lime, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full, marginTop: spacing.sm },
+  hubCtaText: { ...type.caption, color: colors.bg, fontWeight: '800' },
   comment: { flexDirection: 'row', gap: 8, marginBottom: spacing.md },
   cname: { ...type.caption, color: colors.text },
   ctime: { color: colors.textDim, fontWeight: '500' },
@@ -351,6 +434,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+  composerHint: { ...type.micro, color: colors.textDim, marginBottom: 6 },
   inputRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   input: {
     flex: 1,
@@ -361,5 +445,6 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   send: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' },
+  sendOff: { opacity: 0.35 },
   replying: { ...type.caption, color: colors.limeMuted, marginBottom: 6 },
 });
