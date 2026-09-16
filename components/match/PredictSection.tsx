@@ -95,7 +95,11 @@ export function PredictSection({
           <Text style={styles.pickTeam} numberOfLines={1}>
             {home.shortName}
           </Text>
-          <Stepper value={homeScore} onChange={setHomeScore} disabled={!canSave} label={`${home.shortName} score`} />
+          {open ? (
+            <Stepper value={homeScore} onChange={setHomeScore} disabled={!canSave} label={`${home.shortName} score`} />
+          ) : (
+            <Text style={styles.stepValue}>{mine ? mine.homeScore : '—'}</Text>
+          )}
         </View>
         <Text style={styles.dash}>–</Text>
         <View style={styles.pickSide}>
@@ -103,7 +107,11 @@ export function PredictSection({
           <Text style={styles.pickTeam} numberOfLines={1}>
             {away.shortName}
           </Text>
-          <Stepper value={awayScore} onChange={setAwayScore} disabled={!canSave} label={`${away.shortName} score`} />
+          {open ? (
+            <Stepper value={awayScore} onChange={setAwayScore} disabled={!canSave} label={`${away.shortName} score`} />
+          ) : (
+            <Text style={styles.stepValue}>{mine ? mine.awayScore : '—'}</Text>
+          )}
         </View>
       </View>
 
