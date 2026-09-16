@@ -210,7 +210,7 @@ function statsFor(player: Player): PlayerStats {
     appearances,
     goals,
     assists,
-    minutes: apps.reduce((n, a) => n + a.minutes, 0) || appearances * (85 + (h % 6)),
+    minutes: appearances * (82 + (h % 8)),
     yellows: h % 5,
     reds: h % 17 === 0 ? 1 : 0,
     rating: Number((6.4 + (h % 22) / 10).toFixed(1)),

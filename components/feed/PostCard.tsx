@@ -28,7 +28,7 @@ export function PostCard({
 
   return (
     <View style={styles.card}>
-      <Pressable style={styles.head} onPress={() => router.push(`/user/${author.id}`)}>
+      <Pressable style={styles.head} onPress={() => router.push(entityHref('user', author.id))}>
         <Avatar initials={author.initials} color={author.avatarColor} size={42} />
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{author.name}</Text>
@@ -72,7 +72,7 @@ export function PostCard({
           <Text style={[styles.actionText, liked && { color: colors.live }]}>{liked ? '♥ Liked' : '♡ Like'}</Text>
         </Pressable>
         {match ? (
-          <Pressable onPress={() => router.push(`/match/${match.id}`)} style={styles.action}>
+          <Pressable onPress={() => router.push(entityHref('match', match.id))} style={styles.action}>
             <Text style={styles.actionText}>Chat</Text>
           </Pressable>
         ) : null}
