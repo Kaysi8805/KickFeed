@@ -73,7 +73,13 @@ export default function FavoritesScreen() {
         <Text style={styles.title}>Following</Text>
         <View style={styles.topRight}>
           <SearchButton />
-          <Pressable onPress={() => router.push('/pick-favorites')}>
+          <Pressable
+            onPress={() => router.push('/pick-favorites')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Edit favorites"
+            style={styles.editBtn}
+          >
             <Text style={styles.link}>Edit favorites</Text>
           </Pressable>
         </View>
@@ -81,7 +87,13 @@ export default function FavoritesScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.section}>Favorite clubs</Text>
         {teams.length === 0 ? (
-          <EmptyState title="No clubs yet" body="Star teams to personalize live scores on Home." />
+          <EmptyState
+            compact
+            title="No clubs yet"
+            body="Star teams so live scores pin on Feed and Following."
+            actionLabel="Edit favorites"
+            onAction={() => router.push('/pick-favorites')}
+          />
         ) : (
           <View style={styles.chips}>
             {teams.map((t) =>
@@ -97,7 +109,13 @@ export default function FavoritesScreen() {
 
         <Text style={styles.section}>Favorite players</Text>
         {players.length === 0 ? (
-          <Text style={styles.muted}>Search a footballer and tap Follow — they’ll land here.</Text>
+          <EmptyState
+            compact
+            title="No players yet"
+            body="Search a footballer and tap Follow — they’ll land here."
+            actionLabel="Search players"
+            onAction={() => router.push('/search')}
+          />
         ) : (
           <View style={styles.chips}>
             {players.map((p) =>
@@ -109,7 +127,8 @@ export default function FavoritesScreen() {
                   <Text style={styles.chipText}>{p.shortName}</Text>
                   <Pressable
                     onPress={() => toggleFavoritePlayer(p.id)}
-                    hitSlop={8}
+                    hitSlop={12}
+                    accessibilityRole="button"
                     accessibilityLabel={`Unfavorite ${p.shortName}`}
                   >
                     <Text style={styles.star}>★</Text>
@@ -122,7 +141,13 @@ export default function FavoritesScreen() {
 
         <Text style={styles.section}>Favorite competitions</Text>
         {leagues.length === 0 ? (
-          <Text style={styles.muted}>Add leagues so standings and fixtures bubble up first.</Text>
+          <EmptyState
+            compact
+            title="No competitions yet"
+            body="Add leagues so standings and fixtures bubble up first."
+            actionLabel="Edit favorites"
+            onAction={() => router.push('/pick-favorites')}
+          />
         ) : (
           leagues.map((l) =>
             l ? (
@@ -136,29 +161,41 @@ export default function FavoritesScreen() {
 
         <Text style={styles.section}>Live for you</Text>
         {liveFav.length === 0 ? (
-          <Text style={styles.muted}>
-            {catalog.source === 'live'
-              ? 'Favorite an England club or player to pin live fixtures here.'
-              : 'Favorite a club or player to pin their live matches here.'}
-          </Text>
+          <EmptyState
+            compact
+            title="Nothing live for you"
+            body={
+              catalog.source === 'live'
+                ? 'Favorite an England club or player to pin live fixtures here.'
+                : 'Favorite a club or player to pin their live matches here.'
+            }
+          />
         ) : (
           liveFav.map((f) => <MatchRow key={f.id} fixture={f} compact />)
         )}
 
         <Text style={styles.section}>Coming up for you</Text>
         {nextMatches.length === 0 ? (
-          <Text style={styles.muted}>
-            {catalog.source === 'live'
-              ? 'Favorite an England club or the Premier League to pin live fixtures here.'
-              : 'Favorite a team or player to pin their next matches here.'}
-          </Text>
+          <EmptyState
+            compact
+            title="Nothing coming up"
+            body={
+              catalog.source === 'live'
+                ? 'Favorite an England club, player, or the Premier League to pin their next fixtures here.'
+                : 'Favorite a club, player, or competition to pin their next matches here.'
+            }
+          />
         ) : (
           nextMatches.map((f) => <MatchRow key={f.id} fixture={f} compact />)
         )}
 
         <Text style={styles.section}>Match posts</Text>
         {matchPosts.length === 0 ? (
-          <Text style={styles.muted}>Attach a fixture when you post — those land here for people you follow.</Text>
+          <EmptyState
+            compact
+            title="No match posts yet"
+            body="Attach a fixture when you post — those land here for people you follow."
+          />
         ) : (
           matchPosts.map((post) => {
             const author = users.find((u) => u.id === post.authorId);
@@ -178,7 +215,11 @@ export default function FavoritesScreen() {
 
         <Text style={styles.section}>People you follow</Text>
         {following.length === 0 ? (
-          <Text style={styles.muted}>Follow demo fans to fill your social feed.</Text>
+          <EmptyState
+            compact
+            title="Not following anyone"
+            body="Follow demo fans below to fill your social feed."
+          />
         ) : (
           following.map((u) => (
             <Pressable key={u.id} onPress={() => router.push(entityHref('user', u.id))} style={styles.person}>
@@ -187,7 +228,12 @@ export default function FavoritesScreen() {
                 <Text style={styles.rowTitle}>{u.name}</Text>
                 <Text style={styles.muted}>@{u.handle}</Text>
               </View>
-              <Pressable onPress={() => unfollow(u.id)} style={styles.ghost}>
+              <Pressable
+                onPress={() => unfollow(u.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Unfollow ${u.name}`}
+                style={styles.ghost}
+              >
                 <Text style={styles.ghostText}>Following</Text>
               </Pressable>
             </Pressable>
@@ -195,20 +241,29 @@ export default function FavoritesScreen() {
         )}
 
         <Text style={styles.section}>Suggested fans</Text>
-        {suggested.map((u) => (
-          <Pressable key={u.id} onPress={() => router.push(entityHref('user', u.id))} style={styles.person}>
-            <Avatar initials={u.initials} color={u.avatarColor} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>{u.name}</Text>
-              <Text style={styles.muted} numberOfLines={1}>
-                {u.bio}
-              </Text>
-            </View>
-            <Pressable onPress={() => follow(u.id)} style={styles.solid}>
-              <Text style={styles.solidText}>Follow</Text>
+        {suggested.length === 0 ? (
+          <EmptyState compact title="You’re following everyone" body="No more demo fans to suggest right now." />
+        ) : (
+          suggested.map((u) => (
+            <Pressable key={u.id} onPress={() => router.push(entityHref('user', u.id))} style={styles.person}>
+              <Avatar initials={u.initials} color={u.avatarColor} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowTitle}>{u.name}</Text>
+                <Text style={styles.muted} numberOfLines={1}>
+                  {u.bio}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => follow(u.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Follow ${u.name}`}
+                style={styles.solid}
+              >
+                <Text style={styles.solidText}>Follow</Text>
+              </Pressable>
             </Pressable>
-          </Pressable>
-        ))}
+          ))
+        )}
       </ScrollView>
     </Screen>
   );
@@ -225,9 +280,16 @@ const styles = StyleSheet.create({
   },
   title: { ...type.title, color: colors.text },
   topRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  editBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
   link: { ...type.caption, color: colors.lime },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: 40 },
-  section: { ...type.micro, color: colors.textMuted, marginTop: spacing.lg, marginBottom: spacing.sm },
+  section: {
+    ...type.micro,
+    color: colors.limeMuted,
+    textTransform: 'uppercase',
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     flexDirection: 'row',
@@ -279,15 +341,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   ghostText: { ...type.caption, color: colors.textMuted },
   solid: {
     backgroundColor: colors.lime,
     borderRadius: radius.full,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   solidText: { ...type.caption, color: colors.bg, fontWeight: '800' },
 });

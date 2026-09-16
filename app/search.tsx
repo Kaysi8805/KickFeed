@@ -9,6 +9,7 @@ import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import type { League, Player, Team, User } from '@/data/types';
 import { entityHref } from '@/lib/entityNav';
+import { safeBack } from '@/lib/navBack';
 import { searchEntities, searchHasHits } from '@/lib/search';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
@@ -27,7 +28,7 @@ export default function SearchScreen() {
   return (
     <Screen padded={false}>
       <View style={styles.pad}>
-        <HeaderBar title="Search" onBack={() => router.back()} />
+        <HeaderBar title="Search" onBack={() => safeBack('/')} />
         <TextInput
           autoFocus
           value={q}
@@ -49,10 +50,13 @@ export default function SearchScreen() {
         {!ready ? (
           <EmptyState
             title="Find clubs, players, leagues, fans"
-            body="Try Salah, Arsenal, or Premier — results open the same entity pages as the rest of the app."
+            body="Type at least two letters. Try Salah, Arsenal, Premier, or a demo handle — results open the same entity pages as the rest of the app."
           />
         ) : !hits ? (
-          <EmptyState title={`No matches for “${needle}”`} body="Check the spelling, or try a club, player, competition, or demo handle." />
+          <EmptyState
+            title={`No results for “${needle}”`}
+            body="Nothing matched a club, player, competition, or demo fan. Check the spelling or try a shorter name."
+          />
         ) : (
           <>
             {results.teams.length > 0 ? (
@@ -180,6 +184,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
     paddingVertical: 12,
+    minHeight: 44,
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
@@ -187,7 +192,13 @@ const styles = StyleSheet.create({
   },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: 40 },
   section: { marginBottom: spacing.md },
-  sectionTitle: { ...type.micro, color: colors.textMuted, marginBottom: spacing.sm, marginTop: spacing.sm },
+  sectionTitle: {
+    ...type.micro,
+    color: colors.limeMuted,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

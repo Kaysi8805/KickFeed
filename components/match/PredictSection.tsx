@@ -23,24 +23,30 @@ function Stepper({
   disabled: boolean;
   label: string;
 }) {
+  const downOff = disabled || value <= 0;
+  const upOff = disabled || value >= PREDICTION_SCORE_MAX;
   return (
     <View style={styles.step} accessibilityLabel={label}>
       <Pressable
         onPress={() => onChange(Math.max(0, value - 1))}
-        disabled={disabled || value <= 0}
-        style={[styles.stepBtn, (disabled || value <= 0) && styles.stepOff]}
+        disabled={downOff}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: downOff }}
         accessibilityLabel={`${label} down`}
+        style={[styles.stepBtn, downOff && styles.stepOff]}
       >
-        <Text style={styles.stepGlyph}>−</Text>
+        <Text style={[styles.stepGlyph, downOff && styles.stepGlyphOff]}>−</Text>
       </Pressable>
       <Text style={styles.stepValue}>{value}</Text>
       <Pressable
         onPress={() => onChange(Math.min(PREDICTION_SCORE_MAX, value + 1))}
-        disabled={disabled || value >= PREDICTION_SCORE_MAX}
-        style={[styles.stepBtn, (disabled || value >= PREDICTION_SCORE_MAX) && styles.stepOff]}
+        disabled={upOff}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: upOff }}
         accessibilityLabel={`${label} up`}
+        style={[styles.stepBtn, upOff && styles.stepOff]}
       >
-        <Text style={styles.stepGlyph}>+</Text>
+        <Text style={[styles.stepGlyph, upOff && styles.stepGlyphOff]}>+</Text>
       </Pressable>
     </View>
   );
@@ -77,19 +83,20 @@ export function PredictSection({
   const agg = aggregatePredictions(community);
   const canSave = signedIn && open;
   const dirty = !mine || mine.homeScore !== homeScore || mine.awayScore !== awayScore;
+  const saveOff = !dirty;
 
   return (
     <View style={styles.block}>
       <Text style={styles.kicker}>{open ? 'Pick the score before kickoff' : 'Predictions locked'}</Text>
       <Text style={styles.lede}>
         {open
-          ? 'Friendly fan picks only — not a betting market.'
+          ? 'Friendly fan picks only — not a betting market. You can update until kickoff.'
           : mine
-            ? `You predicted ${scoreline(mine.homeScore, mine.awayScore)} before kickoff.`
-            : 'This match has started. Score picks lock at kickoff.'}
+            ? `You predicted ${scoreline(mine.homeScore, mine.awayScore)} before kickoff. Picks freeze once the match is live.`
+            : 'This match has started. Score picks lock at kickoff — no late entries.'}
       </Text>
 
-      <View style={styles.pickCard}>
+      <View style={[styles.pickCard, !open && styles.pickCardLocked]}>
         <View style={styles.pickSide}>
           <Crest team={home} size={36} />
           <Text style={styles.pickTeam} numberOfLines={1}>
@@ -118,19 +125,44 @@ export function PredictSection({
       {canSave ? (
         <Pressable
           onPress={() => onSave(homeScore, awayScore)}
-          disabled={!dirty}
-          style={[styles.cta, !dirty && styles.ctaOff]}
+          disabled={saveOff}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: saveOff }}
+          accessibilityLabel={
+            saveOff
+              ? `${scoreline(homeScore, awayScore)} already saved`
+              : mine
+                ? `Update prediction to ${scoreline(homeScore, awayScore)}`
+                : `Lock in ${scoreline(homeScore, awayScore)}`
+          }
+          style={[styles.cta, saveOff && styles.ctaOff]}
         >
-          <Text style={styles.ctaText}>
-            {mine ? `Update ${scoreline(homeScore, awayScore)}` : `Lock in ${scoreline(homeScore, awayScore)}`}
+          <Text style={[styles.ctaText, saveOff && styles.ctaTextOff]}>
+            {saveOff
+              ? `${scoreline(homeScore, awayScore)} saved`
+              : mine
+                ? `Update ${scoreline(homeScore, awayScore)}`
+                : `Lock in ${scoreline(homeScore, awayScore)}`}
           </Text>
         </Pressable>
+      ) : !open ? (
+        <View
+          style={[styles.cta, styles.ctaLocked]}
+          accessibilityRole="text"
+          accessibilityLabel="Predictions locked at kickoff"
+        >
+          <Text style={styles.ctaLockedText}>{mine ? 'Locked at kickoff' : 'Locked — you didn’t pick'}</Text>
+        </View>
       ) : !signedIn ? (
         <Text style={styles.hint}>Sign in with a demo profile to predict.</Text>
       ) : null}
 
       {agg.count === 0 ? (
-        <EmptyState title="No community picks yet" body="Be first — other demo fans show up here with mock aggregates." />
+        <EmptyState
+          compact
+          title="No community picks yet"
+          body="Be first — other demo fans show up here with mock aggregates."
+        />
       ) : (
         <View style={styles.agg}>
           <Text style={styles.aggTitle}>Community</Text>
@@ -168,29 +200,36 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.sm,
   },
+  pickCardLocked: { borderColor: colors.border, backgroundColor: colors.bgElevated },
   pickSide: { flex: 1, alignItems: 'center', gap: 8 },
   pickTeam: { ...type.caption, color: colors.lime, textAlign: 'center' },
   dash: { ...type.score, fontSize: 22, color: colors.textDim },
   step: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   stepBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.pitchBright,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepOff: { opacity: 0.35 },
+  stepOff: { backgroundColor: colors.surfaceAlt },
   stepGlyph: { ...type.subtitle, color: colors.bg, fontSize: 20 },
+  stepGlyphOff: { color: colors.textDim },
   stepValue: { ...type.score, fontSize: 28, color: colors.text, minWidth: 28, textAlign: 'center' },
   cta: {
     backgroundColor: colors.lime,
     paddingVertical: 12,
+    minHeight: 44,
     borderRadius: radius.full,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  ctaOff: { opacity: 0.4 },
+  ctaOff: { backgroundColor: colors.surfaceAlt },
   ctaText: { ...type.caption, color: colors.bg, fontWeight: '800' },
+  ctaTextOff: { color: colors.textMuted },
+  ctaLocked: { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
+  ctaLockedText: { ...type.caption, color: colors.textMuted, fontWeight: '700' },
   hint: { ...type.caption, color: colors.textDim, fontWeight: '500' },
   agg: {
     backgroundColor: colors.surface,
@@ -200,7 +239,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: 8,
   },
-  aggTitle: { ...type.micro, color: colors.textMuted, textTransform: 'uppercase' },
+  aggTitle: { ...type.micro, color: colors.limeMuted, textTransform: 'uppercase' },
   aggLine: { ...type.caption, color: colors.text, fontWeight: '600' },
   barTrack: { flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden', gap: 2 },
   barHome: { backgroundColor: colors.pitchBright },

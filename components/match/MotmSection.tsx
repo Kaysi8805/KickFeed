@@ -45,14 +45,21 @@ export function MotmSection({
       </Text>
       <Text style={styles.lede}>
         {!open
-          ? 'Voting opens when the match goes live. One vote per demo user.'
+          ? 'Voting opens when the match goes live. One vote per demo user — no take-backs.'
           : mine
-            ? `You voted for ${mine.playerName}. Tallies update as other fans vote.`
+            ? `You voted for ${mine.playerName}. That pick is locked; tallies still update as others vote.`
             : 'Pick one player from the lineups (or squad if XIs are not cached). One vote, no take-backs.'}
       </Text>
 
-      {!open ? null : candidates.length === 0 ? (
+      {!open ? (
         <EmptyState
+          compact
+          title="Voting hasn’t opened"
+          body="Come back once this match is live. The ballot uses the starting XI, or both squads if lineups aren’t cached."
+        />
+      ) : candidates.length === 0 ? (
+        <EmptyState
+          compact
           title="Players not cached"
           body="Free-tier quota may skip lineups and squads. Scores still load; MOTM needs a player list."
         />
@@ -61,13 +68,25 @@ export function MotmSection({
           const votes = tallyByKey.get(player.key)?.votes ?? 0;
           const selected = mine?.playerKey === player.key;
           const team = player.teamId === home.id ? home : player.teamId === away.id ? away : undefined;
+          const voteLocked = open && !!mine;
           return (
             <Pressable
               key={player.key}
               onPress={() => {
                 if (canVote) onVote(player);
               }}
-              style={[styles.row, selected && styles.rowMine]}
+              accessibilityRole={canVote ? 'button' : 'none'}
+              accessibilityState={{ disabled: !canVote, selected }}
+              accessibilityLabel={
+                selected
+                  ? `${player.name}, your Man of the Match vote`
+                  : canVote
+                    ? `Vote ${player.name} for Man of the Match`
+                    : voteLocked
+                      ? `${player.name}, voting closed — you already voted`
+                      : `${player.name}`
+              }
+              style={[styles.row, selected && styles.rowMine, voteLocked && !selected && styles.rowLocked]}
             >
               <View style={styles.numWrap}>
                 <Text style={styles.num}>{player.number}</Text>
@@ -76,6 +95,7 @@ export function MotmSection({
                 <Pressable
                   disabled={!player.playerId}
                   onPress={() => player.playerId && router.push(entityHref('player', player.playerId))}
+                  hitSlop={4}
                 >
                   <Text style={[styles.name, player.playerId ? styles.link : null]} numberOfLines={1}>
                     {player.name}
@@ -84,14 +104,21 @@ export function MotmSection({
                 <Text style={styles.meta}>
                   {player.pos}
                   {team ? ` · ${team.code}` : ''}
-                  {selected ? ' · your vote' : ''}
+                  {selected ? ' · your vote' : voteLocked ? ' · locked' : ''}
                 </Text>
                 <View style={styles.barTrack}>
                   <View style={[styles.barFill, { flex: votes }, votes === 0 && styles.barEmpty]} />
                   <View style={{ flex: maxVotes - votes }} />
                 </View>
               </View>
-              <Text style={styles.count}>{votes}</Text>
+              <View style={styles.trail}>
+                {selected ? (
+                  <View style={styles.voted}>
+                    <Text style={styles.votedText}>Voted</Text>
+                  </View>
+                ) : null}
+                <Text style={styles.count}>{votes}</Text>
+              </View>
             </Pressable>
           );
         })
@@ -112,14 +139,16 @@ const styles = StyleSheet.create({
     gap: 10,
     backgroundColor: colors.surface,
     padding: spacing.md,
+    minHeight: 56,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
   },
   rowMine: { borderColor: colors.limeMuted, backgroundColor: colors.surfaceAlt },
+  rowLocked: { opacity: 0.62 },
   numWrap: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: 8,
     backgroundColor: colors.bgElevated,
     alignItems: 'center',
@@ -132,6 +161,14 @@ const styles = StyleSheet.create({
   barTrack: { flexDirection: 'row', height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: colors.bgElevated },
   barFill: { backgroundColor: colors.pitchBright, borderRadius: 3 },
   barEmpty: { flex: 0, width: 0 },
+  trail: { alignItems: 'flex-end', gap: 4, minWidth: 44 },
+  voted: {
+    backgroundColor: colors.lime,
+    borderRadius: radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  votedText: { ...type.micro, color: colors.bg, letterSpacing: 0.4 },
   count: { ...type.subtitle, color: colors.text, minWidth: 22, textAlign: 'right' },
   hint: { ...type.caption, color: colors.textDim, fontWeight: '500', marginTop: 4 },
 });

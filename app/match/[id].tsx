@@ -152,10 +152,20 @@ export default function MatchDetailScreen() {
           onBack={() => safeBack(entityBackHref('match', fixture.id))}
           right={
             <View style={styles.headerRight}>
-              <Pressable onPress={() => router.push('/tv')}>
+              <Pressable
+                onPress={() => router.push('/tv')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="TV schedule"
+              >
                 <Text style={styles.leagueLink}>TV</Text>
               </Pressable>
-              <Pressable onPress={() => router.push({ pathname: '/compose', params: { matchId: fixture.id } })}>
+              <Pressable
+                onPress={() => router.push({ pathname: '/compose', params: { matchId: fixture.id } })}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Post about this match"
+              >
                 <Text style={styles.leagueLink}>Post</Text>
               </Pressable>
             </View>
@@ -224,7 +234,7 @@ export default function MatchDetailScreen() {
         {tab === 'events' ? (
           <View style={styles.block}>
             {fixture.events.length === 0 ? (
-              <EmptyState title="No events yet" body="Goals, cards, and subs will land here once the match is underway." />
+              <EmptyState compact title="No events yet" body="Goals, cards, and subs will land here once the match is underway." />
             ) : (
               [...fixture.events].reverse().map((e) => {
                 const team = football.getTeam(e.teamId);
@@ -256,6 +266,7 @@ export default function MatchDetailScreen() {
         {tab === 'lineups' ? (
           lineups.home.players.length === 0 && lineups.away.players.length === 0 ? (
             <EmptyState
+              compact
               title="Lineups not cached"
               body="Free-tier quota may skip lineups. Events and the score still come from the fixture payload when available."
             />
@@ -374,16 +385,11 @@ export default function MatchDetailScreen() {
             <Text style={styles.hubSection}>Feed posts</Text>
             {matchPosts.length === 0 ? (
               <EmptyState
+                compact
                 title="No posts tagged yet"
-                body={`Attach ${label} when you compose so this match shows up on Home and Following.`}
-                action={
-                  <Pressable
-                    onPress={() => router.push({ pathname: '/compose', params: { matchId: fixture.id } })}
-                    style={styles.hubCta}
-                  >
-                    <Text style={styles.hubCtaText}>Post about this match</Text>
-                  </Pressable>
-                }
+                body={`Attach ${label} when you compose so this match shows up on Feed and Following.`}
+                actionLabel="Post about this match"
+                onAction={() => router.push({ pathname: '/compose', params: { matchId: fixture.id } })}
               />
             ) : (
               matchPosts.map((post) => {
@@ -405,6 +411,7 @@ export default function MatchDetailScreen() {
             <Text style={styles.hubSection}>Discussion</Text>
             {roots.length === 0 ? (
               <EmptyState
+                compact
                 title="Start the discussion"
                 body="Be first in this match thread — lineups, the ref, or that finish in the box."
               />
@@ -464,6 +471,7 @@ export default function MatchDetailScreen() {
               value={draft}
               editable={!!currentUser}
               onChangeText={setDraft}
+              accessibilityLabel="Match discussion"
             />
             <Pressable
               onPress={() => {
@@ -472,9 +480,17 @@ export default function MatchDetailScreen() {
                 setDraft('');
                 setReplyTo(undefined);
               }}
+              disabled={!currentUser || !draft.trim()}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !currentUser || !draft.trim() }}
+              accessibilityLabel="Send comment"
               style={[styles.send, (!currentUser || !draft.trim()) && styles.sendOff]}
             >
-              <Ionicons name="send" size={16} color={colors.bg} />
+              <Ionicons
+                name="send"
+                size={16}
+                color={!currentUser || !draft.trim() ? colors.textDim : colors.bg}
+              />
             </Pressable>
           </View>
         </View>
@@ -535,7 +551,13 @@ const styles = StyleSheet.create({
   avatars: { flexDirection: 'row' },
   avatarHit: { marginRight: -8, borderWidth: 2, borderColor: colors.bg, borderRadius: 16 },
   peopleLabel: { ...type.caption, color: colors.textMuted, flex: 1, marginLeft: 8 },
-  hubSection: { ...type.micro, color: colors.textMuted, marginTop: spacing.md, marginBottom: 4 },
+  hubSection: {
+    ...type.micro,
+    color: colors.limeMuted,
+    textTransform: 'uppercase',
+    marginTop: spacing.md,
+    marginBottom: 4,
+  },
   engageCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
@@ -546,8 +568,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   engageLine: { ...type.caption, color: colors.lime, fontWeight: '700' },
-  hubCta: { backgroundColor: colors.lime, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full, marginTop: spacing.sm },
-  hubCtaText: { ...type.caption, color: colors.bg, fontWeight: '800' },
   comment: { flexDirection: 'row', gap: 8, marginBottom: spacing.md },
   cname: { ...type.caption, color: colors.text },
   ctime: { color: colors.textDim, fontWeight: '500' },
@@ -573,9 +593,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    minHeight: 44,
     color: colors.text,
   },
-  send: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' },
-  sendOff: { opacity: 0.35 },
+  send: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.lime,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendOff: { backgroundColor: colors.surfaceAlt },
   replying: { ...type.caption, color: colors.limeMuted, marginBottom: 6 },
 });

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ChannelChips, CountryChips } from '@/components/tv/ChannelChips';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { resolveTvCountryId } from '@/lib/tvCountry';
 import { useApp } from '@/services/AppProvider';
 import { tv } from '@/services/tv';
@@ -24,7 +25,12 @@ export function TvMatchSection({ matchId }: { matchId: string }) {
     <View style={styles.card}>
       <View style={styles.head}>
         <Text style={styles.kicker}>TV · {country.flag} {country.name}</Text>
-        <Pressable onPress={() => router.push('/tv')} hitSlop={8}>
+        <Pressable
+          onPress={() => router.push('/tv')}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="TV schedule"
+        >
           <Text style={styles.link}>Schedule</Text>
         </Pressable>
       </View>
@@ -44,10 +50,13 @@ export function TvMatchSection({ matchId }: { matchId: string }) {
           ) : null}
         </>
       ) : (
-        <Text style={styles.empty}>
-          No editorial listing for this match in {country.shortName}. Launch TV covers England Premier League and
-          Championship only.
-        </Text>
+        <EmptyState
+          compact
+          title={`No TV listing in ${country.shortName}`}
+          body="Launch TV covers England Premier League and Championship only. Try another country or open the schedule."
+          actionLabel="Open schedule"
+          onAction={() => router.push('/tv')}
+        />
       )}
       <Text style={styles.disclaimer}>Editorial mock listings — not a licensed TV guide.</Text>
     </View>
@@ -68,6 +77,5 @@ const styles = StyleSheet.create({
   kicker: { ...type.micro, color: colors.limeMuted, textTransform: 'uppercase' },
   link: { ...type.caption, color: colors.lime },
   note: { ...type.caption, color: colors.textMuted, fontWeight: '500' },
-  empty: { ...type.caption, color: colors.textMuted, fontWeight: '500', lineHeight: 18 },
   disclaimer: { ...type.caption, color: colors.textDim, fontWeight: '500', fontSize: 11 },
 });

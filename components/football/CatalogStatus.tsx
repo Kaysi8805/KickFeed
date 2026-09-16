@@ -12,7 +12,13 @@ export function CatalogStatus() {
   }
   if (status.error) {
     return (
-      <Pressable onPress={() => void football.refresh()}>
+      <Pressable
+        onPress={() => void football.refresh()}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Retry loading England scores"
+        style={styles.retry}
+      >
         <Text style={styles.err}>{status.error} · tap to retry</Text>
       </Pressable>
     );
@@ -22,5 +28,6 @@ export function CatalogStatus() {
 
 const styles = StyleSheet.create({
   note: { ...type.caption, color: colors.limeMuted, fontWeight: '500' },
+  retry: { minHeight: 40, justifyContent: 'center' },
   err: { ...type.caption, color: colors.gold, fontWeight: '600' },
 });

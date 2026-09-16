@@ -19,6 +19,9 @@ export function Segmented<T extends string>({
           <Pressable
             key={opt.key}
             onPress={() => onChange(opt.key)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={opt.label}
             style={[styles.item, options.length > 4 && styles.itemTight, active && styles.active]}
           >
             <Text style={[styles.label, options.length > 4 && styles.labelTight, active && styles.labelActive]}>{opt.label}</Text>
@@ -38,8 +41,17 @@ const styles = StyleSheet.create({
     padding: 4,
     gap: 4,
   },
-  item: { flexGrow: 1, flexBasis: 0, minWidth: 48, paddingVertical: spacing.sm, borderRadius: radius.md, alignItems: 'center' },
-  itemTight: { minWidth: 44, paddingVertical: 6 },
+  item: {
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 48,
+    minHeight: 40,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemTight: { minWidth: 44, minHeight: 36, paddingVertical: 8 },
   active: { backgroundColor: colors.pitchBright },
   label: { ...type.caption, color: colors.textMuted },
   labelTight: { fontSize: 11 },

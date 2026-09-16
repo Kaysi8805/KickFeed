@@ -78,14 +78,25 @@ export default function MatchesScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {catalog.source === 'live' && catalog.loading && grouped.length === 0 ? (
           <EmptyState title="Loading matches" body="Fetching Premier League and Championship fixtures." />
+        ) : catalog.source === 'live' && catalog.error && grouped.length === 0 ? (
+          <EmptyState
+            title="Couldn’t load matches"
+            body={`${catalog.error} England scores retry from here, or flip the window if fixtures already cached.`}
+            actionLabel="Retry"
+            onAction={() => void football.refresh()}
+          />
         ) : grouped.length === 0 ? (
           <EmptyState
-            title={filter === 'live' ? 'No live matches right now' : 'Nothing in this window'}
+            title={
+              filter === 'live' ? 'No live matches right now' : filter === 'today' ? 'No matches today' : 'Nothing upcoming'
+            }
             body={
               catalog.source === 'live'
                 ? 'Flip to Today or Upcoming — live England fixtures land here when the API has them.'
                 : 'Flip to Today or Upcoming — the mock clock always has fixtures around now.'
             }
+            actionLabel={filter === 'live' ? 'See today' : filter === 'today' ? 'See upcoming' : 'See live'}
+            onAction={() => setFilter(filter === 'live' ? 'today' : filter === 'today' ? 'upcoming' : 'live')}
           />
         ) : (
           grouped.map(({ league, fixtures: list }) => (
@@ -115,5 +126,11 @@ const styles = StyleSheet.create({
   sub: { ...type.caption, color: colors.textMuted, fontWeight: '500', marginTop: -8 },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: 40 },
   group: { marginBottom: spacing.lg },
-  league: { ...type.micro, color: colors.limeMuted, marginBottom: spacing.sm, textTransform: 'uppercase' },
+  league: {
+    ...type.micro,
+    color: colors.limeMuted,
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+    minHeight: 28,
+  },
 });
