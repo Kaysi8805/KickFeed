@@ -6,6 +6,8 @@ import {
   hydratePersisted,
   markNotificationsRead,
   mergeMatchAlerts,
+  setMotmVote,
+  setPrediction,
   signInDemo,
   toggleFavoritePlayer,
   toggleFavoriteTeam,
@@ -18,7 +20,7 @@ import { describe, expect, it } from 'vitest';
 describe('hydratePersisted', () => {
   it('returns defaults for missing or corrupt JSON', () => {
     expect(hydratePersisted(null).currentUserId).toBeNull();
-    expect(hydratePersisted('not-json').schemaVersion).toBe(1);
+    expect(hydratePersisted('not-json').schemaVersion).toBe(2);
     expect(hydratePersisted('{}').posts.length).toBeGreaterThan(0);
   });
 
@@ -36,7 +38,7 @@ describe('hydratePersisted', () => {
       posts: [{ id: 'keep-me', authorId: 'omar', text: 'still here', createdAt: '2026-01-01T00:00:00.000Z' }],
     };
     const next = hydratePersisted(JSON.stringify(blob));
-    expect(next.schemaVersion).toBe(1);
+    expect(next.schemaVersion).toBe(2);
     expect(next.currentUserId).toBe('omar');
     expect(next.following.omar).toEqual(['maya']);
     expect(next.posts[0]?.id).toBe('keep-me');
@@ -186,3 +188,139 @@ describe('AppProvider mutations', () => {
     expect(state.favorites.maya.teams).toContain('42');
   });
 });
+
+describe('score predictions', () => {
+  const open = { status: 'upcoming' as const, kickoff: '2026-09-16T18:00:00.000Z' };
+  const now = Date.parse('2026-09-16T12:00:00.000Z');
+
+  it('lets Maya pick a pre-kickoff score and hydrates it back', () => {
+    let state = signInDemo(defaults(), 'maya');
+    expect(state.predictions.some((p) => p.userId === 'maya' && p.matchId === 'fx-bha-mun')).toBe(false);
+    state = setPrediction(state, 'fx-bha-mun', 2, 1, now, open);
+    const mine = state.predictions.find((p) => p.userId === 'maya' && p.matchId === 'fx-bha-mun');
+    expect(mine).toMatchObject({ homeScore: 2, awayScore: 1 });
+    expect(state.notifications.some((n) => n.type === 'prediction' && n.recipientId === 'maya')).toBe(true);
+    expect(unreadCountFor(state, 'maya')).toBeGreaterThan(unreadCountFor(defaults(), 'maya'));
+
+    const again = hydratePersisted(JSON.stringify(state));
+    expect(again.schemaVersion).toBe(2);
+    expect(again.predictions.find((p) => p.userId === 'maya' && p.matchId === 'fx-bha-mun')).toMatchObject({
+      homeScore: 2,
+      awayScore: 1,
+    });
+  });
+
+  it('upserts before lock and rejects after kickoff or live', () => {
+    let state = signInDemo(defaults(), 'maya');
+    state = setPrediction(state, 'fx-bha-mun', 2, 1, now, open);
+    state = setPrediction(state, 'fx-bha-mun', 3, 0, now + 1, open);
+    expect(state.predictions.filter((p) => p.userId === 'maya' && p.matchId === 'fx-bha-mun')).toHaveLength(1);
+    expect(state.predictions.find((p) => p.userId === 'maya' && p.matchId === 'fx-bha-mun')?.homeScore).toBe(3);
+    expect(state.notifications.filter((n) => n.type === 'prediction' && n.recipientId === 'maya')).toHaveLength(1);
+
+    const locked = setPrediction(state, 'fx-bha-mun', 0, 0, Date.parse('2026-09-16T18:00:00.000Z'), open);
+    expect(locked.predictions.find((p) => p.userId === 'maya' && p.matchId === 'fx-bha-mun')?.homeScore).toBe(3);
+
+    const live = setPrediction(state, 'fx-liv-ars', 1, 0, now, { status: 'live', kickoff: '2026-09-16T11:00:00.000Z' });
+    expect(live.predictions.some((p) => p.userId === 'maya' && p.matchId === 'fx-liv-ars')).toBe(false);
+  });
+
+  it('treats related mock/live match ids as the same prediction', () => {
+    let state = signInDemo(defaults(), 'maya');
+    state = setPrediction(state, '9001', 2, 1, now, open, ['9001', 'fx-liv-ars']);
+    state = setPrediction(state, 'fx-liv-ars', 1, 1, now + 5, open, ['9001', 'fx-liv-ars']);
+    const mine = state.predictions.filter((p) => p.userId === 'maya' && (p.matchId === '9001' || p.matchId === 'fx-liv-ars'));
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ matchId: 'fx-liv-ars', homeScore: 1, awayScore: 1 });
+  });
+
+  it('fills seed community predictions when hydrating a v1 blob', () => {
+    const next = hydratePersisted(JSON.stringify({ schemaVersion: 1, currentUserId: 'maya' }));
+    expect(next.predictions.length).toBeGreaterThan(0);
+    expect(next.motmVotes.length).toBeGreaterThan(0);
+    expect(next.predictions.some((p) => p.userId === 'maya')).toBe(false);
+  });
+
+  it('keeps intentional empty prediction/MOTM arrays instead of reseeding', () => {
+    const next = hydratePersisted(
+      JSON.stringify({ schemaVersion: 2, currentUserId: 'maya', predictions: [], motmVotes: [] }),
+    );
+    expect(next.predictions).toEqual([]);
+    expect(next.motmVotes).toEqual([]);
+  });
+
+  it('does not reseed when every stored engagement row fails to parse', () => {
+    const next = hydratePersisted(
+      JSON.stringify({
+        schemaVersion: 2,
+        currentUserId: 'maya',
+        predictions: [{ matchId: 1 }],
+        motmVotes: [{ playerName: 'Salah' }],
+      }),
+    );
+    expect(next.predictions).toEqual([]);
+    expect(next.motmVotes).toEqual([]);
+  });
+
+  it('soft-skips a prediction when the fixture is omitted', () => {
+    let state = signInDemo(defaults(), 'maya');
+    const before = state.predictions.length;
+    state = setPrediction(state, 'fx-bha-mun', 2, 1, now);
+    expect(state.predictions).toHaveLength(before);
+    expect(state.predictions.some((p) => p.userId === 'maya' && p.matchId === 'fx-bha-mun')).toBe(false);
+  });
+});
+
+describe('MOTM votes', () => {
+  const salah = {
+    playerKey: 'p-liv-11',
+    playerId: 'p-liv-11',
+    playerName: 'Mohamed Salah',
+    teamId: 'liv',
+  };
+
+  it('records one vote per demo user per match and notifies the voter', () => {
+    let state = signInDemo(defaults(), 'maya');
+    state = setMotmVote(state, 'fx-liv-ars', salah, 5_000, 'live');
+    expect(state.motmVotes.filter((v) => v.userId === 'maya' && v.matchId === 'fx-liv-ars')).toHaveLength(1);
+    expect(state.notifications.some((n) => n.type === 'motm' && n.recipientId === 'maya' && n.body.includes('Salah'))).toBe(
+      true,
+    );
+
+    const blocked = setMotmVote(
+      state,
+      'fx-liv-ars',
+      { playerKey: 'p-ars-7', playerId: 'p-ars-7', playerName: 'Bukayo Saka', teamId: 'ars' },
+      6_000,
+      'live',
+    );
+    expect(blocked.motmVotes.filter((v) => v.userId === 'maya' && v.matchId === 'fx-liv-ars')).toHaveLength(1);
+    expect(blocked.motmVotes.find((v) => v.userId === 'maya')?.playerKey).toBe('p-liv-11');
+
+    const again = hydratePersisted(JSON.stringify(state));
+    expect(again.motmVotes.find((v) => v.userId === 'maya' && v.matchId === 'fx-liv-ars')?.playerKey).toBe('p-liv-11');
+  });
+
+  it('rejects votes before kickoff', () => {
+    let state = signInDemo(defaults(), 'maya');
+    state = setMotmVote(state, 'fx-bha-mun', salah, 7_000, 'upcoming');
+    expect(state.motmVotes.some((v) => v.userId === 'maya' && v.matchId === 'fx-bha-mun')).toBe(false);
+  });
+
+  it('soft-skips a vote when match status is omitted', () => {
+    let state = signInDemo(defaults(), 'maya');
+    const before = state.motmVotes.length;
+    state = setMotmVote(state, 'fx-liv-ars', salah, 7_500);
+    expect(state.motmVotes).toHaveLength(before);
+    expect(state.motmVotes.some((v) => v.userId === 'maya' && v.matchId === 'fx-liv-ars')).toBe(false);
+  });
+
+  it('rejects a second vote when the same match is stored under a live alias id', () => {
+    let state = signInDemo(defaults(), 'maya');
+    state = setMotmVote(state, '9001', salah, 8_000, 'finished', ['9001', 'fx-liv-ars']);
+    const again = setMotmVote(state, 'fx-liv-ars', salah, 9_000, 'finished', ['9001', 'fx-liv-ars']);
+    expect(again.motmVotes.filter((v) => v.userId === 'maya')).toHaveLength(1);
+    expect(again.motmVotes[again.motmVotes.length - 1]?.matchId).toBe('9001');
+  });
+});
+

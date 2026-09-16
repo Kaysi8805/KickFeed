@@ -19,9 +19,9 @@ export function Segmented<T extends string>({
           <Pressable
             key={opt.key}
             onPress={() => onChange(opt.key)}
-            style={[styles.item, active && styles.active]}
+            style={[styles.item, options.length > 4 && styles.itemTight, active && styles.active]}
           >
-            <Text style={[styles.label, active && styles.labelActive]}>{opt.label}</Text>
+            <Text style={[styles.label, options.length > 4 && styles.labelTight, active && styles.labelActive]}>{opt.label}</Text>
           </Pressable>
         );
       })}
@@ -32,13 +32,16 @@ export function Segmented<T extends string>({
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: 4,
     gap: 4,
   },
-  item: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.md, alignItems: 'center' },
+  item: { flexGrow: 1, flexBasis: 0, minWidth: 48, paddingVertical: spacing.sm, borderRadius: radius.md, alignItems: 'center' },
+  itemTight: { minWidth: 44, paddingVertical: 6 },
   active: { backgroundColor: colors.pitchBright },
   label: { ...type.caption, color: colors.textMuted },
+  labelTight: { fontSize: 11 },
   labelActive: { color: colors.bg, fontWeight: '800' },
 });

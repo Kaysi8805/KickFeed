@@ -14,8 +14,9 @@ v1 is **demo-auth local**: seeded fan profiles, mock social, and **mock football
 - **TV / broadcast schedule** — FotMob-style listings for launch geos (**UK, Slovakia, United States**). Browse today’s and upcoming England kickoffs with channel chips; tap through to the match. Editorial/mock data — not a licensed rights guide.
 - **Clubs & players** — Team pages (crest, league table context, fixtures, clickable squad, favorite) and player pages (mock season stats, recent appearances, follow/favorite, link back to club).
 - **Worldwide leagues** — continents → countries → competitions. Batch 3 live standings/scorers are England-only; other geos stay on the mock tree. Featured Premier League (and Championship when live).
-- **Match hub** — discussion thread, participants, empty states, and feed posts attached to that match id. Composer can deep-link from the match page.
-- **Notifications** — in-app center for match-chat replies, goals/kickoff demo alerts for fixtures you care about, follows, and friend posts. Expo Notifications wiring remains local/demo (no paid push).
+- **Match hub** — discussion thread, participants, empty states, feed posts attached to that match id, plus **score predictions** and **Man of the Match** voting. Composer can deep-link from the match page.
+- **Predictions & MOTM** — before kickoff, pick a home/away score and see community aggregates (other demo fans are seeded). Picks lock at kickoff / once the match is live. During and after the match, vote once for MOTM from lineups (squad fallback). Not a betting product.
+- **Notifications** — in-app center for match-chat replies, your prediction/MOTM confirmations, goals/kickoff demo alerts for fixtures you care about, follows, and friend posts. Expo Notifications wiring remains local/demo (no paid push).
 
 ## Run
 
@@ -62,7 +63,7 @@ Mock club ids (`ars`, `liv`, `epl`) still resolve after hydrate so demo favorite
 
 ## Demo mode
 
-On first launch, choose a demo profile. State (favorites including players, follows, posts, comments, notification read flags) is persisted with AsyncStorage under `kickfeed.v1.state`. Post `matchId` values are kept as stored — live remapping is display-time only.
+On first launch, choose a demo profile. State (favorites including players, follows, posts, comments, **score predictions**, **MOTM votes**, notification read flags) is persisted with AsyncStorage under `kickfeed.v1.state` (`schemaVersion` 2). Post `matchId` values are kept as stored — live remapping is display-time only. Predictions and MOTM votes use the same related-id matching as match chat, so mock ids (`fx-liv-ars`) and live England ids stay one ballot when a key is set.
 
 Corrupt JSON is discarded. A missing or newer `schemaVersion` still keeps valid slices (signed-in demo user, follows, posts, …) and stamps the current version. Unknown `currentUserId` values are cleared.
 
@@ -74,21 +75,22 @@ Use **Profile → Switch demo user** to pick another seeded fan. **Profile → E
 app/                 Expo Router screens (tabs + stack)
   team/[id]          Club detail (squad, fixtures, favorite)
   player/[id]        Player detail (stats, appearances, follow)
-  match/[id]         Match hub (events, discussion, attached posts, TV)
+  match/[id]         Match hub (events, Predict, MOTM, discussion, TV)
   tv                 TV schedule by country (UK / SK / US)
   search             Global search (clubs, players, leagues, fans)
 components/          UI, feed cards, match rows, entity links, search entry, TV chips
 lib/matchSocial.ts   Attach/match-post helpers (live vs mock ids)
+lib/engagement.ts    Prediction lock, MOTM ballot, community tallies
 lib/tvCountry.ts     Locale → launch geo, kickoff labels in that timezone
 data/types.ts        Shared domain types
-data/mocks/          Seeded users, teams, squads, leagues, fixtures, posts, TV listings
+data/mocks/          Seeded users, teams, squads, leagues, fixtures, posts, TV, predictions/MOTM
 services/auth.ts     Demo auth + stubs for email/OAuth
 services/football.ts     FootballProvider + mock + auto-select live adapter
 services/footballLive.ts API-Football England adapter (in-memory TTL cache)
 services/footballMap.ts  API entity → KickFeed types
 services/tv.ts           TvProvider + editorial mock listings (licensed swap later)
 services/notifications.ts  Expo Notifications register/schedule stubs
-services/AppProvider.tsx   App state (follows, favorites, posts, TV country)
+services/AppProvider.tsx   App state (follows, favorites, posts, TV country, predictions, MOTM)
 theme/               Color, type, and spacing tokens
 ```
 
@@ -149,13 +151,22 @@ Keep `TvProvider` stable (`getBroadcastsByMatch`, `getListingsByCountry`, `getCo
 
 Karol’s batches:
 
-- **Batch 0 — deferred.** Public landing / kickfeed.polsia.app sneaker page. Explicitly skipped for now.
+- **Batch 0 — deferred.** Public landing / kickfeed.polsia.app sneaker page. Explicitly skipped; still not in this release.
 - **Batch 1 — done.** Teams, players, and competitions are first-class and clickable throughout the app.
 - **Batch 2 — done.** Global search plus follow/favorite **players**.
 - **Batch 3 — done.** Real scores for **England** (API-Football behind `FootballProvider`; demo auth/social still mock). Keyed → PL + Championship; no key → mocks.
 - **Batch 4 — done.** Match-centric social on real England fixtures (match hub, compose attach, feed surfacing, in-app match notifications). Attachments use live match ids when keyed and mock ids otherwise.
-- **Batch 5 — done (this release).** TV / broadcast schedules for launch geos (UK + SK + US) with editorial listings and a `TvProvider` swap path.
-- **Batch 6 — next.** Predictions / MOTM per the product roadmap. Remaining geos, real auth, and DMs stay later.
+- **Batch 5 — done.** TV / broadcast schedules for launch geos (UK + SK + US) with editorial listings and a `TvProvider` swap path.
+- **Batch 6 — done (this release).** Score predictions (lock at kickoff) and Man of the Match voting on the match hub. Demo auth; works on the mock catalog and on live England match ids when a key is set.
+- **Later (Batch 7+).** Real auth, DMs, more live geos beyond England, licensed TV listings, prediction leaderboards / season-long games. Not gambling or paid prediction markets.
+
+## Predictions & MOTM (Batch 6)
+
+Match hub tabs **Predict** and **MOTM** sit next to Events / Lineups / Stats / Hub. TV stays a section on the board (Batch 5).
+
+- **Predict** — upcoming fixtures only. Stepper for home/away (0–9). Upsert until kickoff; live / HT / FT (or kickoff time reached) lock the pick. Community average, most-common scoreline, and home/draw/away counts include other demo users (seeded mocks).
+- **MOTM** — live, half-time, and finished. Ballot is `FootballProvider.getLineups`; if XIs are empty (free-tier skip), `getSquad` for both clubs. One vote per demo user per match (related mock/live ids count as one). Tallies persist with the rest of app state.
+- Confirmations land in Notifications (“You predicted 2–1”, “You voted for Salah”). No odds, stakes, or third-party betting APIs.
 
 ## Theme
 
