@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KickFeed — football social × live scores</title>
+    <meta
+      name="description"
+      content="KickFeed is a Facebook-style social feed crossed with FotMob-style football scores. Demo-auth Expo app with mock football, plus optional England live scores."
+    />
+    <meta name="theme-color" content="#07150F" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="pitch" aria-hidden="true"></div>
+    <header class="nav">
+      <a class="brand" href="#top">
+        <span class="mark" aria-hidden="true"></span>
+        KickFeed
+      </a>
+      <nav>
+        <a href="#product">Product</a>
+        <a href="#demo">Demo</a>
+        <a href="#waitlist">Waitlist</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="kicker">Football social + scores</p>
+          <h1>Talk about the match. Watch the score. Same pitch.</h1>
+          <p class="thesis">
+            Facebook-style social × FotMob-style scores — one Expo app for fans who live in both.
+          </p>
+          <p class="lede">
+            Follow other fans, attach a fixture to a post, and keep Live / Today / Upcoming boards
+            next to the chatter. v1 is a local demo: seeded profiles, mock social, and mock football
+            unless you add a free API-Football key for England.
+          </p>
+          <div class="cta-row">
+            <a class="btn primary" href="#waitlist">Join the waitlist</a>
+            <a
+              class="btn ghost"
+              href="https://github.com/Kaysi8805/KickFeed#run"
+              >Run the Expo demo</a
+            >
+          </div>
+          <p class="no-store">No App Store or Play Store build yet — this is the public pitch, not a shipped store app.</p>
+        </div>
+        <div class="hero-phones" aria-label="KickFeed app screenshots">
+          <figure class="phone phone-back">
+            <img
+              src="./images/matches.png"
+              width="390"
+              height="844"
+              alt="KickFeed Matches tab: live Premier League, UCL, and worldwide scores from the Expo demo"
+            />
+            <figcaption>Matches · Expo web capture</figcaption>
+          </figure>
+          <figure class="phone phone-front">
+            <img
+              src="./images/feed.png"
+              width="390"
+              height="844"
+              alt="KickFeed Feed: live Liverpool vs Arsenal plus fan posts attached to the match"
+            />
+            <figcaption>Feed · Expo web capture</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <aside class="disclaimer" id="demo">
+        <h2>Sandbox / demo — not a production scores product</h2>
+        <p>
+          KickFeed v1 is <strong>demo-auth local</strong>. Pick a seeded fan (Maya, Omar, Luca, …).
+          Social, predictions, MOTM, and notifications persist on-device. Football data is the
+          <strong>in-repo mock catalog</strong> unless you set
+          <code>EXPO_PUBLIC_FOOTBALL_API_KEY</code> — then Matches / standings hydrate
+          <strong>England Premier League + Championship</strong> from API-Football’s free tier.
+          Auth stays mock. Editorial TV listings for UK / SK / US are not a licensed rights guide.
+        </p>
+      </aside>
+
+      <section class="features" id="product">
+        <h2>What’s on the pitch</h2>
+        <ul>
+          <li>
+            <h3>Match-attached feed</h3>
+            <p>Post like a social app, pin a live or upcoming fixture, like and chat from the match hub.</p>
+          </li>
+          <li>
+            <h3>Live · Today · Upcoming</h3>
+            <p>FotMob-style boards, club and player pages, worldwide league tree, England live when keyed.</p>
+          </li>
+          <li>
+            <h3>Predict + MOTM</h3>
+            <p>Score picks lock at kickoff. Vote Man of the Match from lineups. Not a betting product.</p>
+          </li>
+          <li>
+            <h3>Where to watch</h3>
+            <p>Editorial TV chips for launch geos (UK, Slovakia, United States). Swap a licensed feed later.</p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="shots">
+        <h2>Captured from the Expo demo</h2>
+        <p class="shots-lead">
+          Real Expo web captures of Feed and Matches on the mock catalog — Liverpool–Arsenal chatter
+          next to live boards.
+        </p>
+        <div class="shot-grid">
+          <figure>
+            <img
+              src="./images/feed.png"
+              width="390"
+              height="844"
+              alt="KickFeed Feed screenshot with live Liverpool vs Arsenal and fan posts"
+            />
+            <figcaption>Feed — scores on top, friends underneath</figcaption>
+          </figure>
+          <figure>
+            <img
+              src="./images/matches.png"
+              width="390"
+              height="844"
+              alt="KickFeed Matches screenshot showing live Premier League and Champions League fixtures"
+            />
+            <figcaption>Matches — live worldwide (mock) or England when keyed</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="waitlist" id="waitlist">
+        <h2>Get in when we go wider</h2>
+        <p>
+          The Expo demo is public on GitHub today. Leave an email if you want a heads-up when KickFeed
+          is more than a local sandbox. This form is a <strong>client-side stub</strong> — nothing is
+          sent to a server.
+        </p>
+        <form id="waitlist-form" novalidate>
+          <label class="sr-only" for="email">Email</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autocomplete="email"
+            placeholder="you@club.example"
+            required
+          />
+          <button class="btn primary" type="submit">Join the waitlist</button>
+        </form>
+        <p class="form-status" id="waitlist-status" role="status" hidden></p>
+        <p class="alt-cta">
+          Want it now?
+          <a href="https://github.com/Kaysi8805/KickFeed#run">Run the Expo demo</a>
+          — iOS, Android, or web from the README.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>KickFeed · MIT · football social + scores</p>
+      <p>
+        <a href="https://github.com/Kaysi8805/KickFeed">GitHub</a>
+        · landing lives in-repo at <code>landing/</code>
+        · <code>kickfeed.polsia.app</code> DNS cutover is still with Karol
+      </p>
+    </footer>
+    <script src="./app.js"></script>
+  </body>
+</html>
