@@ -97,7 +97,7 @@ export default function PlayerDetailScreen() {
             ? stats
               ? 'Season numbers come from API-Football top scorers when the player is on that list.'
               : 'Full season stats aren’t on the free-tier hydrate (squad pages may still work).'
-            : 'Season numbers are mock placeholders until a live football API is wired in.'}
+            : 'Season numbers are mock. Set EXPO_PUBLIC_FOOTBALL_API_KEY for live England scorers.'}
         </Text>
 
         <Text style={styles.section}>Recent appearances</Text>
