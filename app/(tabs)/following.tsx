@@ -8,11 +8,14 @@ import { MatchRow } from '@/components/match/MatchRow';
 import { SearchButton } from '@/components/search/SearchEntry';
 import { Screen } from '@/components/ui/Screen';
 import { entityHref } from '@/lib/entityNav';
+import { expandFavoriteIds } from '@/lib/favoriteIds';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function FavoritesScreen() {
+  const catalog = useFootballCatalog();
   const {
     users,
     currentUser,
@@ -29,10 +32,14 @@ export default function FavoritesScreen() {
   const teams = favoriteTeamIds.map((id) => football.getTeam(id)).filter(Boolean);
   const leagues = favoriteLeagueIds.map((id) => football.getLeague(id)).filter(Boolean);
   const players = favoritePlayerIds.map((id) => football.getPlayer(id)).filter(Boolean);
-  const followedTeamIds = new Set([
-    ...favoriteTeamIds,
-    ...players.map((p) => p?.teamId).filter((id): id is string => !!id),
-  ]);
+  const followedTeamIds = expandFavoriteIds(
+    [
+      ...favoriteTeamIds,
+      ...players.map((p) => p?.teamId).filter((id): id is string => !!id),
+    ],
+    'team',
+  );
+  const followedLeagueIds = expandFavoriteIds(favoriteLeagueIds, 'league');
 
   const nextMatches = football
     .getFixtures()
@@ -40,7 +47,7 @@ export default function FavoritesScreen() {
       (f) =>
         followedTeamIds.has(f.homeTeamId) ||
         followedTeamIds.has(f.awayTeamId) ||
-        favoriteLeagueIds.includes(f.leagueId),
+        followedLeagueIds.has(f.leagueId),
     )
     .filter((f) => f.status !== 'finished')
     .slice(0, 8);
@@ -114,7 +121,11 @@ export default function FavoritesScreen() {
 
         <Text style={styles.section}>Coming up for you</Text>
         {nextMatches.length === 0 ? (
-          <Text style={styles.muted}>Favorite a team or player to pin their next matches here.</Text>
+          <Text style={styles.muted}>
+            {catalog.source === 'live'
+              ? 'Favorite an England club or the Premier League to pin live fixtures here.'
+              : 'Favorite a team or player to pin their next matches here.'}
+          </Text>
         ) : (
           nextMatches.map((f) => <MatchRow key={f.id} fixture={f} compact />)
         )}

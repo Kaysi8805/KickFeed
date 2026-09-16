@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PlayerRow } from '@/components/entity/PlayerRow';
@@ -9,6 +10,8 @@ import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import type { Player, PlayerPosition } from '@/data/types';
 import { entityHref } from '@/lib/entityNav';
+import { isFavoriteId } from '@/lib/favoriteIds';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football, primaryLeague } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
@@ -23,14 +26,26 @@ const POS_LABEL: Record<PlayerPosition, string> = {
 
 export default function TeamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const catalog = useFootballCatalog();
   const { favoriteTeamIds, toggleFavoriteTeam } = useApp();
   const team = football.getTeam(id);
+
+  useEffect(() => {
+    if (id) void football.ensureSquad(id);
+  }, [id]);
 
   if (!team) {
     return (
       <Screen>
         <HeaderBar title="Club" onBack={() => router.back()} />
-        <EmptyState title="Unknown club" body="This team isn’t in the mock catalog." />
+        <EmptyState
+          title="Unknown club"
+          body={
+            catalog.source === 'live'
+              ? 'This team isn’t in the live England catalog. Demo posts still link mock clubs by name.'
+              : 'This team isn’t in the mock catalog.'
+          }
+        />
       </Screen>
     );
   }
@@ -48,7 +63,7 @@ export default function TeamDetailScreen() {
     .filter((f) => f.status !== 'upcoming')
     .slice(-5)
     .reverse();
-  const fav = favoriteTeamIds.includes(team.id);
+  const fav = isFavoriteId(favoriteTeamIds, team.id, 'team');
 
   const grouped = POS_ORDER.map((pos) => ({
     pos,
@@ -94,27 +109,41 @@ export default function TeamDetailScreen() {
 
         <Text style={styles.section}>Recent</Text>
         {recent.length === 0 ? (
-          <Text style={styles.muted}>No recent mock fixtures for this club.</Text>
+          <Text style={styles.muted}>
+            {catalog.source === 'live' ? 'No recent fixtures in the cached England window.' : 'No recent mock fixtures for this club.'}
+          </Text>
         ) : (
           recent.map((f) => <MatchRow key={f.id} fixture={f} compact />)
         )}
 
         <Text style={styles.section}>Upcoming</Text>
         {upcoming.length === 0 ? (
-          <Text style={styles.muted}>No upcoming mock fixtures seeded.</Text>
+          <Text style={styles.muted}>
+            {catalog.source === 'live' ? 'No upcoming fixtures in the next three weeks of cache.' : 'No upcoming mock fixtures seeded.'}
+          </Text>
         ) : (
           upcoming.map((f) => <MatchRow key={f.id} fixture={f} compact />)
         )}
 
         <Text style={styles.section}>Squad</Text>
-        {grouped.map((g) => (
-          <View key={g.pos} style={styles.group}>
-            <Text style={styles.groupTitle}>{POS_LABEL[g.pos]}</Text>
-            {g.players.map((p: Player) => (
-              <PlayerRow key={p.id} player={p} />
-            ))}
-          </View>
-        ))}
+        {grouped.length === 0 ? (
+          <Text style={styles.muted}>
+            {catalog.source === 'live'
+              ? catalog.loading
+                ? 'Loading squad…'
+                : 'Squad isn’t cached yet (free-tier quota). Standings and fixtures still work.'
+              : 'No squad listed for this club.'}
+          </Text>
+        ) : (
+          grouped.map((g) => (
+            <View key={g.pos} style={styles.group}>
+              <Text style={styles.groupTitle}>{POS_LABEL[g.pos]}</Text>
+              {g.players.map((p: Player) => (
+                <PlayerRow key={p.id} player={p} />
+              ))}
+            </View>
+          ))
+        )}
       </ScrollView>
     </Screen>
   );

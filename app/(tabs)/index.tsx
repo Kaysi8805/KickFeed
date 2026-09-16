@@ -8,22 +8,28 @@ import { SearchBarPrompt } from '@/components/search/SearchEntry';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { useLiveTick } from '@/lib/useLiveTick';
+import { expandFavoriteIds } from '@/lib/favoriteIds';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function FeedScreen() {
   useLiveTick();
+  const catalog = useFootballCatalog();
   const { currentUser, posts, users, followingIds, likedPostIds, toggleLike, unreadCount, favoriteTeamIds, favoritePlayerIds } =
     useApp();
 
   const feed = posts.filter(
     (p) => p.authorId === currentUser?.id || followingIds.includes(p.authorId),
   );
-  const followedTeamIds = new Set([
-    ...favoriteTeamIds,
-    ...favoritePlayerIds.map((id) => football.getPlayer(id)?.teamId).filter((id): id is string => !!id),
-  ]);
+  const followedTeamIds = expandFavoriteIds(
+    [
+      ...favoriteTeamIds,
+      ...favoritePlayerIds.map((id) => football.getPlayer(id)?.teamId).filter((id): id is string => !!id),
+    ],
+    'team',
+  );
   const liveFav = football
     .getFixtures()
     .filter((f) => f.status === 'live' || f.status === 'ht')
@@ -60,7 +66,7 @@ export default function FeedScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {liveFav.length > 0 ? (
           <View style={styles.block}>
-            <Text style={styles.section}>For you · live</Text>
+            <Text style={styles.section}>{catalog.source === 'live' ? 'For you · live England' : 'For you · live'}</Text>
             {liveFav.map((f) => (
               <MatchRow key={f.id} fixture={f} compact />
             ))}

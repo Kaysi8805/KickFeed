@@ -10,11 +10,13 @@ import { Screen } from '@/components/ui/Screen';
 import type { League, Player, Team, User } from '@/data/types';
 import { entityHref } from '@/lib/entityNav';
 import { searchEntities, searchHasHits } from '@/lib/search';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function SearchScreen() {
+  useFootballCatalog();
   const { users } = useApp();
   const [q, setQ] = useState('');
   const results = useMemo(() => searchEntities(q, users), [q, users]);

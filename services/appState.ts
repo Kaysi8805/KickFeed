@@ -166,49 +166,53 @@ export function unfollow(state: Persisted, userId: string): Persisted {
   };
 }
 
-export function toggleFavoriteTeam(state: Persisted, teamId: string): Persisted {
+function toggleIdList(list: string[], id: string, related: string[] = []): string[] {
+  const group = new Set([id, ...related]);
+  const has = list.some((item) => group.has(item));
+  if (has) return list.filter((item) => !group.has(item));
+  return [...list, id];
+}
+
+export function toggleFavoriteTeam(state: Persisted, teamId: string, relatedIds: string[] = []): Persisted {
   if (!state.currentUserId) return state;
   const cur = favoriteSlice(state.favorites[state.currentUserId]);
-  const has = cur.teams.includes(teamId);
   return {
     ...state,
     favorites: {
       ...state.favorites,
       [state.currentUserId]: {
         ...cur,
-        teams: has ? cur.teams.filter((id) => id !== teamId) : [...cur.teams, teamId],
+        teams: toggleIdList(cur.teams, teamId, relatedIds),
       },
     },
   };
 }
 
-export function toggleFavoriteLeague(state: Persisted, leagueId: string): Persisted {
+export function toggleFavoriteLeague(state: Persisted, leagueId: string, relatedIds: string[] = []): Persisted {
   if (!state.currentUserId) return state;
   const cur = favoriteSlice(state.favorites[state.currentUserId]);
-  const has = cur.leagues.includes(leagueId);
   return {
     ...state,
     favorites: {
       ...state.favorites,
       [state.currentUserId]: {
         ...cur,
-        leagues: has ? cur.leagues.filter((id) => id !== leagueId) : [...cur.leagues, leagueId],
+        leagues: toggleIdList(cur.leagues, leagueId, relatedIds),
       },
     },
   };
 }
 
-export function toggleFavoritePlayer(state: Persisted, playerId: string): Persisted {
+export function toggleFavoritePlayer(state: Persisted, playerId: string, relatedIds: string[] = []): Persisted {
   if (!state.currentUserId) return state;
   const cur = favoriteSlice(state.favorites[state.currentUserId]);
-  const has = cur.players.includes(playerId);
   return {
     ...state,
     favorites: {
       ...state.favorites,
       [state.currentUserId]: {
         ...cur,
-        players: has ? cur.players.filter((id) => id !== playerId) : [...cur.players, playerId],
+        players: toggleIdList(cur.players, playerId, relatedIds),
       },
     },
   };

@@ -1,6 +1,4 @@
 import type {
-  Continent,
-  Country,
   Fixture,
   League,
   Lineup,
@@ -11,14 +9,15 @@ import type {
   PlayerPosition,
   PlayerStats,
   SeedFixture,
-  StandingRow,
-  Scorer,
-  Team,
 } from '@/data/types';
 import { continents, countries, leagues, leagueRosters, teams } from '@/data/mocks/catalog';
 import { seedFixtures } from '@/data/mocks/fixtures';
 import { allPlayers, findPlayerById, findPlayerByName, foldName, squadFor } from '@/data/mocks/players';
 import { scorersFor, standingsFor } from '@/data/mocks/stats';
+import { footballApiKeyFromEnv } from '@/services/footballApi';
+import { createLiveFootballProvider } from '@/services/footballLive';
+import type { FootballProvider } from '@/services/footballTypes';
+import { MOCK_FOOTBALL_STATUS, noopAsync } from '@/services/footballTypes';
 
 const teamMap = new Map(teams.map((t) => [t.id, t]));
 const leagueMap = new Map(leagues.map((l) => [l.id, l]));
@@ -156,8 +155,7 @@ export function teamCompetitions(teamId: string): League[] {
 }
 
 export function primaryLeague(teamId: string): League | undefined {
-  const comps = teamCompetitions(teamId);
-  return comps.find((l) => l.featured) ?? comps[0];
+  return primaryLeagueFrom(football, teamId);
 }
 
 function appearancesFor(player: Player, now = Date.now()): PlayerAppearance[] {
@@ -217,32 +215,7 @@ function statsFor(player: Player): PlayerStats {
   };
 }
 
-/**
- * Football data access. v1 is mock-only.
- * Swap `football` for a REST/GraphQL adapter that implements this shape.
- */
-export interface FootballProvider {
-  getContinents(): Continent[];
-  getContinent(id: string): Continent | undefined;
-  getCountries(continentId?: string): Country[];
-  getCountry(id: string): Country | undefined;
-  getLeagues(countryId?: string): League[];
-  getFeaturedLeagues(): League[];
-  getLeague(id: string): League | undefined;
-  getTeams(leagueId?: string): Team[];
-  getTeam(id: string): Team | undefined;
-  getPlayer(id: string): Player | undefined;
-  getPlayers(): Player[];
-  getSquad(teamId: string): Player[];
-  getTeamCompetitions(teamId: string): League[];
-  getPlayerStats(playerId: string): PlayerStats | undefined;
-  getPlayerAppearances(playerId: string): PlayerAppearance[];
-  getFixtures(opts?: { leagueId?: string; teamId?: string }): Fixture[];
-  getFixture(id: string): Fixture | undefined;
-  getStandings(leagueId: string): StandingRow[];
-  getTopScorers(leagueId: string): Scorer[];
-  getLineups(fixture: Fixture): { home: Lineup; away: Lineup };
-}
+export type { FootballEntityKind, FootballProvider, FootballSource, FootballStatus } from '@/services/footballTypes';
 
 export const mockFootballProvider: FootballProvider = {
   getContinents: () => continents,
@@ -292,6 +265,28 @@ export const mockFootballProvider: FootballProvider = {
     home: startingXi(fixture.homeTeamId),
     away: startingXi(fixture.awayTeamId),
   }),
+  getStatus: () => MOCK_FOOTBALL_STATUS,
+  hydrate: noopAsync,
+  refresh: noopAsync,
+  subscribe: () => () => undefined,
+  ensureSquad: noopAsync,
+  ensureMatchDetail: noopAsync,
+  ensureScorers: noopAsync,
+  relatedIds: (_kind, id) => [id],
 };
 
-export const football: FootballProvider = mockFootballProvider;
+export function selectFootballProvider(
+  apiKey = footballApiKeyFromEnv(),
+  fallback: FootballProvider = mockFootballProvider,
+): FootballProvider {
+  if (!apiKey) return fallback;
+  return createLiveFootballProvider({ apiKey, fallback });
+}
+
+/** Mock unless `EXPO_PUBLIC_FOOTBALL_API_KEY` is set. */
+export const football: FootballProvider = selectFootballProvider();
+
+export function primaryLeagueFrom(provider: FootballProvider, teamId: string): League | undefined {
+  const comps = provider.getTeamCompetitions(teamId);
+  return comps.find((l) => l.featured) ?? comps[0];
+}

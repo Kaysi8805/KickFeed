@@ -6,6 +6,7 @@ import {
   markNotificationsRead,
   signInDemo,
   toggleFavoritePlayer,
+  toggleFavoriteTeam,
   toggleLike,
   unreadCountFor,
 } from '@/services/appState';
@@ -93,5 +94,15 @@ describe('AppProvider mutations', () => {
     state = toggleFavoritePlayer(state, 'p-liv-11');
     expect(state.favorites.maya.players).toEqual([]);
     expect(state.favorites.maya.teams).toContain('ars');
+  });
+
+  it('treats mock and live team ids as the same favorite', () => {
+    let state = signInDemo(defaults(), 'maya');
+    expect(state.favorites.maya.teams).toContain('ars');
+    state = toggleFavoriteTeam(state, '42', ['42', 'ars']);
+    expect(state.favorites.maya.teams).not.toContain('ars');
+    expect(state.favorites.maya.teams).not.toContain('42');
+    state = toggleFavoriteTeam(state, '42', ['42', 'ars']);
+    expect(state.favorites.maya.teams).toContain('42');
   });
 });

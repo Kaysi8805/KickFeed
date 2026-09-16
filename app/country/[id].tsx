@@ -5,9 +5,11 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { football } from '@/services/football';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function CountryScreen() {
+  const catalog = useFootballCatalog();
   const { id } = useLocalSearchParams<{ id: string }>();
   const country = football.getCountry(id);
   const leagues = football.getLeagues(id);
@@ -28,7 +30,14 @@ export default function CountryScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         {leagues.length === 0 ? (
-          <EmptyState title="No competitions seeded" body="A real API can fill this country later." />
+            <EmptyState
+              title="No competitions seeded"
+              body={
+                catalog.source === 'live'
+                  ? 'Batch 3 live data is England-only. Other countries stay in the mock tree.'
+                  : 'A real API can fill this country later.'
+              }
+            />
         ) : (
           leagues.map((l) => (
             <Pressable key={l.id} onPress={() => router.push(`/league/${l.id}`)} style={styles.row}>

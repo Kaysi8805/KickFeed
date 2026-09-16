@@ -1,0 +1,206 @@
+/** API-Football (api-sports.io) v3 shapes used by the England live adapter. */
+
+export const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
+export const API_FOOTBALL_SIGNUP = 'https://dashboard.api-football.com/register';
+export const API_FOOTBALL_DOCS = 'https://www.api-football.com/documentation-v3';
+
+/** Premier League + EFL Championship (free-tier, one extra pair of calls). FA Cup skipped to save the 100 req/day budget. */
+export const ENGLAND_LEAGUE_IDS = ['39', '40'] as const;
+export const PREMIER_LEAGUE_ID = '39';
+export const CHAMPIONSHIP_ID = '40';
+
+export interface ApiEnvelope<T> {
+  get?: string;
+  errors?: unknown;
+  results?: number;
+  paging?: { current?: number; total?: number };
+  response?: T;
+}
+
+export interface ApiTeamRef {
+  id: number;
+  name: string;
+  logo?: string | null;
+  code?: string | null;
+  country?: string | null;
+  winner?: boolean | null;
+}
+
+export interface ApiFixture {
+  fixture: {
+    id: number;
+    date: string;
+    timestamp?: number;
+    referee?: string | null;
+    venue?: { id?: number | null; name?: string | null; city?: string | null } | null;
+    status: { long?: string | null; short?: string | null; elapsed?: number | null; extra?: number | null };
+  };
+  league: {
+    id: number;
+    name: string;
+    country?: string | null;
+    season?: number;
+    round?: string | null;
+  };
+  teams: { home: ApiTeamRef; away: ApiTeamRef };
+  goals: { home: number | null; away: number | null };
+  score?: {
+    halftime?: { home: number | null; away: number | null };
+    fulltime?: { home: number | null; away: number | null };
+  };
+}
+
+export interface ApiStandingRow {
+  rank: number;
+  team: ApiTeamRef;
+  points: number;
+  goalsDiff?: number;
+  form?: string | null;
+  all: {
+    played: number;
+    win: number;
+    draw: number;
+    lose: number;
+    goals: { for: number; against: number };
+  };
+}
+
+export interface ApiStandingsResponse {
+  league: {
+    id: number;
+    name: string;
+    season?: number;
+    standings: ApiStandingRow[][];
+  };
+}
+
+export interface ApiTeamResponse {
+  team: ApiTeamRef & { code?: string | null; country?: string | null };
+  venue?: { name?: string | null } | null;
+}
+
+export interface ApiSquadPlayer {
+  id: number;
+  name: string;
+  age?: number | null;
+  number?: number | null;
+  position?: string | null;
+  photo?: string | null;
+}
+
+export interface ApiSquadResponse {
+  team: ApiTeamRef;
+  players: ApiSquadPlayer[];
+}
+
+export interface ApiEvent {
+  time: { elapsed: number | null; extra?: number | null };
+  team: ApiTeamRef;
+  player: { id: number | null; name: string | null };
+  assist?: { id: number | null; name: string | null } | null;
+  type: string;
+  detail?: string | null;
+}
+
+export interface ApiLineupPlayer {
+  player: { id: number; name: string; number?: number | null; pos?: string | null };
+}
+
+export interface ApiLineup {
+  team: ApiTeamRef;
+  formation?: string | null;
+  startXI?: ApiLineupPlayer[];
+  substitutes?: ApiLineupPlayer[];
+}
+
+export interface ApiScorer {
+  player: { id: number; name: string; nationality?: string | null; photo?: string | null };
+  statistics: Array<{
+    team: ApiTeamRef;
+    games?: { appearences?: number | null; appearances?: number | null; minutes?: number | null; rating?: string | null };
+    goals?: { total?: number | null; assists?: number | null };
+    cards?: { yellow?: number | null; red?: number | null };
+  }>;
+}
+
+export type FootballQuery = Record<string, string | number | undefined>;
+
+export type FootballHttp = (path: string, params?: FootballQuery) => Promise<unknown>;
+
+export function footballApiKeyFromEnv(
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
+): string | undefined {
+  const key = env.EXPO_PUBLIC_FOOTBALL_API_KEY?.trim();
+  return key || undefined;
+}
+
+export function footballSeasonFromEnv(
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
+  now = new Date(),
+): number {
+  const raw = env.EXPO_PUBLIC_FOOTBALL_SEASON?.trim();
+  if (raw && /^\d{4}$/.test(raw)) return Number(raw);
+  return europeanSeasonYear(now);
+}
+
+/** European domestic season label is the year it starts (Aug 2026 → 2026). */
+export function europeanSeasonYear(now = new Date()): number {
+  const year = now.getUTCFullYear();
+  return now.getUTCMonth() >= 6 ? year : year - 1;
+}
+
+export function isoDateUtc(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+export function fixtureDateWindow(now = new Date(), backDays = 14, aheadDays = 21): { from: string; to: string } {
+  const from = new Date(now);
+  from.setUTCDate(from.getUTCDate() - backDays);
+  const to = new Date(now);
+  to.setUTCDate(to.getUTCDate() + aheadDays);
+  return { from: isoDateUtc(from), to: isoDateUtc(to) };
+}
+
+export function describeApiErrors(errors: unknown): string | null {
+  if (errors == null) return null;
+  if (Array.isArray(errors)) {
+    if (!errors.length) return null;
+    return errors.map((e) => String(e)).join('; ');
+  }
+  if (typeof errors === 'string') return errors.trim() || null;
+  if (typeof errors === 'object') {
+    const vals = Object.values(errors as Record<string, unknown>).filter((v) => v != null && String(v).trim());
+    return vals.length ? vals.map((v) => String(v)).join('; ') : null;
+  }
+  return null;
+}
+
+export function createApiFootballHttp(apiKey: string, fetchImpl: typeof fetch = fetch): FootballHttp {
+  return async (path, params) => {
+    const url = new URL(path.replace(/^\//, ''), `${API_FOOTBALL_BASE}/`);
+    for (const [key, value] of Object.entries(params ?? {})) {
+      if (value == null || value === '') continue;
+      url.searchParams.set(key, String(value));
+    }
+    const res = await fetchImpl(url.toString(), {
+      method: 'GET',
+      headers: {
+        'x-apisports-key': apiKey,
+        Accept: 'application/json',
+      },
+    });
+    if (res.status === 401 || res.status === 403) {
+      throw new Error('API-Football rejected the key (check EXPO_PUBLIC_FOOTBALL_API_KEY).');
+    }
+    if (res.status === 429) {
+      throw new Error('API-Football rate limit hit. KickFeed will reuse cache and retry later.');
+    }
+    if (!res.ok) {
+      throw new Error(`API-Football HTTP ${res.status}`);
+    }
+    const json = (await res.json()) as ApiEnvelope<unknown>;
+    const err = describeApiErrors(json.errors);
+    if (err) throw new Error(err);
+    return json.response ?? [];
+  };
+}

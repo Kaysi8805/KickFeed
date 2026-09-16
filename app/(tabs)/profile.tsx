@@ -8,11 +8,13 @@ import { Crest } from '@/components/ui/Crest';
 import { Screen } from '@/components/ui/Screen';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { registerForPushNotifications } from '@/services/notifications';
 import { entityHref } from '@/lib/entityNav';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function ProfileScreen() {
+  useFootballCatalog();
   const {
     currentUser,
     posts,

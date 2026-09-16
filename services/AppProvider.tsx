@@ -22,6 +22,7 @@ import {
   unreadCountFor,
   updateProfile as updateProfileState,
 } from '@/services/appState';
+import { football } from '@/services/football';
 
 const STORAGE_KEY = 'kickfeed.v1.state';
 
@@ -77,6 +78,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    void football.hydrate();
+  }, []);
+
+  useEffect(() => {
     if (!ready) return;
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => undefined);
   }, [state, ready]);
@@ -124,9 +129,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       follow: (userId) =>
         patch((p) => followState(p, userId, currentUser?.name ?? 'A fan')),
       unfollow: (userId) => patch((p) => unfollowState(p, userId)),
-      toggleFavoriteTeam: (teamId) => patch((p) => toggleFavoriteTeamState(p, teamId)),
-      toggleFavoriteLeague: (leagueId) => patch((p) => toggleFavoriteLeagueState(p, leagueId)),
-      toggleFavoritePlayer: (playerId) => patch((p) => toggleFavoritePlayerState(p, playerId)),
+      toggleFavoriteTeam: (teamId) =>
+        patch((p) => toggleFavoriteTeamState(p, teamId, football.relatedIds('team', teamId))),
+      toggleFavoriteLeague: (leagueId) =>
+        patch((p) => toggleFavoriteLeagueState(p, leagueId, football.relatedIds('league', leagueId))),
+      toggleFavoritePlayer: (playerId) =>
+        patch((p) => toggleFavoritePlayerState(p, playerId, football.relatedIds('player', playerId))),
       updateProfile: (next) => patch((p) => updateProfileState(p, next)),
       addPost: (text, imageUri) => patch((p) => addPostState(p, text, imageUri)),
       toggleLike: (postId) => patch((p) => toggleLikeState(p, postId)),

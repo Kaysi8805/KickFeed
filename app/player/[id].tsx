@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { TeamLink } from '@/components/entity/TeamLink';
@@ -6,21 +7,36 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { entityHref } from '@/lib/entityNav';
+import { isFavoriteId } from '@/lib/favoriteIds';
 import { kickoffLabel } from '@/lib/format';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function PlayerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const catalog = useFootballCatalog();
   const { favoritePlayerIds, toggleFavoritePlayer } = useApp();
   const player = football.getPlayer(id);
+
+  useEffect(() => {
+    const p = football.getPlayer(id);
+    if (p) void football.ensureSquad(p.teamId);
+  }, [id]);
 
   if (!player) {
     return (
       <Screen>
         <HeaderBar title="Player" onBack={() => router.back()} />
-        <EmptyState title="Unknown player" body="This player isn’t in the mock catalog." />
+        <EmptyState
+          title="Unknown player"
+          body={
+            catalog.source === 'live'
+              ? 'This player isn’t in the cached England squads yet. Open their club page to load the squad, or search again after hydrate.'
+              : 'This player isn’t in the mock catalog.'
+          }
+        />
       </Screen>
     );
   }
@@ -29,7 +45,7 @@ export default function PlayerDetailScreen() {
   const stats = football.getPlayerStats(player.id);
   const apps = football.getPlayerAppearances(player.id);
   const country = team ? football.getCountry(team.countryId) : undefined;
-  const fav = favoritePlayerIds.includes(player.id);
+  const fav = isFavoriteId(favoritePlayerIds, player.id, 'player');
 
   return (
     <Screen padded={false}>
@@ -76,11 +92,21 @@ export default function PlayerDetailScreen() {
           </View>
         ) : null}
 
-        <Text style={styles.hint}>Season numbers are mock placeholders until a live football API is wired in.</Text>
+        <Text style={styles.hint}>
+          {catalog.source === 'live'
+            ? stats
+              ? 'Season numbers come from API-Football top scorers when the player is on that list.'
+              : 'Full season stats aren’t on the free-tier hydrate (squad pages may still work).'
+            : 'Season numbers are mock placeholders until a live football API is wired in.'}
+        </Text>
 
         <Text style={styles.section}>Recent appearances</Text>
         {apps.length === 0 ? (
-          <Text style={styles.muted}>No mock appearances in the current fixture window.</Text>
+          <Text style={styles.muted}>
+            {catalog.source === 'live'
+              ? 'Appearances show up after match events/lineups are cached from a match page.'
+              : 'No mock appearances in the current fixture window.'}
+          </Text>
         ) : (
           apps.map((a) => {
             const fx = football.getFixture(a.fixtureId);

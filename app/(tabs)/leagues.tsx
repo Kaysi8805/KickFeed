@@ -3,11 +3,14 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { useMemo, useState } from 'react';
 
 import { SearchButton } from '@/components/search/SearchEntry';
+import { CatalogStatus } from '@/components/football/CatalogStatus';
 import { Screen } from '@/components/ui/Screen';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function LeaguesScreen() {
+  const catalog = useFootballCatalog();
   const [q, setQ] = useState('');
   const featured = football.getFeaturedLeagues();
   const continents = football.getContinents();
@@ -31,6 +34,7 @@ export default function LeaguesScreen() {
           <Text style={styles.title}>Leagues</Text>
           <SearchButton />
         </View>
+        <CatalogStatus />
         <TextInput
           placeholder="Search leagues or countries"
           placeholderTextColor={colors.textDim}
@@ -63,7 +67,7 @@ export default function LeaguesScreen() {
                 <Text style={styles.chev}>Standings →</Text>
               </Pressable>
             ))}
-            <Text style={styles.section}>Browse worldwide</Text>
+            <Text style={styles.section}>{catalog.source === 'live' ? 'Browse (England live + mock geos)' : 'Browse worldwide'}</Text>
             {continents.map((c) => (
               <Pressable key={c.id} onPress={() => router.push(`/continent/${c.id}`)} style={styles.row}>
                 <View>

@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { CatalogStatus } from '@/components/football/CatalogStatus';
 import { MatchRow } from '@/components/match/MatchRow';
 import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -9,6 +10,8 @@ import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
 import { entityHref } from '@/lib/entityNav';
+import { isFavoriteId } from '@/lib/favoriteIds';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
@@ -17,15 +20,27 @@ type Tab = 'table' | 'scorers' | 'fixtures';
 
 export default function LeagueScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const catalog = useFootballCatalog();
   const { favoriteLeagueIds, toggleFavoriteLeague } = useApp();
   const [tab, setTab] = useState<Tab>('table');
   const league = football.getLeague(id);
+
+  useEffect(() => {
+    if (league && tab === 'scorers') void football.ensureScorers(league.id);
+  }, [league, tab]);
 
   if (!league) {
     return (
       <Screen>
         <HeaderBar title="League" onBack={() => router.back()} />
-        <EmptyState title="Unknown league" body="This competition isn’t in the mock catalog." />
+        <EmptyState
+          title="Unknown league"
+          body={
+            catalog.source === 'live'
+              ? 'Batch 3 live scores cover England (Premier League + Championship). Other competitions stay mock until a later geo batch.'
+              : 'This competition isn’t in the mock catalog.'
+          }
+        />
       </Screen>
     );
   }
@@ -34,7 +49,7 @@ export default function LeagueScreen() {
   const table = football.getStandings(league.id);
   const scorers = football.getTopScorers(league.id);
   const fixtures = football.getFixtures({ leagueId: league.id });
-  const fav = favoriteLeagueIds.includes(league.id);
+  const fav = isFavoriteId(favoriteLeagueIds, league.id, 'league');
 
   return (
     <Screen padded={false}>
@@ -52,6 +67,7 @@ export default function LeagueScreen() {
         <Text style={styles.meta}>
           {country?.flag} {country?.name} · {league.type}
         </Text>
+        <CatalogStatus />
         <Segmented
           value={tab}
           onChange={setTab}
@@ -64,7 +80,9 @@ export default function LeagueScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         {tab === 'table' ? (
-          table.length === 0 ? (
+          catalog.loading && table.length === 0 ? (
+            <EmptyState title="Loading table" body="Standings are cached for a few minutes to stay inside the free-tier limit." />
+          ) : table.length === 0 ? (
             <EmptyState title="No table" body="Cup competitions may not publish a league table." />
           ) : (
             <View style={styles.table}>
@@ -130,6 +148,12 @@ export default function LeagueScreen() {
         ) : null}
 
         {tab === 'scorers' ? (
+          scorers.length === 0 ? (
+            <EmptyState
+              title="No scorers yet"
+              body="The free tier may omit this list, or we skipped a request to save quota."
+            />
+          ) : (
           scorers.map((s, i) => {
             const team = football.getTeam(s.teamId);
             return (
@@ -155,6 +179,7 @@ export default function LeagueScreen() {
               </View>
             );
           })
+          )
         ) : null}
 
         {tab === 'fixtures'

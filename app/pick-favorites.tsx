@@ -6,12 +6,15 @@ import { Crest } from '@/components/ui/Crest';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { entityHref } from '@/lib/entityNav';
+import { isFavoriteId } from '@/lib/favoriteIds';
 import { searchEntities } from '@/lib/search';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function PickFavoritesScreen() {
+  const catalog = useFootballCatalog();
   const {
     favoriteTeamIds,
     favoriteLeagueIds,
@@ -23,17 +26,18 @@ export default function PickFavoritesScreen() {
   const [q, setQ] = useState('');
   const teams = football.getTeams();
   const leagues = football.getLeagues();
+  const hintIds = ['ars', 'liv', 'mci', 'rma', 'bar', 'int', 'bay', 'psg', 'fla', 'mia'];
 
   const teamResults = useMemo(() => {
     const needle = q.trim().toLowerCase();
+    const hinted = hintIds.map((id) => football.getTeam(id)).filter((t): t is NonNullable<typeof t> => !!t);
+    const liveEngland = football.getFeaturedLeagues().flatMap((l) => football.getTeams(l.id));
     const list = needle
       ? teams.filter((t) => t.name.toLowerCase().includes(needle) || t.code.toLowerCase().includes(needle))
-      : teams.filter((t) => ['ars', 'liv', 'mci', 'rma', 'bar', 'int', 'bay', 'psg', 'fla', 'mia'].includes(t.id)).concat(
-          teams.filter((t) => favoriteTeamIds.includes(t.id)),
-        );
+      : hinted.concat(liveEngland).concat(teams.filter((t) => isFavoriteId(favoriteTeamIds, t.id, 'team')));
     const seen = new Set<string>();
     return list.filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true))).slice(0, 24);
-  }, [favoriteTeamIds, q, teams]);
+  }, [catalog.lastSyncedAt, favoriteTeamIds, q, teams]);
 
   const playerResults = useMemo(() => {
     const needle = q.trim();
@@ -58,7 +62,7 @@ export default function PickFavoritesScreen() {
         {leagues
           .filter((l) => l.featured || favoriteLeagueIds.includes(l.id))
           .map((l) => {
-            const on = favoriteLeagueIds.includes(l.id);
+            const on = isFavoriteId(favoriteLeagueIds, l.id, 'league');
             return (
               <View key={l.id} style={[styles.row, on && styles.on]}>
                 <Pressable onPress={() => router.push(entityHref('league', l.id))} style={{ flex: 1 }}>
@@ -75,7 +79,7 @@ export default function PickFavoritesScreen() {
           <Text style={styles.hint}>Search a name like Salah to favorite footballers.</Text>
         ) : (
           playerResults.map((p) => {
-            const on = favoritePlayerIds.includes(p.id);
+            const on = isFavoriteId(favoritePlayerIds, p.id, 'player');
             const team = football.getTeam(p.teamId);
             return (
               <View key={p.id} style={[styles.row, on && styles.on]}>
@@ -102,7 +106,7 @@ export default function PickFavoritesScreen() {
         )}
         <Text style={styles.section}>Clubs</Text>
         {teamResults.map((t) => {
-          const on = favoriteTeamIds.includes(t.id);
+          const on = isFavoriteId(favoriteTeamIds, t.id, 'team');
           return (
             <View key={t.id} style={[styles.row, on && styles.on]}>
               <Pressable

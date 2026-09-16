@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { LiveBadge } from '@/components/match/LiveBadge';
@@ -13,6 +13,7 @@ import { Segmented } from '@/components/ui/Segmented';
 import { entityHref } from '@/lib/entityNav';
 import { timeAgo } from '@/lib/format';
 import { useLiveTick } from '@/lib/useLiveTick';
+import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
@@ -29,11 +30,16 @@ const eventIcon: Record<string, string> = {
 
 export default function MatchDetailScreen() {
   useLiveTick();
+  const catalog = useFootballCatalog();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { users, comments, addComment, currentUser } = useApp();
   const [tab, setTab] = useState<Tab>('events');
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<string | undefined>();
+
+  useEffect(() => {
+    if (id) void football.ensureMatchDetail(id);
+  }, [id]);
 
   const fixture = football.getFixture(id);
   const home = fixture ? football.getTeam(fixture.homeTeamId) : undefined;
@@ -47,7 +53,14 @@ export default function MatchDetailScreen() {
     return (
       <Screen>
         <HeaderBar title="Match" onBack={() => router.back()} />
-        <EmptyState title="Match not found" body="This fixture isn’t in the mock catalog." />
+        <EmptyState
+          title="Match not found"
+          body={
+            catalog.source === 'live'
+              ? 'This fixture isn’t in the cached England window (or the demo catalog).'
+              : 'This fixture isn’t in the mock catalog.'
+          }
+        />
       </Screen>
     );
   }
@@ -145,6 +158,12 @@ export default function MatchDetailScreen() {
         ) : null}
 
         {tab === 'lineups' ? (
+          lineups.home.players.length === 0 && lineups.away.players.length === 0 ? (
+            <EmptyState
+              title="Lineups not cached"
+              body="Free-tier quota may skip lineups. Events and the score still come from the fixture payload when available."
+            />
+          ) : (
           <View style={styles.lineWrap}>
             <View style={{ flex: 1 }}>
               <Text style={styles.lineTitle}>{home.code} · {lineups.home.formation}</Text>
@@ -177,6 +196,7 @@ export default function MatchDetailScreen() {
               ))}
             </View>
           </View>
+          )
         ) : null}
 
         {tab === 'stats' ? (
@@ -191,7 +211,7 @@ export default function MatchDetailScreen() {
               <Text style={styles.statN}>{possession.away}%</Text>
             </View>
             <Text style={styles.hint}>
-              Shot maps and xG will plug in when a real football API replaces services/football.ts.
+              Shot maps and xG are still later. Live scores for England come from API-Football when a key is set.
             </Text>
           </View>
         ) : null}
