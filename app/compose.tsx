@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -38,7 +38,13 @@ export default function ComposeScreen() {
   return (
     <Screen padded={false}>
       <View style={styles.pad}>
-        <HeaderBar title="New post" onBack={() => router.back()} />
+        <HeaderBar
+          title="New post"
+          onBack={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace('/' as Href);
+          }}
+        />
       </View>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Text style={styles.as}>Posting as {currentUser?.name}</Text>
@@ -103,14 +109,21 @@ export default function ComposeScreen() {
           <Pressable
             onPress={() => {
               if (!text.trim()) return;
-              addPost(text.trim(), imageUri, matchId);
+              const attached = matchId ? attachMatchId(football, matchId) : undefined;
+              addPost(text.trim(), imageUri, attached);
               scheduleDemoNotification(
                 'KickFeed',
-                matchId && selected
+                attached && selected
                   ? `Posted on ${fixtureScoreLabel(football, selected)}.`
                   : 'Your post is live in the demo feed.',
               );
-              router.back();
+              if (attached) {
+                router.replace(`/match/${attached}?tab=chat` as Href);
+              } else if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/' as Href);
+              }
             }}
             style={[styles.post, !text.trim() && { opacity: 0.4 }]}
           >
