@@ -52,6 +52,10 @@ export default function MatchDetailScreen() {
   const [replyTo, setReplyTo] = useState<string | undefined>();
 
   useEffect(() => {
+    setTab(tabFromParam(tabParam));
+  }, [tabParam]);
+
+  useEffect(() => {
     if (id) void football.ensureMatchDetail(id);
   }, [id]);
 
