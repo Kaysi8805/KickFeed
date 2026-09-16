@@ -44,6 +44,7 @@ function RootNav() {
         <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
         <Stack.Screen name="search" />
         <Stack.Screen name="pick-favorites" />
+        <Stack.Screen name="tv" />
       </Stack>
     </>
   );

@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CatalogStatus } from '@/components/football/CatalogStatus';
 import { MatchRow } from '@/components/match/MatchRow';
 import { SearchButton } from '@/components/search/SearchEntry';
+import { TvButton } from '@/components/tv/TvButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
@@ -53,7 +54,10 @@ export default function MatchesScreen() {
       <View style={styles.top}>
         <View style={styles.titleRow}>
           <Text style={styles.title}>Matches</Text>
-          <SearchButton />
+          <View style={styles.actions}>
+            <TvButton />
+            <SearchButton />
+          </View>
         </View>
         <Text style={styles.sub}>
           {catalog.source === 'live'
@@ -106,6 +110,7 @@ export default function MatchesScreen() {
 const styles = StyleSheet.create({
   top: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md, gap: spacing.md },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { ...type.title, color: colors.text },
   sub: { ...type.caption, color: colors.textMuted, fontWeight: '500', marginTop: -8 },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: 40 },

@@ -283,7 +283,7 @@ export function selectFootballProvider(
   return createLiveFootballProvider({ apiKey, fallback });
 }
 
-/** Mock unless `EXPO_PUBLIC_FOOTBALL_API_KEY` is set. */
+/** Mock unless `EXPO_PUBLIC_FOOTBALL_API_KEY` is set. TV listings are a separate `TvProvider` (`services/tv.ts`). */
 export const football: FootballProvider = selectFootballProvider();
 
 export function primaryLeagueFrom(provider: FootballProvider, teamId: string): League | undefined {

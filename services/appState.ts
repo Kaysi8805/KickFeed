@@ -219,7 +219,7 @@ export function toggleFavoritePlayer(state: Persisted, playerId: string, related
   };
 }
 
-export function updateProfile(state: Persisted, next: Partial<Pick<User, 'name' | 'bio'>>): Persisted {
+export function updateProfile(state: Persisted, next: Partial<Pick<User, 'name' | 'bio' | 'tvCountryId'>>): Persisted {
   if (!state.currentUserId) return state;
   return {
     ...state,

@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { PostCard } from '@/components/feed/PostCard';
 import { LiveBadge } from '@/components/match/LiveBadge';
+import { TvMatchSection } from '@/components/tv/TvMatchSection';
 import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -110,9 +111,14 @@ export default function MatchDetailScreen() {
           title={league?.shortName ?? 'Match'}
           onBack={() => safeBack(entityBackHref('match', fixture.id))}
           right={
-            <Pressable onPress={() => router.push({ pathname: '/compose', params: { matchId: fixture.id } })}>
-              <Text style={styles.leagueLink}>Post</Text>
-            </Pressable>
+            <View style={styles.headerRight}>
+              <Pressable onPress={() => router.push('/tv')}>
+                <Text style={styles.leagueLink}>TV</Text>
+              </Pressable>
+              <Pressable onPress={() => router.push({ pathname: '/compose', params: { matchId: fixture.id } })}>
+                <Text style={styles.leagueLink}>Post</Text>
+              </Pressable>
+            </View>
           }
         />
       </View>
@@ -145,6 +151,8 @@ export default function MatchDetailScreen() {
             <Text style={styles.team}>{away.shortName}</Text>
           </Pressable>
         </View>
+
+        <TvMatchSection matchId={fixture.id} />
 
         <Segmented
           value={tab}
@@ -398,6 +406,7 @@ const styles = StyleSheet.create({
   ft: { ...type.micro, color: colors.textMuted },
   venue: { ...type.caption, color: colors.textDim, fontWeight: '500', textAlign: 'center' },
   leagueLink: { ...type.caption, color: colors.lime },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   link: { color: colors.lime },
   block: { marginTop: spacing.lg, gap: 8 },
   event: {

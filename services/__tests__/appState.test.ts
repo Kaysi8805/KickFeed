@@ -11,6 +11,7 @@ import {
   toggleFavoriteTeam,
   toggleLike,
   unreadCountFor,
+  updateProfile,
 } from '@/services/appState';
 import { describe, expect, it } from 'vitest';
 
@@ -50,6 +51,14 @@ describe('hydratePersisted', () => {
     };
     const next = hydratePersisted(JSON.stringify(blob));
     expect(next.favorites.maya).toEqual({ teams: ['ars'], leagues: ['epl'], players: [] });
+  });
+
+  it('keeps a saved TV country on the profile slice', () => {
+    let state = signInDemo(defaults(), 'maya');
+    state = updateProfile(state, { tvCountryId: 'gbr' });
+    expect(state.profiles.maya?.tvCountryId).toBe('gbr');
+    const again = hydratePersisted(JSON.stringify(state));
+    expect(again.profiles.maya?.tvCountryId).toBe('gbr');
   });
 });
 
