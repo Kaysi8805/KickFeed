@@ -1,6 +1,7 @@
 import {
   addComment,
   addPost,
+  applyAuthStateChange,
   applyRestoredSession,
   defaults,
   follow,
@@ -404,6 +405,24 @@ describe('supabase vs demo identity', () => {
     const keepDemo = applyRestoredSession(demo, null);
     expect(keepDemo.currentUserId).toBe('maya');
     expect(keepDemo.authMode).toBe('demo');
+  });
+
+  it('applies supabase auth events after boot without stealing demo mode', () => {
+    const demo = signInDemo(defaults(), 'maya');
+    expect(applyAuthStateChange(demo, 'TOKEN_REFRESHED', account).currentUserId).toBe('maya');
+    expect(applyAuthStateChange(demo, 'SIGNED_OUT', null).currentUserId).toBe('maya');
+
+    const signedIn = applyAuthStateChange(signOut(demo), 'SIGNED_IN', account);
+    expect(signedIn.currentUserId).toBe(uuid);
+    expect(signedIn.authMode).toBe('supabase');
+
+    const refreshed = applyAuthStateChange(signedIn, 'TOKEN_REFRESHED', {
+      ...account,
+      name: 'Karol U',
+    });
+    expect(refreshed.currentUserId).toBe(uuid);
+    expect(applyAuthStateChange(signedIn, 'SIGNED_OUT', null).currentUserId).toBeNull();
+    expect(applyAuthStateChange(signedIn, 'INITIAL_SESSION', account).currentUserId).toBe(uuid);
   });
 });
 

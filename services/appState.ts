@@ -270,6 +270,29 @@ export function applyRestoredSession(state: Persisted, supabaseUser: User | null
   return state;
 }
 
+/**
+ * Follow-up events after boot. Demo mode is left alone so "Continue with demo"
+ * is not stolen by a token refresh. INITIAL_SESSION is handled by applyRestoredSession.
+ */
+export function applyAuthStateChange(
+  state: Persisted,
+  event: string,
+  supabaseUser: User | null,
+): Persisted {
+  if (event === 'INITIAL_SESSION' || event === 'PASSWORD_RECOVERY') return state;
+  if (event === 'SIGNED_OUT') {
+    return state.authMode === 'supabase' ? signOut(state) : state;
+  }
+  if (state.authMode === 'demo') return state;
+  if (
+    (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') &&
+    supabaseUser
+  ) {
+    return signInAccount(state, supabaseUser, 'supabase');
+  }
+  return state;
+}
+
 function isSelfActivity(n: AppNotification, userId: string): boolean {
   return n.userId === userId;
 }

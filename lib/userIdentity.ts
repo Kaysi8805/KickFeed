@@ -70,6 +70,22 @@ export function handleFromEmail(email: string): string {
   return handleFromName(local);
 }
 
+/** First 8 hex chars of a uuid, no dashes — suffix that makes handles unique per auth.users row. */
+export function handleSuffixFromUserId(userId: string): string {
+  return userId.replace(/-/g, '').slice(0, 8).toLowerCase();
+}
+
+/**
+ * Collision-safe @handle: sanitized email local-part + `_` + user-id suffix.
+ * `fan@gmail.com` and `fan@yahoo.com` must not share `fan` (profiles.handle is unique).
+ * Keep in sync with `public.kickfeed_handle_for_user` in supabase/migrations.
+ */
+export function uniqueHandleFromEmailAndUserId(email: string, userId: string): string {
+  const local = handleFromEmail(email || 'fan@local').slice(0, 16);
+  const suffix = handleSuffixFromUserId(userId);
+  return `${local || 'fan'}_${suffix || 'user'}`;
+}
+
 export function displayNameFromEmail(email: string): string {
   const local = email.split('@')[0] ?? 'Fan';
   const titled = local

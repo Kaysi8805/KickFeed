@@ -3,11 +3,13 @@ import {
   displayNameFromEmail,
   handleFromEmail,
   handleFromName,
+  handleSuffixFromUserId,
   inferAuthMode,
   initialsFromName,
   isDemoUserId,
   isPersistedUserId,
   isSupabaseUserId,
+  uniqueHandleFromEmailAndUserId,
   userFromProfile,
 } from '@/lib/userIdentity';
 import { describe, expect, it } from 'vitest';
@@ -38,6 +40,15 @@ describe('user identity', () => {
     expect(handleFromEmail('Fan.Name@example.com')).toBe('fan_name');
     expect(displayNameFromEmail('fan.name@example.com')).toBe('Fan Name');
     expect(avatarColorFromId(UUID)).toMatch(/^#/);
+  });
+
+  it('suffixes handles with user id so the same local-part does not collide', () => {
+    const gmail = uniqueHandleFromEmailAndUserId('fan@gmail.com', UUID);
+    const yahoo = uniqueHandleFromEmailAndUserId('fan@yahoo.com', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    expect(gmail).toBe('fan_11111111');
+    expect(yahoo).toBe('fan_aaaaaaaa');
+    expect(gmail).not.toBe(yahoo);
+    expect(handleSuffixFromUserId(UUID)).toBe('11111111');
   });
 
   it('fills a User from a profile slice keyed by supabase id', () => {

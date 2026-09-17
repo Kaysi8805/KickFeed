@@ -1,13 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import type { AppNotification, Comment, Fixture, MotmVote, Post, ScorePrediction, User } from '@/data/types';
 import type { MotmCandidate } from '@/lib/engagement';
 import { attachMatchId, favoriteMatchAlertDrafts, relatedFixtureIds } from '@/lib/matchSocial';
-import { isSupabaseConfigured } from '@/services/supabase';
+import { isSupabaseConfigured, getSupabaseClient } from '@/services/supabase';
 import {
   addComment as addCommentState,
   addPost as addPostState,
+  applyAuthStateChange,
   applyRestoredSession,
   defaults,
   follow as followState,
@@ -31,7 +33,7 @@ import {
   usersFromState,
   type AuthMode,
 } from '@/services/appState';
-import { auth, type EmailAuthResult } from '@/services/auth';
+import { auth, userFromSupabaseAuth, type EmailAuthResult, type KickfeedAuthUser } from '@/services/auth';
 import { football } from '@/services/football';
 
 const STORAGE_KEY = 'kickfeed.v1.state';
@@ -81,26 +83,68 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    let unsub: (() => void) | undefined;
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
         const persisted = hydratePersisted(raw);
-        let supabaseUser: User | null = null;
-        try {
-          supabaseUser = await auth.getSession();
-        } catch {
-          supabaseUser = null;
+        const client = getSupabaseClient();
+        if (!client) {
+          if (!cancelled) {
+            setState(applyRestoredSession(persisted, null));
+            setReady(true);
+          }
+          return;
         }
-        if (!cancelled) setState(applyRestoredSession(persisted, supabaseUser));
+
+        let booted = false;
+        const finishBoot = (supabaseUser: User | null) => {
+          if (cancelled || booted) return;
+          booted = true;
+          setState(applyRestoredSession(persisted, supabaseUser));
+          setReady(true);
+        };
+
+        const { data } = client.auth.onAuthStateChange((event, session) => {
+          const supabaseUser = session?.user
+            ? userFromSupabaseAuth(session.user as KickfeedAuthUser)
+            : null;
+          if (event === 'INITIAL_SESSION') {
+            finishBoot(supabaseUser);
+            return;
+          }
+          if (!cancelled) {
+            setState((prev) => applyAuthStateChange(prev, event, supabaseUser));
+          }
+        });
+        unsub = () => data.subscription.unsubscribe();
+
+        try {
+          finishBoot(await auth.getSession());
+        } catch {
+          finishBoot(null);
+        }
       } catch {
         if (!cancelled) setState(defaults());
-      } finally {
         if (!cancelled) setReady(true);
       }
     })();
     return () => {
       cancelled = true;
+      unsub?.();
     };
+  }, []);
+
+  useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client) return;
+    const onChange = (status: AppStateStatus) => {
+      if (status === 'active') client.auth.startAutoRefresh();
+      else client.auth.stopAutoRefresh();
+    };
+    const sub = AppState.addEventListener('change', onChange);
+    onChange(AppState.currentState);
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {

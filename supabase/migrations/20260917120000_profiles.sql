@@ -4,6 +4,10 @@
 -- User ids: public.profiles.id = auth.users.id (uuid). Keep KickFeed AsyncStorage
 -- predictions / MOTM / favorites keyed by that same id so a later leaderboard batch
 -- can attach rows without remapping.
+--
+-- Handles: email local-part is NOT unique (fan@gmail vs fan@yahoo). Always suffix
+-- with 8 hex chars from auth.users.id. Keep in sync with uniqueHandleFromEmailAndUserId
+-- in lib/userIdentity.ts.
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
@@ -33,6 +37,26 @@ create policy "users can update their own profile"
   using (auth.uid() = id)
   with check (auth.uid() = id);
 
+create or replace function public.kickfeed_handle_for_user(email text, user_id uuid)
+returns text
+language sql
+immutable
+as $$
+  select
+    coalesce(
+      nullif(
+        left(
+          trim(both '_' from lower(regexp_replace(split_part(coalesce(email, 'fan'), '@', 1), '[^a-z0-9]+', '_', 'g'))),
+          16
+        ),
+        ''
+      ),
+      'fan'
+    )
+    || '_'
+    || left(replace(user_id::text, '-', ''), 8);
+$$;
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -43,11 +67,21 @@ begin
   insert into public.profiles (id, handle, display_name)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data->>'handle', split_part(new.email, '@', 1)),
+    public.kickfeed_handle_for_user(new.email, new.id),
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1))
   )
   on conflict (id) do nothing;
   return new;
+exception
+  when unique_violation then
+    insert into public.profiles (id, handle, display_name)
+    values (
+      new.id,
+      'u_' || left(replace(new.id::text, '-', ''), 16),
+      coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1))
+    )
+    on conflict (id) do nothing;
+    return new;
 end;
 $$;
 

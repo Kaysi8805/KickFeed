@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient, processLock, type SupabaseClient } from '@supabase/supabase-js';
 
 export type SupabasePublicConfig = {
   url: string;
@@ -39,6 +39,10 @@ export function isSupabaseConfigured(
 /**
  * Expo Go–friendly client. Session lives in AsyncStorage under supabase-js’s own key;
  * KickFeed social state stays in `kickfeed.v1.state`, keyed by `auth.users.id`.
+ *
+ * `processLock` serializes auth storage writes in React Native (documented Expo
+ * setup). Token refresh while backgrounded is started/stopped from AppState in
+ * AppProvider (`startAutoRefresh` / `stopAutoRefresh`).
  */
 export function createKickfeedSupabaseClient(config: SupabasePublicConfig): SupabaseClient {
   return createClient(config.url, config.anonKey, {
@@ -47,6 +51,7 @@ export function createKickfeedSupabaseClient(config: SupabasePublicConfig): Supa
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
+      lock: processLock,
     },
   });
 }

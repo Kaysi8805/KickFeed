@@ -3,8 +3,9 @@ import { demoUsers } from '@/data/mocks/social';
 import {
   avatarColorFromId,
   displayNameFromEmail,
-  handleFromEmail,
+  handleSuffixFromUserId,
   initialsFromName,
+  uniqueHandleFromEmailAndUserId,
   type AuthMode,
 } from '@/lib/userIdentity';
 import { getSupabaseClient, isSupabaseConfigured } from '@/services/supabase';
@@ -49,7 +50,13 @@ export type AuthClient = {
       data: { session: KickfeedAuthSession | null; user: (KickfeedAuthUser & { identities?: unknown[] }) | null };
       error: { message: string } | null;
     }>;
-    signOut: () => Promise<{ error: { message: string } | null }>;
+    /** `scope: 'local'` = this device; `global` revokes refresh tokens everywhere. */
+    signOut: (opts?: { scope?: 'local' | 'global' | 'others' }) => Promise<{ error: { message: string } | null }>;
+    onAuthStateChange?: (
+      cb: (event: string, session: KickfeedAuthSession | null) => void,
+    ) => { data: { subscription: { unsubscribe: () => void } } };
+    startAutoRefresh?: () => void;
+    stopAutoRefresh?: () => void;
   };
 };
 
@@ -80,7 +87,8 @@ export function mapAuthError(message: string): string {
     return 'Confirm the link in your email, then sign in.';
   }
   if (m.includes('already registered') || m.includes('already been registered') || m.includes('user already')) {
-    return 'That email already has an account. Sign in instead.';
+    // Same copy as a confirmation-required signup — do not confirm that the address exists.
+    return 'Check your email for a confirmation link, then sign in.';
   }
   if (m.includes('password') && (m.includes('at least') || m.includes('6'))) {
     return 'Password must be at least 6 characters.';
@@ -107,7 +115,11 @@ export function userFromSupabaseAuth(authUser: KickfeedAuthUser): User {
     metaString(meta, 'name') ||
     metaString(meta, 'display_name') ||
     (email ? displayNameFromEmail(email) : 'Fan');
-  const handle = metaString(meta, 'handle') || (email ? handleFromEmail(email) : handleFromEmail(name));
+  const derivedHandle = uniqueHandleFromEmailAndUserId(email ?? '', authUser.id);
+  const metaHandle = metaString(meta, 'handle');
+  const suffix = handleSuffixFromUserId(authUser.id);
+  const handle =
+    metaHandle && suffix && metaHandle.toLowerCase().endsWith(`_${suffix}`) ? metaHandle : derivedHandle;
   return {
     id: authUser.id,
     name,
@@ -181,25 +193,40 @@ export async function signUpWithEmailOn(
     options: {
       data: {
         full_name: name,
-        handle: handleFromEmail(normalized),
       },
     },
   });
-  if (error) throw new AuthError(mapAuthError(error.message), 'sign_up');
-  const identities = data.user && 'identities' in data.user ? data.user.identities : undefined;
-  if (data.user && Array.isArray(identities) && identities.length === 0) {
-    throw new AuthError('That email already has an account. Sign in instead.', 'already_registered');
+  if (error) {
+    if (isDuplicateSignupMessage(error.message)) {
+      return { status: 'confirm_email', email: normalized };
+    }
+    throw new AuthError(mapAuthError(error.message), 'sign_up');
   }
-  const authUser = data.session?.user ?? data.user;
-  if (data.session?.user?.id && authUser) {
+  const authUser = data.session?.user;
+  if (authUser?.id) {
     return { status: 'signed_in', user: userFromSupabaseAuth(authUser) };
   }
+  // No session: confirmation-required signup AND the "existing email" fake user
+  // (identities: []) share this shape so attackers cannot enumerate accounts.
   return { status: 'confirm_email', email: normalized };
+}
+
+function isDuplicateSignupMessage(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes('already registered') ||
+    m.includes('already been registered') ||
+    m.includes('user already exists') ||
+    m.includes('user already registered')
+  );
 }
 
 export async function signOutOn(client: AuthClient | null): Promise<void> {
   if (!client) return;
-  const { error } = await client.auth.signOut();
+  // Local scope: this Expo install only. Global would revoke refresh tokens on
+  // every device; KickFeed sign-out / "continue with demo" is a device-level
+  // identity switch, not a security lockout of other sessions.
+  const { error } = await client.auth.signOut({ scope: 'local' });
   if (error) throw new AuthError(mapAuthError(error.message), 'sign_out');
 }
 

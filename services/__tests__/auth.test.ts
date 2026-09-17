@@ -59,16 +59,33 @@ describe('auth helpers', () => {
   it('maps supabase errors to short copy', () => {
     expect(mapAuthError('Invalid login credentials')).toBe('Check email and password.');
     expect(mapAuthError('Email not confirmed')).toMatch(/confirm/i);
-    expect(mapAuthError('User already registered')).toMatch(/already has an account/i);
+    expect(mapAuthError('User already registered')).toMatch(/confirmation link/i);
+    expect(mapAuthError('User already registered')).not.toMatch(/already has an account/i);
   });
 
   it('maps auth.users onto a KickFeed User with the supabase uuid', () => {
     const user = userFromSupabaseAuth(fan);
     expect(user.id).toBe(UUID);
     expect(user.name).toBe('Test Fan');
-    expect(user.handle).toBe('testfan');
+    expect(user.handle).toBe('fan_22222222');
     expect(user.email).toBe('fan@example.com');
     expect(user.favoriteTeamIds).toEqual([]);
+  });
+
+  it('derives collision-safe handles from email + user id when metadata has no suffix', () => {
+    const gmail = userFromSupabaseAuth({
+      id: UUID,
+      email: 'fan@gmail.com',
+      user_metadata: { full_name: 'Fan' },
+    });
+    const yahoo = userFromSupabaseAuth({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      email: 'fan@yahoo.com',
+      user_metadata: { full_name: 'Fan' },
+    });
+    expect(gmail.handle).toBe('fan_22222222');
+    expect(yahoo.handle).toBe('fan_aaaaaaaa');
+    expect(gmail.handle).not.toBe(yahoo.handle);
   });
 });
 
@@ -95,14 +112,31 @@ describe('email auth with a mock client', () => {
     expect(result).toEqual({ status: 'confirm_email', email: 'fan@example.com' });
   });
 
-  it('treats empty identities as an existing account', async () => {
-    const client = mockClient({
+  it('does not distinguish an existing email (empty identities) from a confirmation-required signup', async () => {
+    const existing = mockClient({
       signUp: async () => ({
         data: { session: null, user: { ...fan, identities: [] } },
         error: null,
       }),
     });
-    await expect(signUpWithEmailOn(client, 'fan@example.com', 'secret1')).rejects.toBeInstanceOf(AuthError);
+    const fresh = mockClient({
+      signUp: async () => ({
+        data: { session: null, user: { ...fan, identities: [{ id: '1' }] } },
+        error: null,
+      }),
+    });
+    const duplicateError = mockClient({
+      signUp: async () => ({
+        data: { session: null, user: null },
+        error: { message: 'User already registered' },
+      }),
+    });
+    const emptyIdentities = await signUpWithEmailOn(existing, 'fan@example.com', 'secret1');
+    const needsConfirm = await signUpWithEmailOn(fresh, 'fan@example.com', 'secret1');
+    const alreadyThere = await signUpWithEmailOn(duplicateError, 'fan@example.com', 'secret1');
+    expect(emptyIdentities).toEqual({ status: 'confirm_email', email: 'fan@example.com' });
+    expect(needsConfirm).toEqual(emptyIdentities);
+    expect(alreadyThere).toEqual(emptyIdentities);
   });
 
   it('throws when supabase is not configured', async () => {
@@ -129,6 +163,18 @@ describe('email auth with a mock client', () => {
     await expect(restoreSupabaseUser(client)).resolves.toMatchObject({ id: UUID });
     await expect(restoreSupabaseUser(null)).resolves.toBeNull();
     await expect(signOutOn(null)).resolves.toBeUndefined();
+  });
+
+  it('signs out this device only (local scope)', async () => {
+    let scope: string | undefined;
+    const client = mockClient({
+      signOut: async (opts) => {
+        scope = opts?.scope;
+        return { error: null };
+      },
+    });
+    await signOutOn(client);
+    expect(scope).toBe('local');
   });
 });
 
