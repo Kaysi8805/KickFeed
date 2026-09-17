@@ -16,6 +16,7 @@ v1 is **local-first**: seeded fan profiles for **demo mode**, optional **Supabas
 - **Worldwide leagues** — continents → countries → competitions. Batch 3 live standings/scorers are England-only; other geos stay on the mock tree. Featured Premier League (and Championship when live).
 - **Match hub** — discussion thread, participants, empty states, feed posts attached to that match id, plus **score predictions** and **Man of the Match** voting. Composer can deep-link from the match page.
 - **Predictions & MOTM** — before kickoff, pick a home/away score and see community aggregates (other demo fans are seeded). Picks lock at kickoff / once the match is live. During and after the match, vote once for MOTM from lineups (squad fallback). Not a betting product.
+- **Prediction leaderboards** — global and per-league ranks by prediction points (optional MOTM bonus). Your rank + top 10. Demo board is this device + seeded fans; email sign-in writes picks to KickFeed Postgres. Honesty banners say which table you are on.
 - **Notifications** — in-app center for match-chat replies, your prediction/MOTM confirmations, goals/kickoff demo alerts for fixtures you care about, follows, and friend posts. Expo Notifications wiring remains local/demo (no paid push).
 
 ## Run
@@ -58,11 +59,11 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 ```
 
 5. Restart Expo (`npx expo start`) so the public env vars are inlined. Expo Go is supported (`@supabase/supabase-js` + AsyncStorage session).
-6. Optional: in the Supabase SQL editor, run [`supabase/migrations/20260917120000_profiles.sql`](supabase/migrations/20260917120000_profiles.sql) so each `auth.users` row gets a `public.profiles` row (`id` uuid = `auth.users.id`). The app does **not** require this table for sign-in; it is the join key for a later leaderboard batch. See [`supabase/README.md`](supabase/README.md).
+6. Optional: in the Supabase SQL editor, run [`supabase/migrations/20260917120000_profiles.sql`](supabase/migrations/20260917120000_profiles.sql) and [`supabase/migrations/20260917190000_prediction_leaderboards.sql`](supabase/migrations/20260917190000_prediction_leaderboards.sql). Profiles are the join key (`id` = `auth.users.id`). Predictions / MOTM votes persist for live ranking. See [`supabase/README.md`](supabase/README.md).
 
-Google / Apple providers can be enabled in the same Auth settings later — this batch keeps OAuth as a stub.
+Google / Apple providers can be enabled in the same Auth settings later — OAuth stays a stub.
 
-**Next batch:** prediction leaderboards on real users (same uuid as `auth.users.id` / `profiles.id`). Social graph stays on local AsyncStorage in this PR.
+**Identity:** demo seeds stay `maya` / `omar` / …; real accounts use `auth.users.id` (uuid). Favorites, predictions, MOTM, and leaderboard rows all key off that same id. Social graph stays on local AsyncStorage; live ranking additionally upserts the signed-in user’s picks to Postgres.
 
 ## Public landing (Batch 0)
 
@@ -133,20 +134,23 @@ app/                 Expo Router screens (tabs + stack)
   team/[id]          Club detail (squad, fixtures, favorite)
   player/[id]        Player detail (stats, appearances, follow)
   match/[id]         Match hub (events, Predict, MOTM, discussion, TV)
+  leaderboard        Global / per-league prediction ranking
   tv                 TV schedule by country (UK / SK / US)
   search             Global search (clubs, players, leagues, fans)
-components/          UI, feed cards, match rows, entity links, search entry, TV chips
+components/          UI, feed cards, match rows, entity links, search entry, TV chips, leaderboard
 lib/matchSocial.ts   Attach/match-post helpers (live vs mock ids)
 lib/engagement.ts    Prediction lock, MOTM ballot, community tallies
+lib/leaderboard.ts   Prediction points, MOTM bonus, top-N + current rank
 lib/tvCountry.ts     Locale → launch geo, kickoff labels in that timezone
-lib/honesty.ts        Live-mix + TV editorial disclaimer copy
+lib/honesty.ts        Live-mix + TV editorial + demo/live ranking copy
 lib/footballBff.ts    Allowlisted API-Football proxy + TTL cache (Worker/Node)
 bff/                 Cloudflare Worker + local Node loopback (FOOTBALL_API_KEY server-side)
 data/types.ts        Shared domain types
 data/mocks/          Seeded users, teams, squads, leagues, fixtures, posts, TV, predictions/MOTM
-supabase/             Optional SQL for `profiles` (uuid = auth.users.id); not used by CI
+supabase/             Optional SQL for `profiles` + `predictions` / `motm_votes`; not used by CI
 lib/userIdentity.ts  Demo id vs Supabase uuid helpers; profile → User
 services/auth.ts     Email/password AuthProvider + demo list; OAuth stub
+services/leaderboard.ts  Postgres fetch/upsert when Supabase is configured
 services/supabase.ts Expo client from EXPO_PUBLIC_SUPABASE_* (null without env)
 services/football.ts     FootballProvider + mock + auto-select live adapter
 services/footballLive.ts API-Football England adapter (in-memory TTL cache)
@@ -225,12 +229,14 @@ Karol’s batches:
 - **Batch 6 — done.** Score predictions (lock at kickoff) and Man of the Match voting on the match hub. Demo auth; works on the mock catalog and on live England match ids when a key is set.
 - **Batch 7 — done.** UX polish: consistent empty / loading / error copy, clearer Predict-locked and MOTM-voted states, slightly larger tap targets.
 - **This release.** Honesty banners (England live vs mock; editorial TV), thin API-Football BFF + client switch, leftover Batch 7 nits.
-- **Auth — this PR.** Supabase email/password with demo profile picker as staging/dev fallback. Not in this PR: DMs, more live geos, licensed TV, prediction leaderboards, Apple/Google polish. Not gambling.
-- **Next: prediction leaderboards** on real Supabase users (`auth.users.id`).
+- **Auth — done.** Supabase email/password with demo profile picker as staging/dev fallback.
+- **This PR.** Prediction leaderboards (global + per-league) keyed by demo id or `auth.users` uuid. Postgres when Supabase env is set; local demo board otherwise. Not in this PR: DMs, more live geos, licensed TV, Apple/Google polish. Not gambling.
 
 ## Honesty banners
 
 When the live catalog is on (BFF URL or public API key), Feed / Matches / Leagues / Following show **England live · other leagues mock**. TV schedule and the match TV card show **Editorial TV listings — not a licensed FotMob-style guide.** Mock-only demos hide the mix banner.
+
+Leaderboards show **Demo ranking — this device and seeded fans** when Supabase env is missing (or you stayed on a demo profile), and **Live ranking — KickFeed Postgres** when signed in with email. The two tables are not mixed.
 
 ## UX polish (Batch 7)
 
@@ -243,6 +249,21 @@ Match hub tabs **Predict** and **MOTM** sit next to Events / Lineups / Stats / H
 - **Predict** — upcoming fixtures only. Stepper for home/away (0–9). Upsert until kickoff; live / HT / FT (or kickoff time reached) lock the pick. Community average, most-common scoreline, and home/draw/away counts include other demo users (seeded mocks).
 - **MOTM** — live, half-time, and finished. Ballot is `FootballProvider.getLineups`; if XIs are empty (free-tier skip), `getSquad` for both clubs. One vote per user per match (demo id or Supabase uuid; related mock/live ids count as one). Tallies persist with the rest of app state.
 - Confirmations land in Notifications (“You predicted 2–1”, “You voted for Salah”). No odds, stakes, or third-party betting APIs.
+
+## Prediction leaderboards
+
+Open **Matches → trophy**, **Profile → Leaderboard**, a league page, or **Rank** / **Prediction leaderboard →** on the match hub (`/leaderboard`, optional `?leagueId=`).
+
+Points (finished matches only; live/upcoming wait):
+
+- **Exact scoreline — 5**
+- **Correct result (home / draw / away), wrong score — 2**
+- **Unique community MOTM — +2** (tie for first awards nothing)
+- Miss — 0
+
+Rank: points, then exacts, results, MOTM hits, handle. Top 10 plus the current user’s rank (demo id or Supabase uuid — same key as social state). Related mock/live match ids score once.
+
+**Live** (Supabase env + email session): upserts to `public.predictions` / `public.motm_votes`; board reads Postgres. **Demo** (env missing or Continue with demo): seeded AsyncStorage board only. Not gambling.
 
 ## Theme
 

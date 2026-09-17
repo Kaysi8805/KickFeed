@@ -60,6 +60,7 @@ export function PredictSection({
   community,
   signedIn,
   onSave,
+  onOpenLeaderboard,
 }: {
   fixture: Fixture;
   home: Team;
@@ -68,6 +69,7 @@ export function PredictSection({
   community: ScorePrediction[];
   signedIn: boolean;
   onSave: (homeScore: number, awayScore: number) => void;
+  onOpenLeaderboard?: () => void;
 }) {
   const open = isPredictionOpen(fixture);
   const [homeScore, setHomeScore] = useState(mine?.homeScore ?? 1);
@@ -157,6 +159,17 @@ export function PredictSection({
         <Text style={styles.hint}>Sign in to predict.</Text>
       ) : null}
 
+      {onOpenLeaderboard ? (
+        <Pressable
+          onPress={onOpenLeaderboard}
+          accessibilityRole="button"
+          accessibilityLabel="Open prediction leaderboard"
+          style={styles.rankLink}
+        >
+          <Text style={styles.rankLinkText}>Prediction leaderboard →</Text>
+        </Pressable>
+      ) : null}
+
       {agg.count === 0 ? (
         <EmptyState
           compact
@@ -231,6 +244,8 @@ const styles = StyleSheet.create({
   ctaLocked: { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
   ctaLockedText: { ...type.caption, color: colors.textMuted, fontWeight: '700' },
   hint: { ...type.caption, color: colors.textDim, fontWeight: '500' },
+  rankLink: { minHeight: 44, justifyContent: 'center' },
+  rankLinkText: { ...type.caption, color: colors.lime, fontWeight: '700' },
   agg: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

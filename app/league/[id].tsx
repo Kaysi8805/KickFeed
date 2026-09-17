@@ -71,6 +71,15 @@ export default function LeagueScreen() {
           {country?.flag} {country?.name} · {league.type}
         </Text>
         <CatalogStatus />
+        <Pressable
+          onPress={() => router.push({ pathname: '/leaderboard', params: { leagueId: league.id } })}
+          accessibilityRole="button"
+          accessibilityLabel={`${league.shortName} prediction leaderboard`}
+          style={styles.rankRow}
+        >
+          <Text style={styles.rankLabel}>Predict ranking</Text>
+          <Text style={styles.rankLink}>Open →</Text>
+        </Pressable>
         <Segmented
           value={tab}
           onChange={setTab}
@@ -198,6 +207,20 @@ const styles = StyleSheet.create({
   name: { ...type.subtitle, color: colors.text, marginTop: -4 },
   meta: { ...type.caption, color: colors.textMuted, fontWeight: '500', marginBottom: spacing.sm },
   star: { ...type.caption, color: colors.gold },
+  rankRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minHeight: 44,
+  },
+  rankLabel: { ...type.caption, color: colors.text },
+  rankLink: { ...type.caption, color: colors.lime },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: 40, paddingTop: spacing.md },
   table: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.sm },
   thead: { flexDirection: 'row', paddingVertical: 6, paddingHorizontal: 8 },

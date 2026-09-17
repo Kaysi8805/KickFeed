@@ -2,8 +2,11 @@ import {
   CATALOG_ERROR_BODY,
   CATALOG_ERROR_TITLE,
   LIVE_MIX_DISCLAIMER,
+  LIVE_RANKING_ERROR_BODY,
+  LIVE_RANKING_ERROR_TITLE,
   TV_EDITORIAL_DISCLAIMER,
   matchesEmptyBody,
+  rankingDisclaimer,
 } from '@/lib/honesty';
 import { describe, expect, it } from 'vitest';
 
@@ -30,5 +33,16 @@ describe('honesty copy', () => {
     expect(CATALOG_ERROR_TITLE).toBe('Couldn’t load England scores');
     expect(CATALOG_ERROR_BODY).not.toMatch(/%s|\$\{/);
     expect(CATALOG_ERROR_BODY.toLowerCase()).not.toContain('invalid api key');
+  });
+
+  it('separates demo ranking from live KickFeed Postgres', () => {
+    expect(rankingDisclaimer('demo', false, 'mock')).toMatch(/Demo ranking/i);
+    expect(rankingDisclaimer('demo', false, 'mock')).toMatch(/not a live KickFeed table/i);
+    expect(rankingDisclaimer('demo', true, 'mock')).toMatch(/Email sign-in/i);
+    expect(rankingDisclaimer('live', true, 'live')).toMatch(/KickFeed Postgres/i);
+    expect(rankingDisclaimer('live', true, 'live')).toMatch(/England live/i);
+    expect(LIVE_RANKING_ERROR_TITLE).toBe('Couldn’t load KickFeed ranking');
+    expect(LIVE_RANKING_ERROR_BODY).toMatch(/live table/i);
+    expect(LIVE_RANKING_ERROR_BODY).not.toMatch(/%s|\$\{/);
   });
 });

@@ -48,6 +48,18 @@ export const seedPredictions: ScorePrediction[] = [
   pred('fx-liv-ars', 'sophie', 2, 2, 11),
   pred('fx-liv-ars', 'jordan', 3, 1, 10),
   pred('fx-liv-ars', 'aisha', 1, 1, 9),
+  // Finished mock fixtures so the demo leaderboard has points without waiting on the clock.
+  pred('fx-ful-eve', 'omar', 2, 1, 20),
+  pred('fx-ful-eve', 'luca', 2, 0, 19),
+  pred('fx-ful-eve', 'sophie', 1, 1, 18),
+  pred('fx-ful-eve', 'jordan', 3, 1, 17),
+  pred('fx-ful-eve', 'diego', 2, 1, 16),
+  pred('fx-ful-eve', 'aisha', 1, 0, 15),
+  pred('fx-ath-rso', 'omar', 1, 0, 30),
+  pred('fx-ath-rso', 'luca', 0, 0, 29),
+  pred('fx-ath-rso', 'kenji', 2, 0, 28),
+  pred('fx-rom-ata', 'luca', 0, 1, 25),
+  pred('fx-rom-ata', 'diego', 1, 1, 24),
 ];
 
 export const seedMotmVotes: MotmVote[] = [
