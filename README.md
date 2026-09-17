@@ -2,7 +2,7 @@
 
 KickFeed is a cross-platform iOS and Android app (one Expo / React Native codebase) that combines a Facebook-style social feed with FotMob / Flashscore-style football scores, standings, and worldwide league browsing.
 
-v1 is **demo-auth local**: seeded fan profiles, mock social, and **mock football unless you add a free API-Football key**. No paid API keys and no backend.
+v1 is **demo-auth local**: seeded fan profiles, mock social, and **mock football unless you add a free API-Football key or point the app at the in-repo BFF**. No paid API keys. The football BFF is optional (hides the key and shares the free-tier 100 req/day cache).
 
 ## Features
 
@@ -71,23 +71,26 @@ This PR does **not** change polsia.app DNS. When a static host is live:
 2. Add the same hostname in the host’s custom-domain settings (TLS).
 3. Until that cutover, the recovered landing is only in this repo.
 
-## Real England scores (Batch 3)
+## Real England scores (Batch 3 + BFF)
 
-Without `EXPO_PUBLIC_FOOTBALL_API_KEY`, KickFeed uses the mock catalog (demo still works).
+Without `EXPO_PUBLIC_FOOTBALL_BFF_URL` or `EXPO_PUBLIC_FOOTBALL_API_KEY`, KickFeed uses the mock catalog (demo still works).
 
-With a free API-Football key, Matches / standings / team + player pages hydrate **England — Premier League (primary) and EFL Championship**. FA Cup is skipped so the free **100 requests/day** budget stays on league scores. Auth and social stay mock.
+With either set, Matches / standings / team + player pages hydrate **England — Premier League (primary) and EFL Championship**. FA Cup is skipped so the free **100 requests/day** budget stays on league scores. Auth and social stay mock. **Live screens show “England live · other leagues mock.”** TV stays editorial.
 
-1. Create a free account at [dashboard.api-football.com/register](https://dashboard.api-football.com/register) (no credit card).
-2. Open **Account → My Access** and copy the API key.
-3. Copy `.env.example` to `.env` (already gitignored) and set:
+**Prefer the BFF for demos** (server-side key, shared TTL cache — see [`bff/README.md`](bff/README.md)):
 
 ```
-EXPO_PUBLIC_FOOTBALL_API_KEY=your_key_here
+EXPO_PUBLIC_FOOTBALL_BFF_URL=http://127.0.0.1:8787
+FOOTBALL_API_KEY=your_key_here   # BFF process only; never EXPO_PUBLIC_
 ```
 
-4. Restart Expo (`npx expo start`) so the public env var is inlined. Optional: `EXPO_PUBLIC_FOOTBALL_SEASON=2026` to pin the season start year (defaults to the current European season).
+Leave `EXPO_PUBLIC_FOOTBALL_API_KEY` empty when the BFF URL is set.
 
-Docs: [API-Football v3](https://www.api-football.com/documentation-v3). Header used: `x-apisports-key`. KickFeed caches fixtures (~45s if anything is live, else 5 min), standings (5 min), scorers (15 min), and squads / match detail (lazy, longer TTL) in memory so screens can re-read the existing sync `FootballProvider`. If the free tier omits a squad or lineup, the team/match page still shows scores and degrades that section.
+Solo local without the BFF: copy `.env.example` to `.env` (gitignored) and set `EXPO_PUBLIC_FOOTBALL_API_KEY`. Restart Expo so the public env var is inlined. That key is in the JS bundle — fine for one device, painful for multi-device demos.
+
+Optional: `EXPO_PUBLIC_FOOTBALL_SEASON=2026` to pin the season start year (defaults to the current European season).
+
+Docs: [API-Football v3](https://www.api-football.com/documentation-v3). Direct client header: `x-apisports-key`. KickFeed caches fixtures (~45s if anything is live, else 5 min), standings (5 min), scorers (15 min), and squads / match detail (lazy, longer TTL) in memory so screens can re-read the existing sync `FootballProvider`. The BFF applies the same short TTLs in front of origin. If the free tier omits a squad or lineup, the team/match page still shows scores and degrades that section.
 
 Mock club ids (`ars`, `liv`, `epl`) still resolve after hydrate so demo favorites and feed mentions keep working. Search prefers live England entities when the key is set.
 
@@ -113,6 +116,9 @@ components/          UI, feed cards, match rows, entity links, search entry, TV 
 lib/matchSocial.ts   Attach/match-post helpers (live vs mock ids)
 lib/engagement.ts    Prediction lock, MOTM ballot, community tallies
 lib/tvCountry.ts     Locale → launch geo, kickoff labels in that timezone
+lib/honesty.ts        Live-mix + TV editorial disclaimer copy
+lib/footballBff.ts    Allowlisted API-Football proxy + TTL cache (Worker/Node)
+bff/                 Cloudflare Worker + local Node loopback (FOOTBALL_API_KEY server-side)
 data/types.ts        Shared domain types
 data/mocks/          Seeded users, teams, squads, leagues, fixtures, posts, TV, predictions/MOTM
 services/auth.ts     Demo auth + stubs for email/OAuth
@@ -150,7 +156,7 @@ In-app notifications cover match-chat replies and demo kickoff/goal alerts for f
 
 ## Football data
 
-`services/football.ts` exports `FootballProvider`. `football` is the mock provider unless `EXPO_PUBLIC_FOOTBALL_API_KEY` is set, in which case `createLiveFootballProvider` loads England data from API-Football and falls back to mock for demo posts, non-England clubs, and missing live records.
+`services/football.ts` exports `FootballProvider`. `football` is the mock provider unless `EXPO_PUBLIC_FOOTBALL_BFF_URL` or `EXPO_PUBLIC_FOOTBALL_API_KEY` is set, in which case `createLiveFootballProvider` loads England data (via the BFF when the URL is set, otherwise straight to API-Football) and falls back to mock for demo posts, non-England clubs, and missing live records.
 
 Keep `data/types.ts` stable so screens do not care whether data is seeded or remote.
 
@@ -185,12 +191,17 @@ Karol’s batches:
 - **Batch 0 — done.** Public football landing recovered in-repo at `landing/`. `kickfeed.polsia.app` still needs DNS cutover by Karol — this repo does not touch polsia DNS.
 - **Batch 1 — done.** Teams, players, and competitions are first-class and clickable throughout the app.
 - **Batch 2 — done.** Global search plus follow/favorite **players**.
-- **Batch 3 — done.** Real scores for **England** (API-Football behind `FootballProvider`; demo auth/social still mock). Keyed → PL + Championship; no key → mocks.
+- **Batch 3 — done.** Real scores for **England** (API-Football behind `FootballProvider`; demo auth/social still mock). BFF URL or public key → PL + Championship; otherwise mocks.
 - **Batch 4 — done.** Match-centric social on real England fixtures (match hub, compose attach, feed surfacing, in-app match notifications). Attachments use live match ids when keyed and mock ids otherwise.
 - **Batch 5 — done.** TV / broadcast schedules for launch geos (UK + SK + US) with editorial listings and a `TvProvider` swap path.
 - **Batch 6 — done.** Score predictions (lock at kickoff) and Man of the Match voting on the match hub. Demo auth; works on the mock catalog and on live England match ids when a key is set.
-- **Batch 7 — done (this release).** UX polish only: consistent empty / loading / error copy, clearer Predict-locked and MOTM-voted states, slightly larger tap targets. No new screens or APIs.
-- **Later (Batch 8+).** Real auth, DMs, more live geos beyond England, licensed TV listings, prediction leaderboards / season-long games. Not gambling or paid prediction markets.
+- **Batch 7 — done.** UX polish: consistent empty / loading / error copy, clearer Predict-locked and MOTM-voted states, slightly larger tap targets.
+- **This release.** Honesty banners (England live vs mock; editorial TV), thin API-Football BFF + client switch, leftover Batch 7 nits.
+- **Next: real auth.** Email / OAuth with demo as a staging fallback. Not in this PR: DMs, more live geos, licensed TV, prediction leaderboards. Not gambling.
+
+## Honesty banners
+
+When the live catalog is on (BFF URL or public API key), Feed / Matches / Leagues / Following show **England live · other leagues mock**. TV schedule and the match TV card show **Editorial TV listings — not a licensed FotMob-style guide.** Mock-only demos hide the mix banner.
 
 ## UX polish (Batch 7)
 

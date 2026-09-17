@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ChannelChips, CountryChips } from '@/components/tv/ChannelChips';
+import { TvDisclaimer } from '@/components/tv/TvDisclaimer';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { resolveTvCountryId } from '@/lib/tvCountry';
 import { useApp } from '@/services/AppProvider';
@@ -30,6 +31,7 @@ export function TvMatchSection({ matchId }: { matchId: string }) {
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="TV schedule"
+          style={styles.scheduleBtn}
         >
           <Text style={styles.link}>Schedule</Text>
         </Pressable>
@@ -58,7 +60,7 @@ export function TvMatchSection({ matchId }: { matchId: string }) {
           onAction={() => router.push('/tv')}
         />
       )}
-      <Text style={styles.disclaimer}>Editorial mock listings — not a licensed TV guide.</Text>
+      <TvDisclaimer compact />
     </View>
   );
 }
@@ -76,6 +78,6 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   kicker: { ...type.micro, color: colors.limeMuted, textTransform: 'uppercase' },
   link: { ...type.caption, color: colors.lime },
+  scheduleBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
   note: { ...type.caption, color: colors.textMuted, fontWeight: '500' },
-  disclaimer: { ...type.caption, color: colors.textDim, fontWeight: '500', fontSize: 11 },
 });

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ChannelChips, CountryChips } from '@/components/tv/ChannelChips';
+import { TvDisclaimer } from '@/components/tv/TvDisclaimer';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
@@ -45,6 +46,7 @@ export default function TvScheduleScreen() {
         <Text style={styles.sub}>
           {country ? `${country.flag} ${country.name}` : 'Launch geos'} · England PL / Championship
         </Text>
+        <TvDisclaimer />
         <CountryChips countries={countries} value={countryId} onChange={selectCountry} />
         <Segmented
           value={window}
@@ -85,10 +87,9 @@ export default function TvScheduleScreen() {
             );
           })
         )}
-        <Text style={styles.disclaimer}>
-          Editorial / mock listings so the screens work without a TV rights feed. Swap `TvProvider` for a licensed
-          source later — do not scrape FotMob or broadcasters.
-        </Text>
+        <View style={styles.footerDisclaimer}>
+          <TvDisclaimer />
+        </View>
       </ScrollView>
     </Screen>
   );
@@ -109,5 +110,5 @@ const styles = StyleSheet.create({
   },
   league: { ...type.micro, color: colors.limeMuted, textTransform: 'uppercase' },
   teams: { ...type.subtitle, color: colors.text },
-  disclaimer: { ...type.caption, color: colors.textDim, fontWeight: '500', lineHeight: 18, marginTop: spacing.md },
+  footerDisclaimer: { marginTop: spacing.md },
 });

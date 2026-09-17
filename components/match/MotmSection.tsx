@@ -69,23 +69,26 @@ export function MotmSection({
           const selected = mine?.playerKey === player.key;
           const team = player.teamId === home.id ? home : player.teamId === away.id ? away : undefined;
           const voteLocked = open && !!mine;
+          const Row = canVote ? Pressable : View;
           return (
-            <Pressable
+            <Row
               key={player.key}
-              onPress={() => {
-                if (canVote) onVote(player);
-              }}
-              accessibilityRole={canVote ? 'button' : 'none'}
-              accessibilityState={{ disabled: !canVote, selected }}
-              accessibilityLabel={
-                selected
-                  ? `${player.name}, your Man of the Match vote`
-                  : canVote
-                    ? `Vote ${player.name} for Man of the Match`
-                    : voteLocked
-                      ? `${player.name}, voting closed — you already voted`
-                      : `${player.name}`
-              }
+              {...(canVote
+                ? {
+                    onPress: () => onVote(player),
+                    accessibilityRole: 'button' as const,
+                    accessibilityState: { disabled: false, selected },
+                    accessibilityLabel: `Vote ${player.name} for Man of the Match`,
+                  }
+                : {
+                    accessibilityRole: 'none' as const,
+                    accessibilityState: { disabled: true, selected },
+                    accessibilityLabel: selected
+                      ? `${player.name}, your Man of the Match vote`
+                      : voteLocked
+                        ? `${player.name}, voting closed — you already voted`
+                        : `${player.name}`,
+                  })}
               style={[styles.row, selected && styles.rowMine, voteLocked && !selected && styles.rowLocked]}
             >
               <View style={styles.numWrap}>
@@ -119,7 +122,7 @@ export function MotmSection({
                 ) : null}
                 <Text style={styles.count}>{votes}</Text>
               </View>
-            </Pressable>
+            </Row>
           );
         })
       )}

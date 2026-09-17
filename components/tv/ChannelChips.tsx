@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: 'center',
   },
   countryActive: { backgroundColor: colors.pitchBright, borderColor: colors.pitchBright },
