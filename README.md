@@ -41,6 +41,36 @@ npm test
 
 CI runs `npm ci` → `typecheck` → `test` on pull requests (see `.github/workflows/ci.yml`). CI does **not** need an API key; tests use mocks and JSON fixtures.
 
+## Public landing (Batch 0)
+
+The football marketing site lives in-repo at [`landing/`](landing/) (plain HTML/CSS/JS plus Expo web captures of Feed and Matches). It is **not** part of the Expo TypeScript graph — `npm test` / `typecheck` ignore it.
+
+Thesis: **Facebook-style social × FotMob-style scores — one pitch.** No App Store / Play Store download button; CTAs are a client-side waitlist stub and a link to [Run the Expo demo](#run).
+
+Preview locally (no build step):
+
+```bash
+python3 -m http.server 4173 --directory landing
+```
+
+Then open http://localhost:4173 — or open `landing/index.html` in a browser.
+
+### Deploy (static host)
+
+`landing/` is a static root: `index.html`, `styles.css`, `app.js`, `images/`, `favicon.svg`, plus `CNAME` (`kickfeed.polsia.app`) and `.nojekyll` for GitHub Pages.
+
+- **Cloudflare Pages** — connect this GitHub repo, production branch `main`, **output / root directory `landing`**, empty build command. Attach the custom domain when DNS is ready.
+- **GitHub Pages** — GitHub’s branch publisher only serves `/` or `/docs`. Either copy `landing/` to `docs/` and set Pages → Deploy from branch → `/docs`, or add an Actions workflow that uploads the `landing/` folder as the Pages artifact. Keep `CNAME` at the published root.
+- **Any other static host** — rsync / upload the contents of `landing/` as the site root.
+
+### DNS cutover (Karol)
+
+This PR does **not** change polsia.app DNS. When a static host is live:
+
+1. Create `kickfeed.polsia.app` as a **CNAME** to the host (Cloudflare Pages `*.pages.dev`, GitHub Pages `kaysi8805.github.io`, etc.).
+2. Add the same hostname in the host’s custom-domain settings (TLS).
+3. Until that cutover, the recovered landing is only in this repo.
+
 ## Real England scores (Batch 3)
 
 Without `EXPO_PUBLIC_FOOTBALL_API_KEY`, KickFeed uses the mock catalog (demo still works).
@@ -72,6 +102,7 @@ Use **Profile → Switch demo user** to pick another seeded fan. **Profile → E
 ## Project layout
 
 ```
+landing/             Public static marketing site (Batch 0; GitHub Pages / Cloudflare)
 app/                 Expo Router screens (tabs + stack)
   team/[id]          Club detail (squad, fixtures, favorite)
   player/[id]        Player detail (stats, appearances, follow)
@@ -151,7 +182,7 @@ Keep `TvProvider` stable (`getBroadcastsByMatch`, `getListingsByCountry`, `getCo
 
 Karol’s batches:
 
-- **Batch 0 — deferred.** Public landing / kickfeed.polsia.app sneaker page. Explicitly skipped; still not in this release.
+- **Batch 0 — done.** Public football landing recovered in-repo at `landing/`. `kickfeed.polsia.app` still needs DNS cutover by Karol — this repo does not touch polsia DNS.
 - **Batch 1 — done.** Teams, players, and competitions are first-class and clickable throughout the app.
 - **Batch 2 — done.** Global search plus follow/favorite **players**.
 - **Batch 3 — done.** Real scores for **England** (API-Football behind `FootballProvider`; demo auth/social still mock). Keyed → PL + Championship; no key → mocks.
