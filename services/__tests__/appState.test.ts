@@ -1,6 +1,7 @@
 import {
   addComment,
   addPost,
+  applyRestoredSession,
   defaults,
   follow,
   hydratePersisted,
@@ -8,12 +9,15 @@ import {
   mergeMatchAlerts,
   setMotmVote,
   setPrediction,
+  signInAccount,
   signInDemo,
+  signOut,
   toggleFavoritePlayer,
   toggleFavoriteTeam,
   toggleLike,
   unreadCountFor,
   updateProfile,
+  usersFromState,
 } from '@/services/appState';
 import { describe, expect, it } from 'vitest';
 
@@ -27,7 +31,23 @@ describe('hydratePersisted', () => {
   it('keeps a known demo user and drops unknown ids', () => {
     const saved = { ...defaults(), currentUserId: 'maya' as const };
     expect(hydratePersisted(JSON.stringify(saved)).currentUserId).toBe('maya');
+    expect(hydratePersisted(JSON.stringify(saved)).authMode).toBe('demo');
     expect(hydratePersisted(JSON.stringify({ ...saved, currentUserId: 'ghost' })).currentUserId).toBeNull();
+  });
+
+  it('keeps a supabase uuid currentUserId and infers authMode', () => {
+    const uuid = '11111111-1111-4111-8111-111111111111';
+    const next = hydratePersisted(
+      JSON.stringify({
+        schemaVersion: 2,
+        currentUserId: uuid,
+        profiles: { [uuid]: { name: 'Karol', handle: 'karol', email: 'fan@example.com' } },
+      }),
+    );
+    expect(next.currentUserId).toBe(uuid);
+    expect(next.authMode).toBe('supabase');
+    expect(usersFromState(next).some((u) => u.id === uuid && u.email === 'fan@example.com')).toBe(true);
+    expect(usersFromState(next).some((u) => u.id === 'maya')).toBe(true);
   });
 
   it('keeps valid slices when schemaVersion does not match', () => {
@@ -321,6 +341,69 @@ describe('MOTM votes', () => {
     const again = setMotmVote(state, 'fx-liv-ars', salah, 9_000, 'finished', ['9001', 'fx-liv-ars']);
     expect(again.motmVotes.filter((v) => v.userId === 'maya')).toHaveLength(1);
     expect(again.motmVotes[again.motmVotes.length - 1]?.matchId).toBe('9001');
+  });
+});
+
+describe('supabase vs demo identity', () => {
+  const uuid = '33333333-3333-4333-8333-333333333333';
+  const account = {
+    id: uuid,
+    name: 'Karol',
+    handle: 'karol',
+    bio: 'KickFeed fan',
+    avatarColor: '#22C55E',
+    initials: 'KA',
+    favoriteTeamIds: [] as string[],
+    favoriteLeagueIds: [] as string[],
+    email: 'fan@example.com',
+  };
+  const open = { status: 'upcoming' as const, kickoff: '2026-09-16T18:00:00.000Z' };
+  const now = Date.parse('2026-09-16T12:00:00.000Z');
+
+  it('keys predictions, MOTM, and favorites by supabase uuid without touching demo slices', () => {
+    let state = signInDemo(defaults(), 'maya');
+    const mayaTeams = state.favorites.maya.teams;
+    state = signInAccount(state, account, 'supabase');
+    expect(state.currentUserId).toBe(uuid);
+    expect(state.authMode).toBe('supabase');
+    expect(state.favorites[uuid]).toEqual({ teams: [], leagues: [], players: [] });
+    expect(state.favorites.maya.teams).toEqual(mayaTeams);
+
+    state = setPrediction(state, 'fx-bha-mun', 2, 1, now, open);
+    expect(state.predictions.some((p) => p.userId === uuid && p.matchId === 'fx-bha-mun')).toBe(true);
+    expect(state.predictions.some((p) => p.userId === 'maya' && p.matchId === 'fx-bha-mun')).toBe(false);
+
+    state = toggleFavoriteTeam(state, 'ars');
+    expect(state.favorites[uuid].teams).toContain('ars');
+    expect(state.favorites.maya.teams).toEqual(mayaTeams);
+
+    const live = setMotmVote(
+      state,
+      'fx-liv-ars',
+      { playerKey: 'p-liv-11', playerId: 'p-liv-11', playerName: 'Mohamed Salah', teamId: 'liv' },
+      5_000,
+      'live',
+    );
+    expect(live.motmVotes.some((v) => v.userId === uuid && v.playerKey === 'p-liv-11')).toBe(true);
+
+    const signedOut = signOut(state);
+    expect(signedOut.currentUserId).toBeNull();
+    expect(signedOut.predictions.some((p) => p.userId === uuid)).toBe(true);
+  });
+
+  it('lets a restored supabase session win, and drops a leftover uuid without a session', () => {
+    const demo = signInDemo(defaults(), 'maya');
+    const withSession = applyRestoredSession(demo, account);
+    expect(withSession.currentUserId).toBe(uuid);
+    expect(withSession.authMode).toBe('supabase');
+
+    const leftover = applyRestoredSession(withSession, null);
+    expect(leftover.currentUserId).toBeNull();
+    expect(leftover.authMode).toBeNull();
+
+    const keepDemo = applyRestoredSession(demo, null);
+    expect(keepDemo.currentUserId).toBe('maya');
+    expect(keepDemo.authMode).toBe('demo');
   });
 });
 

@@ -150,6 +150,7 @@ export interface Lineup {
 }
 
 export interface User {
+  /** Demo seed id (`maya`) or Supabase `auth.users.id` (uuid). Leaderboards attach to this later. */
   id: string;
   name: string;
   handle: string;
@@ -160,6 +161,8 @@ export interface User {
   favoriteLeagueIds: string[];
   /** Launch-geo TV market (`gbr` / `svk` / `usa`, …). Missing → device locale, else Slovakia. */
   tvCountryId?: string;
+  /** Present for real Supabase accounts; omitted on seeded demo fans. */
+  email?: string;
 }
 
 export type TvChannelKind = 'tv' | 'streaming';
@@ -215,7 +218,7 @@ export interface Comment {
   parentId?: string;
 }
 
-/** Demo-user score pick for a fixture. Locked at kickoff / once the match is live. */
+/** Per-user score pick (demo id or Supabase uuid). Locked at kickoff / once the match is live. */
 export interface ScorePrediction {
   matchId: string;
   userId: string;
@@ -226,7 +229,7 @@ export interface ScorePrediction {
 }
 
 /**
- * One Man of the Match vote per demo user per match.
+ * One Man of the Match vote per user per match (demo id or Supabase uuid).
  * `playerKey` is the catalog player id when known, else a stable lineup key.
  */
 export interface MotmVote {
@@ -246,7 +249,7 @@ export interface AppNotification {
   body: string;
   createdAt: string;
   read: boolean;
-  /** Demo user who should see this notification. */
+  /** User who should see this notification (demo id or Supabase uuid). */
   recipientId: string;
   matchId?: string;
   /** Actor or related user (never equal to recipientId for self-activity). */

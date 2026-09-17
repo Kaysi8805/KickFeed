@@ -3,10 +3,18 @@ import { seedMotmVotes, seedPredictions } from '@/data/mocks/engagement';
 import { demoUsers, seedComments, seedFollowing, seedNotifications, seedPosts } from '@/data/mocks/social';
 import { clampScore, isMotmOpen, isPredictionOpen, motmVoteForUser, predictionForUser } from '@/lib/engagement';
 import type { MatchAlertDraft } from '@/lib/matchSocial';
+import {
+  inferAuthMode,
+  isDemoUserId,
+  isPersistedUserId,
+  isSupabaseUserId,
+  userFromProfile,
+  type AuthMode,
+} from '@/lib/userIdentity';
 
 export const STATE_SCHEMA_VERSION = 2;
 
-const KNOWN_USER_IDS = new Set(demoUsers.map((u) => u.id));
+export type { AuthMode };
 
 export interface FavoriteSlice {
   teams: string[];
@@ -17,6 +25,8 @@ export interface FavoriteSlice {
 export interface Persisted {
   schemaVersion: number;
   currentUserId: string | null;
+  /** `demo` seeded picker vs `supabase` session. Inferred from `currentUserId` when missing. */
+  authMode: AuthMode | null;
   following: Record<string, string[]>;
   favorites: Record<string, FavoriteSlice>;
   profiles: Record<string, Partial<User>>;
@@ -36,6 +46,7 @@ export function defaults(): Persisted {
   return {
     schemaVersion: STATE_SCHEMA_VERSION,
     currentUserId: null,
+    authMode: null,
     following: { ...seedFollowing },
     favorites,
     profiles: {},
@@ -52,8 +63,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function knownUserId(value: unknown): string | null {
-  return typeof value === 'string' && KNOWN_USER_IDS.has(value) ? value : null;
+function persistableUserId(value: unknown): string | null {
+  return typeof value === 'string' && isPersistedUserId(value) ? value : null;
 }
 
 function pickRecord<T>(value: unknown, fallback: T): T {
@@ -141,6 +152,7 @@ function pickFavorites(value: unknown, fallback: Persisted['favorites']): Persis
  * Corrupt JSON → full defaults.
  * Missing/future schemaVersion still keeps valid slices (user, follows, posts, predictions, …)
  * and stamps STATE_SCHEMA_VERSION. Unknown currentUserId becomes null.
+ * Demo ids (`maya`) and Supabase uuids are kept; other strings are cleared.
  */
 export function hydratePersisted(raw: string | null): Persisted {
   const base = defaults();
@@ -153,9 +165,11 @@ export function hydratePersisted(raw: string | null): Persisted {
   }
   if (!isPlainObject(parsed)) return base;
 
+  const currentUserId = persistableUserId(parsed.currentUserId);
   return {
     schemaVersion: STATE_SCHEMA_VERSION,
-    currentUserId: knownUserId(parsed.currentUserId),
+    currentUserId,
+    authMode: inferAuthMode(currentUserId, parsed.authMode),
     following: pickRecord(parsed.following, base.following),
     favorites: pickFavorites(parsed.favorites, base.favorites),
     profiles: pickRecord(parsed.profiles, base.profiles),
@@ -166,6 +180,94 @@ export function hydratePersisted(raw: string | null): Persisted {
     predictions: pickPredictions(parsed.predictions, base.predictions),
     motmVotes: pickMotmVotes(parsed.motmVotes, base.motmVotes),
   };
+}
+
+function profileSliceFromUser(user: User): Partial<User> {
+  return {
+    name: user.name,
+    handle: user.handle,
+    bio: user.bio,
+    avatarColor: user.avatarColor,
+    initials: user.initials,
+    email: user.email,
+    tvCountryId: user.tvCountryId,
+  };
+}
+
+/**
+ * Demo users always appear. Signed-in Supabase accounts (and any other uuid
+ * profile/favorites keys) are merged in so feed authors resolve after email login.
+ */
+export function usersFromState(state: Persisted): User[] {
+  const byId = new Map<string, User>();
+  for (const u of demoUsers) {
+    const fav = state.favorites[u.id];
+    byId.set(u.id, {
+      ...u,
+      ...state.profiles[u.id],
+      favoriteTeamIds: fav?.teams ?? u.favoriteTeamIds,
+      favoriteLeagueIds: fav?.leagues ?? u.favoriteLeagueIds,
+    });
+  }
+  const extraIds = new Set<string>([
+    ...Object.keys(state.profiles),
+    ...Object.keys(state.favorites),
+    ...(state.currentUserId ? [state.currentUserId] : []),
+  ]);
+  for (const id of extraIds) {
+    if (byId.has(id) || !isPersistedUserId(id) || isDemoUserId(id)) continue;
+    byId.set(id, userFromProfile(id, state.profiles[id], state.favorites[id]));
+  }
+  return [...byId.values()];
+}
+
+/** Attach a real or demo account. Per-user maps (favorites, predictions, MOTM) key off `user.id`. */
+export function signInAccount(state: Persisted, user: User, mode: AuthMode): Persisted {
+  if (mode === 'demo' && !isDemoUserId(user.id)) {
+    return { ...state, currentUserId: null, authMode: null };
+  }
+  if (mode === 'supabase' && !isSupabaseUserId(user.id)) {
+    return { ...state, currentUserId: null, authMode: null };
+  }
+  const existingProfile = state.profiles[user.id];
+  const existingFav = state.favorites[user.id];
+  return {
+    ...state,
+    currentUserId: user.id,
+    authMode: mode,
+    profiles: {
+      ...state.profiles,
+      [user.id]: {
+        ...profileSliceFromUser(user),
+        ...existingProfile,
+        email: user.email ?? existingProfile?.email,
+      },
+    },
+    favorites: {
+      ...state.favorites,
+      [user.id]: existingFav ?? {
+        teams: [...user.favoriteTeamIds],
+        leagues: [...user.favoriteLeagueIds],
+        players: [],
+      },
+    },
+    following: {
+      ...state.following,
+      [user.id]: state.following[user.id] ?? [],
+    },
+  };
+}
+
+/**
+ * Supabase session wins on boot. If the session is gone, drop a leftover uuid so
+ * demo restore still works and we never keep a signed-in uuid without a session.
+ */
+export function applyRestoredSession(state: Persisted, supabaseUser: User | null): Persisted {
+  if (supabaseUser) return signInAccount(state, supabaseUser, 'supabase');
+  if (state.authMode === 'supabase' || (state.currentUserId && isSupabaseUserId(state.currentUserId))) {
+    return signOut(state);
+  }
+  return state;
 }
 
 function isSelfActivity(n: AppNotification, userId: string): boolean {
@@ -185,12 +287,14 @@ export function unreadCountFor(state: Persisted, userId: string | null): number 
 }
 
 export function signInDemo(state: Persisted, userId: string): Persisted {
-  if (!KNOWN_USER_IDS.has(userId)) return { ...state, currentUserId: null };
-  return { ...state, currentUserId: userId };
+  if (!isDemoUserId(userId)) return { ...state, currentUserId: null, authMode: null };
+  const user = demoUsers.find((u) => u.id === userId);
+  if (!user) return { ...state, currentUserId: null, authMode: null };
+  return signInAccount(state, user, 'demo');
 }
 
 export function signOut(state: Persisted): Persisted {
-  return { ...state, currentUserId: null };
+  return { ...state, currentUserId: null, authMode: null };
 }
 
 export function follow(state: Persisted, targetUserId: string, actorDisplayName: string, now = Date.now()): Persisted {
@@ -459,7 +563,7 @@ function hasEngagementNote(
 }
 
 /**
- * Upsert the current demo user's score pick while the fixture is still pre-kickoff.
+ * Upsert the current user's score pick while the fixture is still pre-kickoff.
  * After lock (live / HT / FT, or kickoff time reached) the existing row is left unchanged.
  */
 export function setPrediction(
@@ -510,7 +614,7 @@ export function setPrediction(
 }
 
 /**
- * Cast a single MOTM vote for the current demo user. Live / HT / FT only; a second vote is ignored.
+ * Cast a single MOTM vote for the current user. Live / HT / FT only; a second vote is ignored.
  */
 export function setMotmVote(
   state: Persisted,

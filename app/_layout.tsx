@@ -4,7 +4,7 @@ import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { DemoLogin } from '@/components/DemoLogin';
+import { AuthScreen } from '@/components/AuthScreen';
 import { AppProvider, useApp } from '@/services/AppProvider';
 import { colors } from '@/theme';
 
@@ -19,7 +19,7 @@ function Boot() {
 function RootNav() {
   const { ready, currentUser } = useApp();
   if (!ready) return <Boot />;
-  if (!currentUser) return <DemoLogin />;
+  if (!currentUser) return <AuthScreen />;
 
   return (
     <>

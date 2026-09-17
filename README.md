@@ -2,11 +2,11 @@
 
 KickFeed is a cross-platform iOS and Android app (one Expo / React Native codebase) that combines a Facebook-style social feed with FotMob / Flashscore-style football scores, standings, and worldwide league browsing.
 
-v1 is **demo-auth local**: seeded fan profiles, mock social, and **mock football unless you add a free API-Football key or point the app at the in-repo BFF**. No paid API keys. The football BFF is optional (hides the key and shares the free-tier 100 req/day cache).
+v1 is **local-first**: seeded fan profiles for **demo mode**, optional **Supabase email auth**, mock social, and **mock football unless you add a free API-Football key or point the app at the in-repo BFF**. No paid API keys. The football BFF is optional (hides the key and shares the free-tier 100 req/day cache). Email auth is optional — without Supabase env vars the demo picker still works.
 
 ## Features
 
-- **Demo auth** — pick a seeded fan profile (Maya, Omar, Luca, …). No email/password or OAuth yet.
+- **Auth** — email/password via **Supabase Auth** when `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY` are set. Without those (or tap **Continue with demo**), pick a seeded fan (Maya, Omar, Luca, …). Apple/Google OAuth is stubbed for a later batch.
 - **Profiles & favorites** — name, photo initials, bio, favorite clubs, competitions, and players. **TV country** (UK / SK / US) defaults from the device locale, else Slovakia. Favorites drive Home live scores and Following.
 - **Social feed & follows** — follow demo users, post text (optional photo), optionally **attach a live/today/upcoming fixture**, like posts, see friends + own posts. Home and Following highlight match-attached posts and live matches for clubs/players you follow.
 - **Global search** — dedicated Search screen from the Feed bar and tab headers. Query clubs, players, competitions, and demo fans; results open the existing entity pages.
@@ -39,7 +39,30 @@ npm run typecheck
 npm test
 ```
 
-CI runs `npm ci` → `typecheck` → `test` on pull requests (see `.github/workflows/ci.yml`). CI does **not** need an API key; tests use mocks and JSON fixtures.
+CI runs `npm ci` → `typecheck` → `test` on pull requests (see `.github/workflows/ci.yml`). CI does **not** need an API-Football key or Supabase credentials; tests use mocks and JSON fixtures.
+
+## Supabase email auth
+
+Without `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`, KickFeed stays on the **demo profile picker** (same as today). With both set, the gate is email sign-in / sign-up, and **Continue with demo** remains a staging fallback.
+
+Karol — create a free project and paste keys (never commit `.env`):
+
+1. Sign up at [supabase.com](https://supabase.com) and **New project**.
+2. **Authentication → Providers → Email** — enable it. For local Expo demos, turn **Confirm email** off so sign-up returns a session immediately (or leave it on and click the mail link, then sign in).
+3. **Project Settings → API** — copy **Project URL** and the **anon public** key.
+4. Copy [`.env.example`](.env.example) to `.env` (gitignored) and set:
+
+```
+EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+```
+
+5. Restart Expo (`npx expo start`) so the public env vars are inlined. Expo Go is supported (`@supabase/supabase-js` + AsyncStorage session).
+6. Optional: in the Supabase SQL editor, run [`supabase/migrations/20260917120000_profiles.sql`](supabase/migrations/20260917120000_profiles.sql) so each `auth.users` row gets a `public.profiles` row (`id` uuid = `auth.users.id`). The app does **not** require this table for sign-in; it is the join key for a later leaderboard batch. See [`supabase/README.md`](supabase/README.md).
+
+Google / Apple providers can be enabled in the same Auth settings later — this batch keeps OAuth as a stub.
+
+**Next batch:** prediction leaderboards on real users (same uuid as `auth.users.id` / `profiles.id`). Social graph stays on local AsyncStorage in this PR.
 
 ## Public landing (Batch 0)
 
@@ -75,7 +98,7 @@ This PR does **not** change polsia.app DNS. When a static host is live:
 
 Without `EXPO_PUBLIC_FOOTBALL_BFF_URL` or `EXPO_PUBLIC_FOOTBALL_API_KEY`, KickFeed uses the mock catalog (demo still works).
 
-With either set, Matches / standings / team + player pages hydrate **England — Premier League (primary) and EFL Championship**. FA Cup is skipped so the free **100 requests/day** budget stays on league scores. Auth and social stay mock. **Live screens show “England live · other leagues mock.”** TV stays editorial.
+With either set, Matches / standings / team + player pages hydrate **England — Premier League (primary) and EFL Championship**. FA Cup is skipped so the free **100 requests/day** budget stays on league scores. Social graph stays on local AsyncStorage. **Live screens show “England live · other leagues mock.”** TV stays editorial.
 
 **Prefer the BFF for demos** (server-side key, shared TTL cache — see [`bff/README.md`](bff/README.md)):
 
@@ -96,11 +119,11 @@ Mock club ids (`ars`, `liv`, `epl`) still resolve after hydrate so demo favorite
 
 ## Demo mode
 
-On first launch, choose a demo profile. State (favorites including players, follows, posts, comments, **score predictions**, **MOTM votes**, notification read flags) is persisted with AsyncStorage under `kickfeed.v1.state` (`schemaVersion` 2). Post `matchId` values are kept as stored — live remapping is display-time only. Predictions and MOTM votes use the same related-id matching as match chat, so mock ids (`fx-liv-ars`) and live England ids stay one ballot when a key is set.
+On first launch without Supabase env, choose a demo profile. With Supabase env, email sign-in is first; **Continue with demo** still opens the picker. State (favorites including players, follows, posts, comments, **score predictions**, **MOTM votes**, notification read flags) is persisted with AsyncStorage under `kickfeed.v1.state` (`schemaVersion` 2). Per-user maps (favorites, predictions, MOTM, likes, following) are keyed by `currentUserId`: seeded ids like `maya` in demo mode, or the Supabase `auth.users` uuid when signed in with email. Demo and email data can coexist on one device. Post `matchId` values are kept as stored — live remapping is display-time only. Predictions and MOTM votes use the same related-id matching as match chat, so mock ids (`fx-liv-ars`) and live England ids stay one ballot when a key is set.
 
-Corrupt JSON is discarded. A missing or newer `schemaVersion` still keeps valid slices (signed-in demo user, follows, posts, …) and stamps the current version. Unknown `currentUserId` values are cleared.
+Corrupt JSON is discarded. A missing or newer `schemaVersion` still keeps valid slices (signed-in demo user or uuid, follows, posts, …) and stamps the current version. Unknown `currentUserId` values (not a demo id and not a uuid) are cleared. On boot, a live Supabase session wins; if the session is gone, a leftover uuid is dropped so demo restore still works.
 
-Use **Profile → Switch demo user** to pick another seeded fan. **Profile → Enable device match alerts** opts into Expo push (no-op until an EAS `projectId` exists). Real credentials are intentionally not collected.
+Use **Profile → Switch demo user** / **Switch account** / **Sign out** to return to the gate. **Profile → Enable device match alerts** opts into Expo push (no-op until an EAS `projectId` exists).
 
 ## Project layout
 
@@ -121,7 +144,10 @@ lib/footballBff.ts    Allowlisted API-Football proxy + TTL cache (Worker/Node)
 bff/                 Cloudflare Worker + local Node loopback (FOOTBALL_API_KEY server-side)
 data/types.ts        Shared domain types
 data/mocks/          Seeded users, teams, squads, leagues, fixtures, posts, TV, predictions/MOTM
-services/auth.ts     Demo auth + stubs for email/OAuth
+supabase/             Optional SQL for `profiles` (uuid = auth.users.id); not used by CI
+lib/userIdentity.ts  Demo id vs Supabase uuid helpers; profile → User
+services/auth.ts     Email/password AuthProvider + demo list; OAuth stub
+services/supabase.ts Expo client from EXPO_PUBLIC_SUPABASE_* (null without env)
 services/football.ts     FootballProvider + mock + auto-select live adapter
 services/footballLive.ts API-Football England adapter (in-memory TTL cache)
 services/footballMap.ts  API entity → KickFeed types
@@ -131,14 +157,16 @@ services/AppProvider.tsx   App state (follows, favorites, posts, TV country, pre
 theme/               Color, type, and spacing tokens
 ```
 
-## Swap in real auth later
+## Auth (demo + Supabase)
 
-`services/auth.ts` exports an `AuthProvider`:
+`services/auth.ts` exports an `AuthProvider` used by `AppProvider`:
 
-- Keep `listDemoUsers()` for a staging fallback if you want.
-- Implement `signInWithEmail` / `signInWithOAuth` (they currently throw).
-- Point `AppProvider.signInDemo` at a session token and load the user from your API.
-- The UI already gates on `currentUser`; you can replace `DemoLogin` with a real login screen without rewriting tabs.
+- `listDemoUsers()` — staging fallback picker (always available).
+- `signInWithEmail` / `signUpWithEmail` / `getSession` / `signOut` — real Supabase Auth when env is set; throw a clear error without it.
+- `signInWithOAuth` — still throws (Apple/Google polish is a later batch).
+- KickFeed `User.id` is the demo seed id or `auth.users.id` (uuid) so leaderboards can attach later without remapping.
+
+The UI gates on `currentUser`. `AuthScreen` shows email when configured, otherwise the demo picker.
 
 ## Match-centric social (Batch 4)
 
@@ -197,7 +225,8 @@ Karol’s batches:
 - **Batch 6 — done.** Score predictions (lock at kickoff) and Man of the Match voting on the match hub. Demo auth; works on the mock catalog and on live England match ids when a key is set.
 - **Batch 7 — done.** UX polish: consistent empty / loading / error copy, clearer Predict-locked and MOTM-voted states, slightly larger tap targets.
 - **This release.** Honesty banners (England live vs mock; editorial TV), thin API-Football BFF + client switch, leftover Batch 7 nits.
-- **Next: real auth.** Email / OAuth with demo as a staging fallback. Not in this PR: DMs, more live geos, licensed TV, prediction leaderboards. Not gambling.
+- **Auth — this PR.** Supabase email/password with demo profile picker as staging/dev fallback. Not in this PR: DMs, more live geos, licensed TV, prediction leaderboards, Apple/Google polish. Not gambling.
+- **Next: prediction leaderboards** on real Supabase users (`auth.users.id`).
 
 ## Honesty banners
 
@@ -212,7 +241,7 @@ Copy and empty-state pass on Feed, Matches, Search, Following, and the match hub
 Match hub tabs **Predict** and **MOTM** sit next to Events / Lineups / Stats / Hub. TV stays a section on the board (Batch 5).
 
 - **Predict** — upcoming fixtures only. Stepper for home/away (0–9). Upsert until kickoff; live / HT / FT (or kickoff time reached) lock the pick. Community average, most-common scoreline, and home/draw/away counts include other demo users (seeded mocks).
-- **MOTM** — live, half-time, and finished. Ballot is `FootballProvider.getLineups`; if XIs are empty (free-tier skip), `getSquad` for both clubs. One vote per demo user per match (related mock/live ids count as one). Tallies persist with the rest of app state.
+- **MOTM** — live, half-time, and finished. Ballot is `FootballProvider.getLineups`; if XIs are empty (free-tier skip), `getSquad` for both clubs. One vote per user per match (demo id or Supabase uuid; related mock/live ids count as one). Tallies persist with the rest of app state.
 - Confirmations land in Notifications (“You predicted 2–1”, “You voted for Salah”). No odds, stakes, or third-party betting APIs.
 
 ## Theme

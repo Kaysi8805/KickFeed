@@ -25,7 +25,7 @@ export default function UserScreen() {
     return (
       <Screen>
         <HeaderBar title="Fan" onBack={() => safeBack(entityBackHref('user', id))} />
-        <EmptyState title="Unknown profile" body="This demo user isn’t in the seed list." />
+        <EmptyState title="Unknown profile" body="This fan isn’t on this device." />
       </Screen>
     );
   }
