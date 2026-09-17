@@ -23,7 +23,7 @@ export interface FootballStatus {
   geoLabel: string;
 }
 
-export type FootballEntityKind = 'team' | 'player' | 'league';
+export type FootballEntityKind = 'team' | 'player' | 'league' | 'match';
 
 /**
  * Football data access.

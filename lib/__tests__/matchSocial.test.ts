@@ -106,6 +106,7 @@ describe('live catalog id stability', () => {
     expect(canonicalMatchId(live, 'fx-liv-ars')).toBe('9001');
     expect(attachMatchId(live, '9001')).toBe('9001');
     expect(relatedFixtureIds(live, 'fx-liv-ars')).toContain('9001');
+    expect(relatedFixtureIds(live, '9001')).toContain('fx-liv-ars');
     const attached = postsForMatch([post({ id: 'p1', matchId: 'fx-liv-ars' })], '9001', live);
     expect(attached).toHaveLength(1);
     expect(commentsForMatch([{ id: 'c1', matchId: 'fx-liv-ars', authorId: 'maya', text: 'x', createdAt: 't' }], '9001', live)).toHaveLength(
@@ -144,9 +145,10 @@ describe('live catalog id stability', () => {
     expect(ambiguous.catalogId).toBe('fx-liv-ars');
     expect(resolvePostFixture(post({ id: 'p1', matchId: 'fx-liv-ars' }), live)).toBeUndefined();
 
-    const ghost = resolveMatchDeepLink(live, 'fx-rma-bar');
-    expect(ghost.via).toBe('missing');
-    expect(ghost.fixture).toBeUndefined();
+    const clasico = resolveMatchDeepLink(live, 'fx-rma-bar');
+    expect(clasico.via).toBe('exact');
+    expect(clasico.fixture?.id).toBe('fx-rma-bar');
+    expect(clasico.source).toBe('live');
   });
 
   it('builds goal-style drafts on live ids for users who favorite those clubs', async () => {

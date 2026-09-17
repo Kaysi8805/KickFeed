@@ -57,6 +57,7 @@ interface LiveSnapshot {
   teamLeagueIds: Map<string, Set<string>>;
   teamAliases: Map<string, string>;
   playerAliases: Map<string, string>;
+  fixtureAliases: Map<string, string>;
 }
 
 function emptySnapshot(): LiveSnapshot {
@@ -72,6 +73,7 @@ function emptySnapshot(): LiveSnapshot {
     teamLeagueIds: new Map(),
     teamAliases: new Map(),
     playerAliases: new Map(),
+    fixtureAliases: new Map(),
   };
 }
 
@@ -97,6 +99,42 @@ function rememberPlayer(snap: LiveSnapshot, player: Player) {
   snap.playerAliases.set(alias, player.id);
   const mockTeam = [...snap.teamAliases.entries()].find(([, liveId]) => liveId === player.teamId)?.[0];
   if (mockTeam) snap.playerAliases.set(`p-${mockTeam}-${player.number}`, player.id);
+}
+
+function fixturePairKey(homeTeamId: string, awayTeamId: string, leagueId: string): string {
+  return `${canonicalLeagueId(leagueId) ?? leagueId}|${homeTeamId}|${awayTeamId}`;
+}
+
+function reindexFixtureAliases(snap: LiveSnapshot, fallback: FootballProvider) {
+  snap.fixtureAliases.clear();
+  const groups = new Map<string, { lives: string[]; mocks: string[] }>();
+  const touch = (key: string) => {
+    const group = groups.get(key) ?? { lives: [], mocks: [] };
+    groups.set(key, group);
+    return group;
+  };
+  for (const liveFx of snap.fixtures.values()) {
+    touch(fixturePairKey(liveFx.homeTeamId, liveFx.awayTeamId, liveFx.leagueId)).lives.push(liveFx.id);
+  }
+  for (const mock of fallback.getFixtures()) {
+    const home = snap.teamAliases.get(mock.homeTeamId) ?? mock.homeTeamId;
+    const away = snap.teamAliases.get(mock.awayTeamId) ?? mock.awayTeamId;
+    const group = groups.get(fixturePairKey(home, away, mock.leagueId));
+    if (!group) continue;
+    group.mocks.push(mock.id);
+  }
+  for (const group of groups.values()) {
+    if (group.lives.length !== 1 || group.mocks.length !== 1) continue;
+    const liveId = group.lives[0]!;
+    const mockId = group.mocks[0]!;
+    snap.fixtureAliases.set(mockId, liveId);
+    snap.fixtureAliases.set(liveId, liveId);
+  }
+}
+
+function isAliasedMockFixture(snap: LiveSnapshot, mockId: string): boolean {
+  const liveId = snap.fixtureAliases.get(mockId);
+  return !!liveId && liveId !== mockId;
 }
 
 export function createLiveFootballProvider(opts: {
@@ -217,6 +255,7 @@ export function createLiveFootballProvider(opts: {
       http('/fixtures', { league: leagueId, season, from, to }).then((r) => asArray<ApiFixture>(r)),
     );
     ingestFixtures(rows);
+    reindexFixtureAliases(snap, fallback);
     const mapped = [...snap.fixtures.values()];
     cache.set(key, rows, fixturesTtlMs(hasLiveFixture(mapped)), now());
   };
@@ -287,6 +326,17 @@ export function createLiveFootballProvider(opts: {
     return leagueAliases(canonical);
   };
 
+  const relatedMatchIds = (id: string): string[] => {
+    const canonical = snap.fixtureAliases.get(id) ?? (snap.fixtures.has(id) ? id : undefined);
+    const out = new Set<string>([id]);
+    if (!canonical) return [...out];
+    out.add(canonical);
+    for (const [alias, liveId] of snap.fixtureAliases) {
+      if (liveId === canonical) out.add(alias);
+    }
+    return [...out];
+  };
+
   async function hydrate(force = false): Promise<void> {
     if (hydratePromise && !force) return hydratePromise;
     if (status.ready && !force && !status.error && cache.hasFresh(`fixtures:${PREMIER_LEAGUE_ID}:${windowParams().season}:${windowParams().from}:${windowParams().to}`, now())) {
@@ -339,6 +389,7 @@ export function createLiveFootballProvider(opts: {
     relatedIds: (kind, id) => {
       if (kind === 'team') return relatedTeamIds(id);
       if (kind === 'player') return relatedPlayerIds(id);
+      if (kind === 'match') return relatedMatchIds(id);
       return relatedLeagueIds(id);
     },
     ensureSquad: async (teamId) => {
@@ -489,8 +540,14 @@ export function createLiveFootballProvider(opts: {
       });
       if (filter?.teamId && !liveTeam(filter.teamId)) return fallback.getFixtures(filter);
       if (filter?.leagueId && !isLiveEnglandLeague(filter.leagueId)) return fallback.getFixtures(filter);
-      if (!filter && !live.length && !status.ready) return [];
-      return live;
+      if (filter) return live;
+      const rest = fallback.getFixtures().filter((f) => {
+        if (isAliasedMockFixture(snap, f.id)) return false;
+        if (isLiveEnglandLeague(f.leagueId)) return false;
+        if (fallback.getLeague(f.leagueId)?.countryId === 'eng') return false;
+        return true;
+      });
+      return [...live, ...rest].sort((a, b) => Date.parse(a.kickoff) - Date.parse(b.kickoff));
     },
     getFixture: (id) => snap.fixtures.get(id) ?? fallback.getFixture(id),
     getStandings: (leagueId) => {

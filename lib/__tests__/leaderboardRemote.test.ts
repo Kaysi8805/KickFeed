@@ -1,4 +1,5 @@
 import { LIVE_RANKING_ERROR_BODY, rankingDisclaimer } from '@/lib/honesty';
+import { LEADERBOARD_TIEBREAK_COPY } from '@/lib/leaderboard';
 import {
   asLeaderboardClient,
   fetchRemoteLeaderboardRows,
@@ -23,6 +24,7 @@ describe('ranking honesty', () => {
     expect(rankingDisclaimer('live', true, 'mock')).toMatch(/mock catalog/i);
     expect(LIVE_RANKING_ERROR_BODY).toMatch(/live table/i);
     expect(LIVE_RANKING_ERROR_BODY).not.toMatch(/%s|\$\{/);
+    expect(LEADERBOARD_TIEBREAK_COPY).toMatch(/matches/);
   });
 });
 
@@ -59,16 +61,17 @@ describe('remote leaderboard rows', () => {
     expect(profile?.name).toBe('Karol');
   });
 
-  it('round-trips a prediction for upsert', () => {
+  it('does not send client timestamps on the write payload', () => {
     const row = {
       matchId: 'fx-ful-eve',
       userId: UUID,
       homeScore: 2,
       awayScore: 1,
-      createdAt: '2026-09-17T10:00:00.000Z',
-      updatedAt: '2026-09-17T11:00:00.000Z',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     };
-    expect(predictionToRemote(row, 'epl')).toMatchObject({
+    const remote = predictionToRemote(row, 'epl');
+    expect(remote).toMatchObject({
       match_id: 'fx-ful-eve',
       user_id: UUID,
       league_id: 'epl',
@@ -85,7 +88,7 @@ describe('remote leaderboard rows', () => {
     }).user_id).toBe(UUID);
   });
 
-  it('fetches through the tiny client wrapper and no-ops without supabase', async () => {
+  it('fetches through the tiny client wrapper and writes via RPC, not table upsert', async () => {
     expect(asLeaderboardClient(null)).toBeNull();
     const missing = await fetchRemoteLeaderboardRows(null);
     expect(missing).toEqual({ error: 'not_configured' });
@@ -104,11 +107,15 @@ describe('remote leaderboard rows', () => {
       motm_votes: [],
       profiles: [{ id: UUID, handle: 'fan_44444444', display_name: 'Karol' }],
     };
+    const rpcCalls: Array<{ fn: string; args?: Record<string, unknown> }> = [];
     const client = asLeaderboardClient({
       from: (table: string) => ({
         select: async () => ({ data: tables[table] ?? [], error: null }),
-        upsert: async () => ({ error: null }),
       }),
+      rpc: async (fn, args) => {
+        rpcCalls.push({ fn, args });
+        return { data: null, error: null };
+      },
     });
     const rows = await fetchRemoteLeaderboardRows(client);
     expect('error' in rows).toBe(false);
@@ -116,7 +123,54 @@ describe('remote leaderboard rows', () => {
     expect(rows.predictions[0]?.userId).toBe(UUID);
     expect(rows.users[0]?.name).toBe('Karol');
 
-    const saved = await upsertRemotePrediction(client, rows.predictions[0]!, 'epl');
+    const saved = await upsertRemotePrediction(
+      client,
+      rows.predictions[0]!,
+      'epl',
+      '2026-09-20T15:00:00.000Z',
+    );
     expect(saved.error).toBeNull();
+    expect(rpcCalls[0]).toMatchObject({
+      fn: 'kickfeed_upsert_prediction',
+      args: {
+        p_match_id: 'fx-ful-eve',
+        p_league_id: 'epl',
+        p_kickoff: '2026-09-20T15:00:00.000Z',
+      },
+    });
+    expect(rpcCalls[0]?.args).not.toHaveProperty('created_at');
+    expect(rpcCalls[0]?.args).not.toHaveProperty('p_created_at');
+  });
+
+  it('surfaces fetch failures instead of throwing', async () => {
+    const client = asLeaderboardClient({
+      from: () => ({
+        select: async () => {
+          throw new Error('network down');
+        },
+      }),
+      rpc: async () => ({ data: null, error: null }),
+    });
+    await expect(fetchRemoteLeaderboardRows(client)).resolves.toEqual({ error: 'network down' });
+
+    const locked = asLeaderboardClient({
+      from: () => ({
+        select: async () => ({ data: [], error: null }),
+      }),
+      rpc: async () => {
+        throw new Error('predictions locked at kickoff');
+      },
+    });
+    const row = {
+      matchId: 'fx-ful-eve',
+      userId: UUID,
+      homeScore: 1,
+      awayScore: 0,
+      createdAt: '2026-09-17T10:00:00.000Z',
+      updatedAt: '2026-09-17T10:00:00.000Z',
+    };
+    await expect(upsertRemotePrediction(locked, row, 'epl', '2026-09-01T12:00:00.000Z')).resolves.toEqual({
+      error: 'predictions locked at kickoff',
+    });
   });
 });

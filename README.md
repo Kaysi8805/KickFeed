@@ -59,7 +59,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 ```
 
 5. Restart Expo (`npx expo start`) so the public env vars are inlined. Expo Go is supported (`@supabase/supabase-js` + AsyncStorage session).
-6. Optional: in the Supabase SQL editor, run [`supabase/migrations/20260917120000_profiles.sql`](supabase/migrations/20260917120000_profiles.sql) and [`supabase/migrations/20260917190000_prediction_leaderboards.sql`](supabase/migrations/20260917190000_prediction_leaderboards.sql). Profiles are the join key (`id` = `auth.users.id`). Predictions / MOTM votes persist for live ranking. See [`supabase/README.md`](supabase/README.md).
+6. Optional: in the Supabase SQL editor, run the files in [`supabase/migrations/`](supabase/migrations/) (profiles, prediction tables, then write-lock RPCs). Profiles are the join key (`id` = `auth.users.id`). Live ranking writes go through kickoff-lock RPCs — not direct table upserts. See [`supabase/README.md`](supabase/README.md).
 
 Google / Apple providers can be enabled in the same Auth settings later — OAuth stays a stub.
 
@@ -261,9 +261,9 @@ Points (finished matches only; live/upcoming wait):
 - **Unique community MOTM — +2** (tie for first awards nothing)
 - Miss — 0
 
-Rank: points, then exacts, results, MOTM hits, handle. Top 10 plus the current user’s rank (demo id or Supabase uuid — same key as social state). Related mock/live match ids score once.
+Rank: points, then exacts, results, MOTM hits, scored matches, handle. Top 10 plus the current user’s rank (demo id or Supabase uuid — same key as social state). Related mock/live match ids score once.
 
-**Live** (Supabase env + email session): upserts to `public.predictions` / `public.motm_votes`; board reads Postgres. **Demo** (env missing or Continue with demo): seeded AsyncStorage board only. Not gambling.
+**Live** (Supabase env + email session): writes go through `kickfeed_upsert_prediction` / `kickfeed_upsert_motm_vote` (server `now()` + kickoff lock). Board reads Postgres. Direct table writes are revoked. **Demo** (env missing or Continue with demo): seeded AsyncStorage board only. Not gambling.
 
 ## Theme
 

@@ -4,6 +4,9 @@ import { userFromProfile, type AuthMode } from '@/lib/userIdentity';
 
 export const LEADERBOARD_TOP_N = 10;
 
+export const LEADERBOARD_TIEBREAK_COPY =
+  'Tie-break: exacts, then results, then MOTM, then matches, then handle.';
+
 /** Exact scoreline after full time. */
 export const POINTS_EXACT = 5;
 /** Correct home / draw / away, wrong score. */

@@ -13,6 +13,7 @@ import {
   scorePredictionPoints,
   shouldPersistLeaderboard,
   uniqueMotmWinner,
+  LEADERBOARD_TIEBREAK_COPY,
 } from '@/lib/leaderboard';
 import { relatedFixtureIds } from '@/lib/matchSocial';
 import { mockFootballProvider } from '@/services/football';
@@ -276,6 +277,7 @@ describe('finished catalog matches', () => {
     expect(board.totalRanked).toBeGreaterThan(0);
     expect(board.current).toBeNull();
     expect(board.top[0]?.points).toBeGreaterThan(0);
+    expect(LEADERBOARD_TIEBREAK_COPY).toMatch(/matches/i);
     expect(LEADERBOARD_TOP_N).toBe(10);
   });
 });

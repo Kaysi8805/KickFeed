@@ -18,6 +18,7 @@ import {
   markNotificationsRead as markNotificationsReadState,
   mergeMatchAlerts,
   notificationsFor,
+  rememberProfiles as rememberProfilesState,
   Persisted,
   setMotmVote as setMotmVoteState,
   setPrediction as setPredictionState,
@@ -76,6 +77,7 @@ interface AppContextValue {
   addComment: (matchId: string, text: string, parentId?: string) => void;
   setPrediction: (fixture: Fixture, homeScore: number, awayScore: number) => void;
   setMotmVote: (fixture: Fixture, candidate: MotmCandidate) => void;
+  rememberProfiles: (users: User[]) => void;
   markNotificationsRead: () => void;
   followerCount: (userId: string) => number;
 }
@@ -186,6 +188,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setState((prev) => fn(prev));
   }, []);
 
+  const rememberProfiles = useCallback(
+    (nextUsers: User[]) => {
+      patch((p) => rememberProfilesState(p, nextUsers));
+    },
+    [patch],
+  );
+
   const value = useMemo<AppContextValue>(
     () => ({
       ready,
@@ -274,7 +283,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (shouldPersistLeaderboard(supabaseConfigured, next.authMode) && next.currentUserId) {
             const row = predictionForUser(next.predictions, next.currentUserId, related);
             if (row) {
-              void upsertRemotePrediction(asLeaderboardClient(getSupabaseClient()), row, fixture.leagueId);
+              void upsertRemotePrediction(
+                asLeaderboardClient(getSupabaseClient()),
+                row,
+                fixture.leagueId,
+                fixture.kickoff,
+              );
             }
           }
           return next;
@@ -299,11 +313,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (shouldPersistLeaderboard(supabaseConfigured, next.authMode) && next.currentUserId) {
             const row = motmVoteForUser(next.motmVotes, next.currentUserId, related);
             if (row) {
-              void upsertRemoteMotmVote(asLeaderboardClient(getSupabaseClient()), row);
+              void upsertRemoteMotmVote(asLeaderboardClient(getSupabaseClient()), row, fixture.kickoff);
             }
           }
           return next;
         }),
+      rememberProfiles,
       markNotificationsRead: () => patch(markNotificationsReadState),
       followerCount: (userId) => Object.values(state.following).filter((ids) => ids.includes(userId)).length,
     }),
@@ -316,6 +331,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       likedPostIds,
       notifications,
       patch,
+      rememberProfiles,
       ready,
       state,
       supabaseConfigured,

@@ -103,6 +103,13 @@ describe('live football provider', () => {
     expect(live.getTopScorers('39')[0]?.playerName).toMatch(/Salah/);
     expect(live.getFixture('fx-liv-ars')?.id).toBe('fx-liv-ars');
     expect(live.getTeam('rma')?.name).toBe('Real Madrid');
+    const all = live.getFixtures();
+    expect(all.some((f) => f.id === '9001')).toBe(true);
+    expect(all.some((f) => f.id === 'fx-rma-bar')).toBe(true);
+    expect(all.some((f) => f.id === 'fx-liv-ars')).toBe(false);
+    expect(live.relatedIds('match', '9001')).toEqual(expect.arrayContaining(['9001', 'fx-liv-ars']));
+    expect(live.relatedIds('match', 'fx-liv-ars')).toContain('9001');
+    expect(live.relatedIds('match', '9001')).not.toContain('fx-facup-liv-ars');
   });
 
   it('reuses the in-memory cache on a second hydrate within ttl', async () => {

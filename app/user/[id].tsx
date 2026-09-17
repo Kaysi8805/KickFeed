@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PostCard } from '@/components/feed/PostCard';
@@ -9,23 +10,44 @@ import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
+import { fetchRemoteProfileById } from '@/services/leaderboard';
 import { colors, radius, spacing, type } from '@/theme';
 import { entityBackHref, entityHref } from '@/lib/entityNav';
 import { safeBack } from '@/lib/navBack';
 import { routeId } from '@/lib/routeParams';
+import { isPersistedUserId, isSupabaseUserId, userFromProfile } from '@/lib/userIdentity';
+import type { User } from '@/data/types';
 
 export default function UserScreen() {
   const { id: rawId } = useLocalSearchParams<{ id: string | string[] }>();
   const id = routeId(rawId);
-  const { users, currentUser, followingIds, follow, unfollow, posts, likedPostIds, toggleLike, followerCount } =
+  const { users, currentUser, followingIds, follow, unfollow, posts, likedPostIds, toggleLike, followerCount, rememberProfiles } =
     useApp();
-  const user = id ? users.find((u) => u.id === id) : undefined;
+  const fromState = id ? users.find((u) => u.id === id) : undefined;
+  const [fetched, setFetched] = useState<User | undefined>();
 
-  if (!user) {
+  useEffect(() => {
+    if (!id || fromState || !isPersistedUserId(id)) return;
+    let cancelled = false;
+    void (async () => {
+      const remote = await fetchRemoteProfileById(id);
+      if (cancelled || !remote) return;
+      setFetched(remote);
+      rememberProfiles([remote]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fromState, id, rememberProfiles]);
+
+  const user =
+    fromState ?? fetched ?? (id && isPersistedUserId(id) ? userFromProfile(id, undefined) : undefined);
+
+  if (!id || !user) {
     return (
       <Screen>
         <HeaderBar title="Fan" onBack={() => safeBack(entityBackHref('user', id))} />
-        <EmptyState title="Unknown profile" body="This fan isn’t on this device." />
+        <EmptyState title="Unknown profile" body="This fan isn’t on KickFeed." />
       </Screen>
     );
   }
@@ -45,7 +67,7 @@ export default function UserScreen() {
           <Avatar initials={user.initials} color={user.avatarColor} size={68} />
           <Text style={styles.name}>{user.name}</Text>
           <Text style={styles.handle}>@{user.handle}</Text>
-          <Text style={styles.bio}>{user.bio}</Text>
+          {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
           <Text style={styles.counts}>
             {followerCount(user.id)} followers · {userPosts.length} posts
           </Text>
@@ -70,7 +92,14 @@ export default function UserScreen() {
           ) : null}
         </View>
         {userPosts.length === 0 ? (
-          <EmptyState title="No posts yet" body="This fan hasn’t posted in the demo feed." />
+          <EmptyState
+            title="No posts on this device"
+            body={
+              isSupabaseUserId(user.id)
+                ? 'This fan is on the KickFeed ranking table. Feed posts stay local to each install.'
+                : 'This fan hasn’t posted in the demo feed.'
+            }
+          />
         ) : (
           userPosts.map((post) => (
             <PostCard

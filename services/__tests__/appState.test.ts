@@ -8,6 +8,7 @@ import {
   hydratePersisted,
   markNotificationsRead,
   mergeMatchAlerts,
+  rememberProfiles,
   setMotmVote,
   setPrediction,
   signInAccount,
@@ -49,6 +50,25 @@ describe('hydratePersisted', () => {
     expect(next.authMode).toBe('supabase');
     expect(usersFromState(next).some((u) => u.id === uuid && u.email === 'fan@example.com')).toBe(true);
     expect(usersFromState(next).some((u) => u.id === 'maya')).toBe(true);
+  });
+
+  it('adds remote ranking profiles so user pages can resolve them', () => {
+    const uuid = '55555555-5555-4555-8555-555555555555';
+    const state = rememberProfiles(defaults(), [
+      {
+        id: uuid,
+        name: 'Live Fan',
+        handle: 'live_fan',
+        bio: 'KickFeed fan',
+        avatarColor: '#22C55E',
+        initials: 'LF',
+        favoriteTeamIds: [],
+        favoriteLeagueIds: [],
+      },
+    ]);
+    expect(usersFromState(state).some((u) => u.id === uuid && u.name === 'Live Fan')).toBe(true);
+    const again = rememberProfiles(state, [{ ...state.profiles[uuid]!, id: uuid, name: 'Ignored', handle: 'x', bio: '', avatarColor: '#000', initials: 'IG', favoriteTeamIds: [], favoriteLeagueIds: [] }]);
+    expect(again.profiles[uuid]?.name).toBe('Live Fan');
   });
 
   it('keeps valid slices when schemaVersion does not match', () => {

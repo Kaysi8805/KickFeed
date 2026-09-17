@@ -18,6 +18,7 @@ import {
   leaderboardSource,
   rankLeaderboard,
   shouldPersistLeaderboard,
+  LEADERBOARD_TIEBREAK_COPY,
   type LeaderboardBoard,
 } from '@/lib/leaderboard';
 import { relatedFixtureIds } from '@/lib/matchSocial';
@@ -52,6 +53,7 @@ export default function LeaderboardScreen() {
     users,
     predictions,
     motmVotes,
+    rememberProfiles,
   } = useApp();
 
   const source = leaderboardSource(supabaseConfigured, authMode);
@@ -73,31 +75,44 @@ export default function LeaderboardScreen() {
     }
     setLiveLoading(true);
     setLiveError(null);
-    const client = asLeaderboardClient(getSupabaseClient());
-    const leagueIdFor = (matchId: string) => {
-      const direct = football.getFixture(matchId);
-      if (direct) return direct.leagueId;
-      for (const id of relatedFixtureIds(football, matchId)) {
-        const hit = football.getFixture(id);
-        if (hit) return hit.leagueId;
+    try {
+      const client = asLeaderboardClient(getSupabaseClient());
+      const leagueIdFor = (matchId: string) => {
+        const direct = football.getFixture(matchId);
+        if (direct) return direct.leagueId;
+        for (const id of relatedFixtureIds(football, matchId)) {
+          const hit = football.getFixture(id);
+          if (hit) return hit.leagueId;
+        }
+        return '';
+      };
+      const kickoffFor = (matchId: string) => {
+        const direct = football.getFixture(matchId);
+        if (direct?.kickoff) return direct.kickoff;
+        for (const id of relatedFixtureIds(football, matchId)) {
+          const hit = football.getFixture(id);
+          if (hit?.kickoff) return hit.kickoff;
+        }
+        return undefined;
+      };
+      if (currentUser && shouldPersistLeaderboard(supabaseConfigured, authMode)) {
+        await syncUserEngagementToCloud(client, currentUser.id, predictions, motmVotes, leagueIdFor, kickoffFor);
       }
-      return '';
-    };
-    if (currentUser && shouldPersistLeaderboard(supabaseConfigured, authMode)) {
-      await syncUserEngagementToCloud(client, currentUser.id, predictions, motmVotes, leagueIdFor).catch(
-        () => undefined,
-      );
-    }
-    const rows = await fetchRemoteLeaderboardRows(client);
-    if ('error' in rows) {
+      const rows = await fetchRemoteLeaderboardRows(client);
+      if ('error' in rows) {
+        setRemote(null);
+        setLiveError(rows.error);
+        return;
+      }
+      setRemote(rows);
+      rememberProfiles(rows.users);
+    } catch (err) {
       setRemote(null);
-      setLiveError(rows.error);
+      setLiveError(err instanceof Error ? err.message : 'fetch failed');
+    } finally {
       setLiveLoading(false);
-      return;
     }
-    setRemote(rows);
-    setLiveLoading(false);
-  }, [authMode, currentUser, motmVotes, predictions, source, supabaseConfigured]);
+  }, [authMode, currentUser, motmVotes, predictions, rememberProfiles, source, supabaseConfigured]);
 
   useEffect(() => {
     void loadLive();
@@ -213,7 +228,7 @@ export default function LeaderboardScreen() {
 
             <Text style={styles.rules}>
               Scoring (full time only): exact scoreline 5 pts · correct 1X2 2 pts · unique community MOTM +2.
-              Tie-break: exacts, then results, then MOTM, then handle. Not a betting product.
+              {` ${LEADERBOARD_TIEBREAK_COPY}`} Not a betting product.
             </Text>
             {selectedLeague ? (
               <Pressable
