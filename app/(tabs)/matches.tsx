@@ -9,6 +9,7 @@ import { TvButton } from '@/components/tv/TvButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
+import { CATALOG_ERROR_BODY, CATALOG_ERROR_TITLE, matchesEmptyBody } from '@/lib/honesty';
 import { isSameDay } from '@/lib/format';
 import { entityHref } from '@/lib/entityNav';
 import { expandFavoriteIds } from '@/lib/favoriteIds';
@@ -59,11 +60,9 @@ export default function MatchesScreen() {
             <SearchButton />
           </View>
         </View>
-        <Text style={styles.sub}>
-          {catalog.source === 'live'
-            ? 'England · Premier League and Championship'
-            : 'Live, today, and what’s next worldwide (mock)'}
-        </Text>
+        {catalog.source === 'live' ? null : (
+          <Text style={styles.sub}>Live, today, and what’s next worldwide (mock)</Text>
+        )}
         <CatalogStatus />
         <Segmented
           value={filter}
@@ -80,8 +79,8 @@ export default function MatchesScreen() {
           <EmptyState title="Loading matches" body="Fetching Premier League and Championship fixtures." />
         ) : catalog.source === 'live' && catalog.error && grouped.length === 0 ? (
           <EmptyState
-            title="Couldn’t load matches"
-            body={`${catalog.error} England scores retry from here, or flip the window if fixtures already cached.`}
+            title={CATALOG_ERROR_TITLE}
+            body={CATALOG_ERROR_BODY}
             actionLabel="Retry"
             onAction={() => void football.refresh()}
           />
@@ -90,11 +89,7 @@ export default function MatchesScreen() {
             title={
               filter === 'live' ? 'No live matches right now' : filter === 'today' ? 'No matches today' : 'Nothing upcoming'
             }
-            body={
-              catalog.source === 'live'
-                ? 'Flip to Today or Upcoming — live England fixtures land here when the API has them.'
-                : 'Flip to Today or Upcoming — the mock clock always has fixtures around now.'
-            }
+            body={matchesEmptyBody(filter, catalog.source)}
             actionLabel={filter === 'live' ? 'See today' : filter === 'today' ? 'See upcoming' : 'See live'}
             onAction={() => setFilter(filter === 'live' ? 'today' : filter === 'today' ? 'upcoming' : 'live')}
           />
@@ -131,6 +126,6 @@ const styles = StyleSheet.create({
     color: colors.limeMuted,
     marginBottom: spacing.sm,
     textTransform: 'uppercase',
-    minHeight: 28,
+    minHeight: 44,
   },
 });

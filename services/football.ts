@@ -14,7 +14,7 @@ import { continents, countries, leagues, leagueRosters, teams } from '@/data/moc
 import { seedFixtures } from '@/data/mocks/fixtures';
 import { allPlayers, findPlayerById, findPlayerByName, foldName, squadFor } from '@/data/mocks/players';
 import { scorersFor, standingsFor } from '@/data/mocks/stats';
-import { footballApiKeyFromEnv } from '@/services/footballApi';
+import { createApiFootballHttp, footballApiKeyFromEnv, footballBffUrlFromEnv } from '@/services/footballApi';
 import { createLiveFootballProvider } from '@/services/footballLive';
 import type { FootballProvider } from '@/services/footballTypes';
 import { MOCK_FOOTBALL_STATUS, noopAsync } from '@/services/footballTypes';
@@ -278,12 +278,16 @@ export const mockFootballProvider: FootballProvider = {
 export function selectFootballProvider(
   apiKey = footballApiKeyFromEnv(),
   fallback: FootballProvider = mockFootballProvider,
+  bffUrl = footballBffUrlFromEnv(),
 ): FootballProvider {
+  if (bffUrl) {
+    return createLiveFootballProvider({ http: createApiFootballHttp({ bffUrl }), fallback });
+  }
   if (!apiKey) return fallback;
   return createLiveFootballProvider({ apiKey, fallback });
 }
 
-/** Mock unless `EXPO_PUBLIC_FOOTBALL_API_KEY` is set. TV listings are a separate `TvProvider` (`services/tv.ts`). */
+/** Mock unless a BFF URL or `EXPO_PUBLIC_FOOTBALL_API_KEY` is set. TV listings are a separate `TvProvider` (`services/tv.ts`). */
 export const football: FootballProvider = selectFootballProvider();
 
 export function primaryLeagueFrom(provider: FootballProvider, teamId: string): League | undefined {

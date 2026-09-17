@@ -134,6 +134,21 @@ export function footballApiKeyFromEnv(
   return key || undefined;
 }
 
+/** Optional BFF base URL (no trailing slash). When set, the live adapter talks here instead of API-Football. */
+export function footballBffUrlFromEnv(
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
+): string | undefined {
+  const raw = env.EXPO_PUBLIC_FOOTBALL_BFF_URL?.trim();
+  if (!raw) return undefined;
+  return raw.replace(/\/+$/, '');
+}
+
+export type FootballHttpOptions = {
+  apiKey?: string;
+  bffUrl?: string;
+  fetchImpl?: typeof fetch;
+};
+
 export function footballSeasonFromEnv(
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
   now = new Date(),
@@ -175,32 +190,47 @@ export function describeApiErrors(errors: unknown): string | null {
   return null;
 }
 
-export function createApiFootballHttp(apiKey: string, fetchImpl: typeof fetch = fetch): FootballHttp {
+export function createApiFootballHttp(
+  apiKeyOrOpts: string | FootballHttpOptions = '',
+  fetchImpl: typeof fetch = fetch,
+): FootballHttp {
+  const opts: FootballHttpOptions =
+    typeof apiKeyOrOpts === 'string' ? { apiKey: apiKeyOrOpts, fetchImpl } : { fetchImpl, ...apiKeyOrOpts };
+  const doFetch = opts.fetchImpl ?? fetchImpl;
+  const bffUrl = opts.bffUrl?.trim().replace(/\/+$/, '') || undefined;
+  const apiKey = opts.apiKey?.trim() ?? '';
+  const base = `${bffUrl ?? API_FOOTBALL_BASE}/`;
+
   return async (path, params) => {
-    const url = new URL(path.replace(/^\//, ''), `${API_FOOTBALL_BASE}/`);
+    const url = new URL(path.replace(/^\//, ''), base);
     for (const [key, value] of Object.entries(params ?? {})) {
       if (value == null || value === '') continue;
       url.searchParams.set(key, String(value));
     }
-    const res = await fetchImpl(url.toString(), {
-      method: 'GET',
-      headers: {
-        'x-apisports-key': apiKey,
-        Accept: 'application/json',
-      },
-    });
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (!bffUrl) headers['x-apisports-key'] = apiKey;
+    const res = await doFetch(url.toString(), { method: 'GET', headers });
+    let json: ApiEnvelope<unknown> | undefined;
+    try {
+      json = (await res.json()) as ApiEnvelope<unknown>;
+    } catch {
+      json = undefined;
+    }
+    const apiErr = describeApiErrors(json?.errors);
     if (res.status === 401 || res.status === 403) {
-      throw new Error('API-Football rejected the key (check EXPO_PUBLIC_FOOTBALL_API_KEY).');
+      throw new Error(
+        bffUrl
+          ? 'Football BFF rejected the request (check FOOTBALL_API_KEY on the server).'
+          : 'API-Football rejected the key (check EXPO_PUBLIC_FOOTBALL_API_KEY).',
+      );
     }
     if (res.status === 429) {
       throw new Error('API-Football rate limit hit. KickFeed will reuse cache and retry later.');
     }
     if (!res.ok) {
-      throw new Error(`API-Football HTTP ${res.status}`);
+      throw new Error(apiErr || (bffUrl ? `Football BFF HTTP ${res.status}` : `API-Football HTTP ${res.status}`));
     }
-    const json = (await res.json()) as ApiEnvelope<unknown>;
-    const err = describeApiErrors(json.errors);
-    if (err) throw new Error(err);
-    return json.response ?? [];
+    if (apiErr) throw new Error(apiErr);
+    return json?.response ?? [];
   };
 }

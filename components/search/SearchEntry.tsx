@@ -33,9 +33,9 @@ export function SearchBarPrompt() {
 
 const styles = StyleSheet.create({
   icon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',

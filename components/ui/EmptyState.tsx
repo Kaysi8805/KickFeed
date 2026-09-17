@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.lime,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    minHeight: 40,
+    minHeight: 44,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',

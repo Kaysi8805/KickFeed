@@ -1,0 +1,8 @@
+name = "kickfeed-football-bff"
+main = "src/worker.ts"
+compatibility_date = "2026-09-17"
+
+# Local: copy bff/.dev.vars.example → bff/.dev.vars (gitignored)
+#   FOOTBALL_API_KEY=your_key_here
+# Deploy secret (never commit):
+#   npx wrangler secret put FOOTBALL_API_KEY --config bff/wrangler.toml

@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { CatalogStatus } from '@/components/football/CatalogStatus';
 import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -84,13 +85,16 @@ export default function FavoritesScreen() {
           </Pressable>
         </View>
       </View>
+      <View style={styles.statusPad}>
+        <CatalogStatus />
+      </View>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.section}>Favorite clubs</Text>
         {teams.length === 0 ? (
           <EmptyState
             compact
             title="No clubs yet"
-            body="Star teams so live scores pin on Feed and Following."
+            body="Star clubs so live scores pin on Feed and Following."
             actionLabel="Edit favorites"
             onAction={() => router.push('/pick-favorites')}
           />
@@ -279,6 +283,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: { ...type.title, color: colors.text },
+  statusPad: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
   topRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   editBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
   link: { ...type.caption, color: colors.lime },
@@ -343,7 +348,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: 'center',
   },
   ghostText: { ...type.caption, color: colors.textMuted },
@@ -352,7 +357,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: 'center',
   },
   solidText: { ...type.caption, color: colors.bg, fontWeight: '800' },

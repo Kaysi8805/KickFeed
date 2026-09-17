@@ -15,8 +15,15 @@ import {
   leagueAliases,
   mockClubStyle,
 } from '@/services/footballMap';
-import { describeApiErrors, europeanSeasonYear, fixtureDateWindow, footballApiKeyFromEnv } from '@/services/footballApi';
-import { describe, expect, it } from 'vitest';
+import {
+  createApiFootballHttp,
+  describeApiErrors,
+  europeanSeasonYear,
+  fixtureDateWindow,
+  footballApiKeyFromEnv,
+  footballBffUrlFromEnv,
+} from '@/services/footballApi';
+import { describe, expect, it, vi } from 'vitest';
 
 describe('football mappers', () => {
   it('maps API-Football status codes onto KickFeed match status', () => {
@@ -137,6 +144,20 @@ describe('API-Football helpers', () => {
   it('reads the public env key and ignores blanks', () => {
     expect(footballApiKeyFromEnv({ EXPO_PUBLIC_FOOTBALL_API_KEY: '  abc  ' })).toBe('abc');
     expect(footballApiKeyFromEnv({ EXPO_PUBLIC_FOOTBALL_API_KEY: '   ' })).toBeUndefined();
+    expect(footballBffUrlFromEnv({ EXPO_PUBLIC_FOOTBALL_BFF_URL: 'https://bff.test/' })).toBe('https://bff.test');
+    expect(footballBffUrlFromEnv({ EXPO_PUBLIC_FOOTBALL_BFF_URL: '  ' })).toBeUndefined();
+  });
+
+  it('calls the BFF without sending a client API key', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ response: [{ ok: true }] }), { status: 200 }));
+    const http = createApiFootballHttp({ bffUrl: 'https://bff.example/', apiKey: 'should-not-leave-the-client' }, fetchImpl);
+    await expect(http('/fixtures', { league: 39 })).resolves.toEqual([{ ok: true }]);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://bff.example/fixtures?league=39',
+      expect.objectContaining({
+        headers: expect.not.objectContaining({ 'x-apisports-key': expect.anything() }),
+      }),
+    );
   });
 
   it('labels the European season from July and formats a fixture window', () => {

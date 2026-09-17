@@ -1,6 +1,6 @@
 import { mockFootballProvider } from '@/services/football';
 import { createLiveFootballProvider } from '@/services/footballLive';
-import { footballApiKeyFromEnv } from '@/services/footballApi';
+import { footballApiKeyFromEnv, footballBffUrlFromEnv } from '@/services/footballApi';
 import { selectFootballProvider } from '@/services/football';
 import type { ApiFixture, ApiScorer, FootballHttp } from '@/services/footballApi';
 import { describe, expect, it, vi } from 'vitest';
@@ -72,6 +72,15 @@ describe('live football provider', () => {
     expect(selectFootballProvider(undefined, mockFootballProvider)).toBe(mockFootballProvider);
     expect(mockFootballProvider.getStatus().source).toBe('mock');
     expect(mockFootballProvider.getTeam('liv')?.name).toBe('Liverpool');
+  });
+
+  it('uses the live adapter when a BFF URL is set even without a client key', () => {
+    expect(footballBffUrlFromEnv({ EXPO_PUBLIC_FOOTBALL_BFF_URL: ' https://bff.example/ ' })).toBe(
+      'https://bff.example',
+    );
+    const live = selectFootballProvider(undefined, mockFootballProvider, 'https://bff.example');
+    expect(live).not.toBe(mockFootballProvider);
+    expect(live.getStatus().source).toBe('live');
   });
 
   it('hydrates PL fixtures/standings and aliases mock club ids', async () => {
