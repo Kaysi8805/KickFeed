@@ -154,7 +154,7 @@ export function PredictSection({
           <Text style={styles.ctaLockedText}>{mine ? 'Locked at kickoff' : 'Locked — you didn’t pick'}</Text>
         </View>
       ) : !signedIn ? (
-        <Text style={styles.hint}>Sign in with a demo profile to predict.</Text>
+        <Text style={styles.hint}>Sign in to predict.</Text>
       ) : null}
 
       {agg.count === 0 ? (

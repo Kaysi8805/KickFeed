@@ -19,6 +19,8 @@ export default function ProfileScreen() {
   useFootballCatalog();
   const {
     currentUser,
+    authMode,
+    supabaseConfigured,
     posts,
     users,
     likedPostIds,
@@ -57,6 +59,12 @@ export default function ProfileScreen() {
           <Avatar initials={currentUser.initials} color={currentUser.avatarColor} size={72} />
           <Text style={styles.name}>{currentUser.name}</Text>
           <Text style={styles.handle}>@{currentUser.handle}</Text>
+          {currentUser.email ? <Text style={styles.email}>{currentUser.email}</Text> : null}
+          <View style={styles.modePill}>
+            <Text style={styles.modePillText}>
+              {authMode === 'supabase' ? 'SIGNED IN' : 'DEMO MODE'}
+            </Text>
+          </View>
           <Text style={styles.bio}>{currentUser.bio}</Text>
           <View style={styles.stats}>
             <View style={styles.stat}>
@@ -128,13 +136,21 @@ export default function ProfileScreen() {
           })
         )}
         <Pressable style={styles.switcher} onPress={signOut}>
-          <Text style={styles.switcherText}>Switch demo user</Text>
+          <Text style={styles.switcherText}>
+            {authMode === 'supabase' ? 'Sign out' : supabaseConfigured ? 'Switch account' : 'Switch demo user'}
+          </Text>
         </Pressable>
         <Pressable style={styles.switcher} onPress={enableDeviceAlerts} disabled={pushBusy}>
           <Text style={styles.switcherText}>{pushBusy ? 'Checking…' : 'Enable device match alerts'}</Text>
         </Pressable>
         {pushNote ? <Text style={styles.demoNote}>{pushNote}</Text> : null}
-        <Text style={styles.demoNote}>Demo mode only — email/OAuth stubs are in services/auth.ts</Text>
+        <Text style={styles.demoNote}>
+          {authMode === 'supabase'
+            ? 'Favorites, predictions, and MOTM votes on this device are stored under your Supabase user id. Leaderboards come next.'
+            : supabaseConfigured
+              ? 'Demo profile — local only. Sign out and use email to attach this device to a real account.'
+              : 'Demo mode — add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for email sign-in.'}
+        </Text>
       </ScrollView>
     </Screen>
   );
@@ -162,6 +178,17 @@ const styles = StyleSheet.create({
   identity: { alignItems: 'center', marginTop: -36, marginBottom: spacing.lg },
   name: { ...type.title, color: colors.text, marginTop: spacing.sm },
   handle: { ...type.caption, color: colors.limeMuted, marginTop: 2 },
+  email: { ...type.caption, color: colors.textMuted, marginTop: 4, fontWeight: '500' },
+  modePill: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  modePillText: { ...type.micro, color: colors.limeMuted },
   bio: { ...type.body, color: colors.textMuted, textAlign: 'center', marginTop: spacing.sm, lineHeight: 22 },
   stats: { flexDirection: 'row', gap: 28, marginTop: spacing.lg },
   stat: { alignItems: 'center' },

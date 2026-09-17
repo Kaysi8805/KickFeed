@@ -1,13 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import type { AppNotification, Comment, Fixture, MotmVote, Post, ScorePrediction, User } from '@/data/types';
-import { demoUsers } from '@/data/mocks/social';
 import type { MotmCandidate } from '@/lib/engagement';
 import { attachMatchId, favoriteMatchAlertDrafts, relatedFixtureIds } from '@/lib/matchSocial';
+import { isSupabaseConfigured, getSupabaseClient } from '@/services/supabase';
 import {
   addComment as addCommentState,
   addPost as addPostState,
+  applyAuthStateChange,
+  applyRestoredSession,
   defaults,
   follow as followState,
   hydratePersisted,
@@ -17,6 +20,7 @@ import {
   Persisted,
   setMotmVote as setMotmVoteState,
   setPrediction as setPredictionState,
+  signInAccount,
   signInDemo as signInDemoState,
   signOut as signOutState,
   toggleFavoriteLeague as toggleFavoriteLeagueState,
@@ -26,7 +30,10 @@ import {
   unfollow as unfollowState,
   unreadCountFor,
   updateProfile as updateProfileState,
+  usersFromState,
+  type AuthMode,
 } from '@/services/appState';
+import { auth, userFromSupabaseAuth, type EmailAuthResult, type KickfeedAuthUser } from '@/services/auth';
 import { football } from '@/services/football';
 
 const STORAGE_KEY = 'kickfeed.v1.state';
@@ -34,6 +41,8 @@ const STORAGE_KEY = 'kickfeed.v1.state';
 interface AppContextValue {
   ready: boolean;
   currentUser: User | null;
+  authMode: AuthMode | null;
+  supabaseConfigured: boolean;
   users: User[];
   followingIds: string[];
   favoriteTeamIds: string[];
@@ -47,6 +56,8 @@ interface AppContextValue {
   predictions: ScorePrediction[];
   motmVotes: MotmVote[];
   signInDemo: (userId: string) => void;
+  signInWithEmail: (email: string, password: string) => Promise<EmailAuthResult>;
+  signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<EmailAuthResult>;
   signOut: () => void;
   follow: (userId: string) => void;
   unfollow: (userId: string) => void;
@@ -68,22 +79,72 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<Persisted>(defaults);
   const [ready, setReady] = useState(false);
+  const supabaseConfigured = isSupabaseConfigured();
 
   useEffect(() => {
     let cancelled = false;
+    let unsub: (() => void) | undefined;
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (!cancelled) setState(hydratePersisted(raw));
+        const persisted = hydratePersisted(raw);
+        const client = getSupabaseClient();
+        if (!client) {
+          if (!cancelled) {
+            setState(applyRestoredSession(persisted, null));
+            setReady(true);
+          }
+          return;
+        }
+
+        let booted = false;
+        const finishBoot = (supabaseUser: User | null) => {
+          if (cancelled || booted) return;
+          booted = true;
+          setState(applyRestoredSession(persisted, supabaseUser));
+          setReady(true);
+        };
+
+        const { data } = client.auth.onAuthStateChange((event, session) => {
+          const supabaseUser = session?.user
+            ? userFromSupabaseAuth(session.user as KickfeedAuthUser)
+            : null;
+          if (event === 'INITIAL_SESSION') {
+            finishBoot(supabaseUser);
+            return;
+          }
+          if (!cancelled) {
+            setState((prev) => applyAuthStateChange(prev, event, supabaseUser));
+          }
+        });
+        unsub = () => data.subscription.unsubscribe();
+
+        try {
+          finishBoot(await auth.getSession());
+        } catch {
+          finishBoot(null);
+        }
       } catch {
         if (!cancelled) setState(defaults());
-      } finally {
         if (!cancelled) setReady(true);
       }
     })();
     return () => {
       cancelled = true;
+      unsub?.();
     };
+  }, []);
+
+  useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client) return;
+    const onChange = (status: AppStateStatus) => {
+      if (status === 'active') client.auth.startAutoRefresh();
+      else client.auth.stopAutoRefresh();
+    };
+    const sub = AppState.addEventListener('change', onChange);
+    onChange(AppState.currentState);
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {
@@ -104,16 +165,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => undefined);
   }, [state, ready]);
 
-  const users = useMemo(
-    () =>
-      demoUsers.map((u) => ({
-        ...u,
-        ...state.profiles[u.id],
-        favoriteTeamIds: state.favorites[u.id]?.teams ?? u.favoriteTeamIds,
-        favoriteLeagueIds: state.favorites[u.id]?.leagues ?? u.favoriteLeagueIds,
-      })),
-    [state.favorites, state.profiles],
-  );
+  const users = useMemo(() => usersFromState(state), [state]);
 
   const currentUser = users.find((u) => u.id === state.currentUserId) ?? null;
   const followingIds = currentUser ? (state.following[currentUser.id] ?? []) : [];
@@ -132,6 +184,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     () => ({
       ready,
       currentUser,
+      authMode: state.authMode,
+      supabaseConfigured,
       users,
       followingIds,
       favoriteTeamIds,
@@ -144,8 +198,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       likedPostIds,
       predictions: state.predictions,
       motmVotes: state.motmVotes,
-      signInDemo: (userId) => patch((p) => signInDemoState(p, userId)),
-      signOut: () => patch(signOutState),
+      signInDemo: (userId) => {
+        void (async () => {
+          try {
+            await auth.signOut();
+          } catch {
+            /* demo still works without a live project */
+          }
+          patch((p) => signInDemoState(p, userId));
+        })();
+      },
+      signInWithEmail: async (email, password) => {
+        const result = await auth.signInWithEmail(email, password);
+        if (result.status === 'signed_in') {
+          patch((p) => signInAccount(p, result.user, 'supabase'));
+        }
+        return result;
+      },
+      signUpWithEmail: async (email, password, displayName) => {
+        const result = await auth.signUpWithEmail(email, password, displayName);
+        if (result.status === 'signed_in') {
+          patch((p) => signInAccount(p, result.user, 'supabase'));
+        }
+        return result;
+      },
+      signOut: () => {
+        patch(signOutState);
+        void auth.signOut().catch(() => undefined);
+      },
       follow: (userId) =>
         patch((p) => followState(p, userId, currentUser?.name ?? 'A fan')),
       unfollow: (userId) => patch((p) => unfollowState(p, userId)),
@@ -205,7 +285,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       markNotificationsRead: () => patch(markNotificationsReadState),
       followerCount: (userId) => Object.values(state.following).filter((ids) => ids.includes(userId)).length,
     }),
-    [currentUser, favoriteLeagueIds, favoritePlayerIds, favoriteTeamIds, followingIds, likedPostIds, notifications, patch, ready, state, unreadCount, users],
+    [
+      currentUser,
+      favoriteLeagueIds,
+      favoritePlayerIds,
+      favoriteTeamIds,
+      followingIds,
+      likedPostIds,
+      notifications,
+      patch,
+      ready,
+      state,
+      supabaseConfigured,
+      unreadCount,
+      users,
+    ],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

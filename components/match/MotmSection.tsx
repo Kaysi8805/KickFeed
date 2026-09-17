@@ -45,7 +45,7 @@ export function MotmSection({
       </Text>
       <Text style={styles.lede}>
         {!open
-          ? 'Voting opens when the match goes live. One vote per demo user — no take-backs.'
+          ? 'Voting opens when the match goes live. One vote per user — no take-backs.'
           : mine
             ? `You voted for ${mine.playerName}. That pick is locked; tallies still update as others vote.`
             : 'Pick one player from the lineups (or squad if XIs are not cached). One vote, no take-backs.'}
@@ -127,7 +127,7 @@ export function MotmSection({
         })
       )}
 
-      {!signedIn && open ? <Text style={styles.hint}>Sign in with a demo profile to vote.</Text> : null}
+      {!signedIn && open ? <Text style={styles.hint}>Sign in to vote.</Text> : null}
     </View>
   );
 }
