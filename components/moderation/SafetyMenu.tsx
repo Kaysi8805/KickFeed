@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ReportSheet } from '@/components/moderation/ReportSheet';
 import type { ReportTargetType } from '@/data/types';
@@ -38,7 +38,9 @@ export function SafetyMenu({
       return;
     }
     blockUser(targetUserId);
-    Alert.alert('Blocked', `${label}’s posts and match-chat messages are hidden on this account.`);
+    if (Platform.OS !== 'web') {
+      Alert.alert('Blocked', `${label}’s posts and match-chat messages are hidden on this account.`);
+    }
   }
 
   return (

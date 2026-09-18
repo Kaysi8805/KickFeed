@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { PostCard } from '@/components/feed/PostCard';
@@ -84,6 +84,7 @@ export default function MatchDetailScreen() {
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<string | undefined>();
   const [chatNow, setChatNow] = useState(() => Date.now());
+  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     setTab(tabFromParam(tabParam));
@@ -193,7 +194,12 @@ export default function MatchDetailScreen() {
           }
         />
       </View>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.board}>
           <Pressable style={styles.side} onPress={() => router.push(entityHref('team', home.id))}>
             <Crest team={home} size={56} />
@@ -530,6 +536,7 @@ export default function MatchDetailScreen() {
                 addComment(fixture.id, draft.trim(), replyTo);
                 setDraft('');
                 setReplyTo(undefined);
+                requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
               }}
               disabled={!canSend}
               accessibilityRole="button"
