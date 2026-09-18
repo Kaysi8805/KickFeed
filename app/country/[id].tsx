@@ -9,6 +9,7 @@ import { safeBack } from '@/lib/navBack';
 import { routeId } from '@/lib/routeParams';
 import { football } from '@/services/football';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
+import { LIVE_COUNTRY_EMPTY } from '@/lib/honesty';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function CountryScreen() {
@@ -38,7 +39,7 @@ export default function CountryScreen() {
               title="No competitions seeded"
               body={
                 catalog.source === 'live'
-                  ? 'Batch 3 live data is England-only. Other countries stay in the mock tree.'
+                  ? LIVE_COUNTRY_EMPTY
                   : 'A real API can fill this country later.'
               }
             />

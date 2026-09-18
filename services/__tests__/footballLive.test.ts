@@ -33,9 +33,44 @@ const scorer: ApiScorer = {
   statistics: [{ team: { id: 40, name: 'Liverpool' }, goals: { total: 5, assists: 2 } }],
 };
 
+const slovanDac: ApiFixture = {
+  fixture: {
+    id: 9101,
+    date: '2026-09-16T16:00:00+00:00',
+    venue: { name: 'Tehelné pole', city: 'Bratislava' },
+    status: { short: '1H', elapsed: 22 },
+  },
+  league: { id: 332, name: 'Super Liga' },
+  teams: {
+    home: { id: 636, name: 'Slovan Bratislava' },
+    away: { id: 637, name: 'DAC' },
+  },
+  goals: { home: 1, away: 0 },
+};
+
+const rmaBar: ApiFixture = {
+  fixture: {
+    id: 9201,
+    date: '2026-09-16T19:00:00+00:00',
+    venue: { name: 'Santiago Bernabéu', city: 'Madrid' },
+    status: { short: 'NS' },
+  },
+  league: { id: 140, name: 'La Liga' },
+  teams: {
+    home: { id: 541, name: 'Real Madrid' },
+    away: { id: 529, name: 'Barcelona' },
+  },
+  goals: { home: null, away: null },
+};
+
 function fakeHttp(): FootballHttp {
   return vi.fn(async (path, params) => {
-    if (path === '/fixtures') return params?.league === 40 || params?.league === '40' ? [] : [livArs];
+    if (path === '/fixtures') {
+      if (params?.league === 40 || params?.league === '40') return [];
+      if (params?.league === 332 || params?.league === '332') return [slovanDac];
+      if (params?.league === 140 || params?.league === '140') return [rmaBar];
+      return [livArs];
+    }
     if (path === '/standings') {
       return [{ league: { id: Number(params?.league), standings: [[standing]] } }];
     }
@@ -103,13 +138,25 @@ describe('live football provider', () => {
     expect(live.getTopScorers('39')[0]?.playerName).toMatch(/Salah/);
     expect(live.getFixture('fx-liv-ars')?.id).toBe('fx-liv-ars');
     expect(live.getTeam('rma')?.name).toBe('Real Madrid');
+    expect(live.getStatus().geoLabel).toMatch(/Slovakia/);
+    expect(live.getLeague('nikeliga')?.id).toBe('332');
+    expect(live.getFixtures({ leagueId: 'nikeliga' })[0]?.id).toBe('9101');
+    expect(live.getTeam('slovan')?.id).toBe('636');
+    expect(live.getLeague('laliga')?.id).toBe('140');
+    expect(live.getFixtures({ leagueId: '140' })[0]?.homeTeamId).toBe('541');
+    expect(live.getLeagues('svk').some((l) => l.id === '332')).toBe(true);
+    expect(live.getLeagues('esp').some((l) => l.id === '140')).toBe(true);
     const all = live.getFixtures();
     expect(all.some((f) => f.id === '9001')).toBe(true);
-    expect(all.some((f) => f.id === 'fx-rma-bar')).toBe(true);
+    expect(all.some((f) => f.id === '9101')).toBe(true);
+    expect(all.some((f) => f.id === '9201')).toBe(true);
+    expect(all.some((f) => f.id === 'fx-rma-bar')).toBe(false);
     expect(all.some((f) => f.id === 'fx-liv-ars')).toBe(false);
+    expect(all.some((f) => f.id === 'fx-int-mil')).toBe(true);
     expect(live.relatedIds('match', '9001')).toEqual(expect.arrayContaining(['9001', 'fx-liv-ars']));
     expect(live.relatedIds('match', 'fx-liv-ars')).toContain('9001');
     expect(live.relatedIds('match', '9001')).not.toContain('fx-facup-liv-ars');
+    expect(live.relatedIds('match', '9201')).toEqual(expect.arrayContaining(['9201', 'fx-rma-bar']));
   });
 
   it('reuses the in-memory cache on a second hydrate within ttl', async () => {

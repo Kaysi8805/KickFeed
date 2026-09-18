@@ -10,10 +10,10 @@ v1 is **local-first**: seeded fan profiles for **demo mode**, optional **Supabas
 - **Profiles & favorites** — name, photo initials, bio, favorite clubs, competitions, and players. **TV country** (UK / SK / US) defaults from the device locale, else Slovakia. Favorites drive Home live scores and Following.
 - **Social feed & follows** — follow demo users, post text (optional photo), optionally **attach a live/today/upcoming fixture**, like posts, see friends + own posts. Home and Following highlight match-attached posts and live matches for clubs/players you follow.
 - **Global search** — dedicated Search screen from the Feed bar and tab headers. Query clubs, players, competitions, and demo fans; results open the existing entity pages.
-- **Live scores & fixtures** — Live / Today / Upcoming. With a key, England Premier League + Championship from API-Football; without a key, the mock worldwide catalog. Match pages with score, events, lineups (when the free tier returns them), stats stubs, and **TV channels for the user’s country**.
+- **Live scores & fixtures** — Live / Today / Upcoming. With a BFF URL or key, **England (PL + Championship), Slovakia Niké Liga, and Spain La Liga** from API-Football; without either, the mock worldwide catalog. Match pages with score, events, lineups (when the free tier returns them), stats stubs, and **TV channels for the user’s country**.
 - **TV / broadcast schedule** — FotMob-style listings for launch geos (**UK, Slovakia, United States**). Browse today’s and upcoming England kickoffs with channel chips; tap through to the match. Editorial/mock data — not a licensed rights guide.
 - **Clubs & players** — Team pages (crest, league table context, fixtures, clickable squad, favorite) and player pages (mock season stats, recent appearances, follow/favorite, link back to club).
-- **Worldwide leagues** — continents → countries → competitions. Batch 3 live standings/scorers are England-only; other geos stay on the mock tree. Featured Premier League (and Championship when live).
+- **Worldwide leagues** — continents → countries → competitions. Live standings/scorers are England + Slovakia + La Liga; other geos stay on the mock tree. Featured PL, Championship, Niké Liga, and La Liga when live.
 - **Match hub** — discussion thread, participants, empty states, feed posts attached to that match id, plus **score predictions** and **Man of the Match** voting. Composer can deep-link from the match page.
 - **Predictions & MOTM** — before kickoff, pick a home/away score and see community aggregates (other demo fans are seeded). Picks lock at kickoff / once the match is live. During and after the match, vote once for MOTM from lineups (squad fallback). Not a betting product.
 - **Prediction leaderboards** — global and per-league ranks by prediction points (optional MOTM bonus). Your rank + top 10. Demo board is this device + seeded fans; email sign-in writes picks to KickFeed Postgres. Honesty banners say which table you are on.
@@ -95,11 +95,22 @@ This PR does **not** change polsia.app DNS. When a static host is live:
 2. Add the same hostname in the host’s custom-domain settings (TLS).
 3. Until that cutover, the recovered landing is only in this repo.
 
-## Real England scores (Batch 3 + BFF)
+## Real live scores (England + Slovakia + La Liga, via BFF)
 
-Without `EXPO_PUBLIC_FOOTBALL_BFF_URL` or `EXPO_PUBLIC_FOOTBALL_API_KEY`, KickFeed uses the mock catalog (demo still works).
+Without `EXPO_PUBLIC_FOOTBALL_BFF_URL` or `EXPO_PUBLIC_FOOTBALL_API_KEY`, KickFeed uses the mock catalog (demo still works offline).
 
-With either set, Matches / standings / team + player pages hydrate **England — Premier League (primary) and EFL Championship**. FA Cup is skipped so the free **100 requests/day** budget stays on league scores. Social graph stays on local AsyncStorage. **Live screens show “England live · other leagues mock.”** TV stays editorial.
+With either set, Matches / standings / team + player pages hydrate:
+
+| Country | Competition | API-Football id |
+| --- | --- | --- |
+| England | Premier League (primary) | 39 |
+| England | EFL Championship | 40 |
+| Slovakia | Niké Liga (Super Liga) | 332 |
+| Spain | **La Liga** | 140 |
+
+**La Liga, not Bundesliga:** KickFeed already has a featured La Liga mock tree (club colors + `rma`/`bar` aliases), and its weekend kickoffs complement England rather than stacking another Saturday 15:30 CET block. FA Cup and other cups are skipped so the free **100 requests/day** budget stays on these four league scores.
+
+Social graph stays on local AsyncStorage. **Live screens show “England, Slovakia & La Liga live · other leagues mock.”** TV stays editorial.
 
 **Prefer the BFF for demos** (server-side key, shared TTL cache — see [`bff/README.md`](bff/README.md)):
 
@@ -114,9 +125,9 @@ Solo local without the BFF: copy `.env.example` to `.env` (gitignored) and set `
 
 Optional: `EXPO_PUBLIC_FOOTBALL_SEASON=2026` to pin the season start year (defaults to the current European season).
 
-Docs: [API-Football v3](https://www.api-football.com/documentation-v3). Direct client header: `x-apisports-key`. KickFeed caches fixtures (~45s if anything is live, else 5 min), standings (5 min), scorers (15 min), and squads / match detail (lazy, longer TTL) in memory so screens can re-read the existing sync `FootballProvider`. The BFF applies the same short TTLs in front of origin. If the free tier omits a squad or lineup, the team/match page still shows scores and degrades that section.
+Docs: [API-Football v3](https://www.api-football.com/documentation-v3). Direct client header: `x-apisports-key`. Client cache: fixtures ~45s if anything in that league window is live, else 5 min; standings 5 min; scorers 15 min; squads / match detail lazy. The BFF is stricter on origin: allowlisted leagues only, fixtures 45s if any row is live else 5 min, standings 15 min, scorers 30 min, and **429/5xx reuse stale cache**. Cold hydrate is 9 origin calls (4 leagues × fixtures+standings + PL scorers); extra devices HIT the BFF. If the free tier omits a squad or lineup, the team/match page still shows scores and degrades that section.
 
-Mock club ids (`ars`, `liv`, `epl`) still resolve after hydrate so demo favorites and feed mentions keep working. Search prefers live England entities when the key is set.
+Mock club ids (`ars`, `liv`, `epl`, `slovan`, `laliga`) still resolve after hydrate so demo favorites and feed mentions keep working. Search prefers live coverage entities when the BFF/key is set.
 
 ## Demo mode
 
@@ -153,7 +164,8 @@ services/auth.ts     Email/password AuthProvider + demo list; OAuth stub
 services/leaderboard.ts  Postgres fetch/upsert when Supabase is configured
 services/supabase.ts Expo client from EXPO_PUBLIC_SUPABASE_* (null without env)
 services/football.ts     FootballProvider + mock + auto-select live adapter
-services/footballLive.ts API-Football England adapter (in-memory TTL cache)
+services/footballLive.ts API-Football live adapter (England + SK + La Liga, in-memory TTL cache)
+lib/footballCoverage.ts Live league ids / geo labels (BFF allowlist + adapter)
 services/footballMap.ts  API entity → KickFeed types
 services/tv.ts           TvProvider + editorial mock listings (licensed swap later)
 services/notifications.ts  Expo Notifications register/schedule stubs
@@ -188,7 +200,7 @@ In-app notifications cover match-chat replies and demo kickoff/goal alerts for f
 
 ## Football data
 
-`services/football.ts` exports `FootballProvider`. `football` is the mock provider unless `EXPO_PUBLIC_FOOTBALL_BFF_URL` or `EXPO_PUBLIC_FOOTBALL_API_KEY` is set, in which case `createLiveFootballProvider` loads England data (via the BFF when the URL is set, otherwise straight to API-Football) and falls back to mock for demo posts, non-England clubs, and missing live records.
+`services/football.ts` exports `FootballProvider`. `football` is the mock provider unless `EXPO_PUBLIC_FOOTBALL_BFF_URL` or `EXPO_PUBLIC_FOOTBALL_API_KEY` is set, in which case `createLiveFootballProvider` loads England + Slovakia + La Liga (via the BFF when the URL is set, otherwise straight to API-Football) and falls back to mock for demo posts, other geos, and missing live records.
 
 Keep `data/types.ts` stable so screens do not care whether data is seeded or remote.
 
@@ -228,13 +240,14 @@ Karol’s batches:
 - **Batch 5 — done.** TV / broadcast schedules for launch geos (UK + SK + US) with editorial listings and a `TvProvider` swap path.
 - **Batch 6 — done.** Score predictions (lock at kickoff) and Man of the Match voting on the match hub. Demo auth; works on the mock catalog and on live England match ids when a key is set.
 - **Batch 7 — done.** UX polish: consistent empty / loading / error copy, clearer Predict-locked and MOTM-voted states, slightly larger tap targets.
-- **This release.** Honesty banners (England live vs mock; editorial TV), thin API-Football BFF + client switch, leftover Batch 7 nits.
+- **Honesty + BFF — done.** Mix banners, thin API-Football BFF, leftover Batch 7 nits.
 - **Auth — done.** Supabase email/password with demo profile picker as staging/dev fallback.
-- **This PR.** Prediction leaderboards (global + per-league) keyed by demo id or `auth.users` uuid. Postgres when Supabase env is set; local demo board otherwise. Not in this PR: DMs, more live geos, licensed TV, Apple/Google polish. Not gambling.
+- **Leaderboards — done.** Prediction leaderboards (global + per-league) keyed by demo id or `auth.users` uuid.
+- **This PR.** Live scores beyond England: **Slovakia Niké Liga + La Liga**, BFF league allowlist + quota TTLs. Not in this PR: DMs, licensed TV, Apple/Google polish, more geos. Not gambling.
 
 ## Honesty banners
 
-When the live catalog is on (BFF URL or public API key), Feed / Matches / Leagues / Following show **England live · other leagues mock**. TV schedule and the match TV card show **Editorial TV listings — not a licensed FotMob-style guide.** Mock-only demos hide the mix banner.
+When the live catalog is on (BFF URL or public API key), Feed / Matches / Leagues / Following show **England, Slovakia & La Liga live · other leagues mock**. TV schedule and the match TV card show **Editorial TV listings — not a licensed FotMob-style guide.** Mock-only demos hide the mix banner.
 
 Leaderboards show **Demo ranking — this device and seeded fans** when Supabase env is missing (or you stayed on a demo profile), and **Live ranking — KickFeed Postgres** when signed in with email. The two tables are not mixed.
 

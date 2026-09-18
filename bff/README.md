@@ -2,23 +2,42 @@
 
 Thin GET proxy in front of [API-Football](https://www.api-football.com/documentation-v3) so Expo clients (and multi-device demos) share one **100 req/day** budget.
 
-The worker keeps the key on the server (`FOOTBALL_API_KEY`), allowlists the paths KickFeed already calls, and caches fixtures / standings / scorers / squads / events / lineups in memory with a short TTL.
+The worker keeps the key on the server (`FOOTBALL_API_KEY`), allowlists the paths KickFeed already calls, **allowlists live coverage leagues**, and caches fixtures / standings / scorers / squads / events / lineups in memory with a quota-aware TTL. 429 / 5xx responses reuse **stale cache** when one exists.
 
-The Expo app does **not** need this running for CI or mock-catalog demos. Point the client at it only when you want live England scores without putting the key in `EXPO_PUBLIC_*`.
+The Expo app does **not** need this running for CI or mock-catalog demos. Point the client at it only when you want live England / Slovakia / La Liga scores without putting the key in `EXPO_PUBLIC_*`.
+
+## Live coverage (origin allowlist)
+
+| League id | Competition | Country |
+| --- | --- | --- |
+| `39` | Premier League | England |
+| `40` | Championship | England |
+| `332` | Niké Liga (Super Liga) | Slovakia |
+| `140` | La Liga | Spain |
+
+`GET /fixtures`, `/standings`, and `/players/topscorers` **require** `?league=` in that set. UCL (`2`), Bundesliga (`78`), and anything else is `400` and never hits origin. FA Cup is skipped on purpose.
+
+**La Liga vs Bundesliga:** La Liga is the extra top-5 EU league because KickFeed already has a featured Spanish mock tree (aliases for Real Madrid / Barcelona) and its kickoff spread complements England. Bundesliga would stack another Saturday 15:30 CET block for the same quota cost.
 
 ## Endpoints
 
-| Path | Upstream | TTL |
+| Path | Upstream | Origin TTL |
 | --- | --- | --- |
-| `GET /health` | none | — |
-| `GET /fixtures` | `/fixtures` | 45s |
-| `GET /standings` | `/standings` | 5 min |
-| `GET /players/topscorers` | `/players/topscorers` | 15 min |
+| `GET /health` | none | — (lists coverage, TTLs, cache size, quota note) |
+| `GET /fixtures?league=` | `/fixtures` | **45s if any row is live, else 5 min** |
+| `GET /standings?league=` | `/standings` | 15 min |
+| `GET /players/topscorers?league=` | `/players/topscorers` | 30 min |
 | `GET /players/squads` | `/players/squads` | 30 min |
-| `GET /fixtures/events` | `/fixtures/events` | 45s |
-| `GET /fixtures/lineups` | `/fixtures/lineups` | 45s |
+| `GET /fixtures/events` | `/fixtures/events` | 60s |
+| `GET /fixtures/lineups` | `/fixtures/lineups` | 60s |
 
-Anything else is `404`. `POST` is `405`. CORS is `*` for Expo web. Responses are the **API-Football JSON envelope** (same as talking to `v3.football.api-sports.io` directly).
+Anything else is `404`. `POST` is `405`. CORS is `*` for Expo web. Responses are the **API-Football JSON envelope** (same as talking to `v3.football.api-sports.io` directly). Cache status is `X-KickFeed-Cache: HIT \| MISS \| STALE \| BYPASS`.
+
+### Quota math (~100 req/day)
+
+Cold hydrate from the app is **9 origin calls** when the BFF cache is empty: 4 leagues × (fixtures + standings) + Premier League scorers. Squads, events, and lineups stay lazy (match/team open). Extra phones HIT the in-memory cache.
+
+If a league window has a live match, that fixtures key refreshes every 45s **per BFF process**, not per device. Idle leagues stay at 5 minutes. Do not poll extra competitions — the allowlist is the budget.
 
 ## Env (never commit secrets)
 
@@ -45,6 +64,15 @@ FOOTBALL_API_KEY=your_key_here npm run bff
 ```
 
 Health check: `curl http://127.0.0.1:8787/health`
+
+Try a covered league (needs a key):
+
+```bash
+curl http://127.0.0.1:8787/fixtures?league=332
+curl http://127.0.0.1:8787/fixtures?league=140
+```
+
+Uncovered leagues should 400 without an origin call: `curl http://127.0.0.1:8787/fixtures?league=2`
 
 ## Deploy (Cloudflare Worker, free tier)
 

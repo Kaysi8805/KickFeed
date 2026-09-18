@@ -26,7 +26,7 @@ export default function PickFavoritesScreen() {
   const [q, setQ] = useState('');
   const teams = football.getTeams();
   const leagues = football.getLeagues();
-  const hintIds = ['ars', 'liv', 'mci', 'rma', 'bar', 'int', 'bay', 'psg', 'fla', 'mia'];
+  const hintIds = ['ars', 'liv', 'mci', 'rma', 'bar', 'slovan', 'int', 'bay', 'psg', 'fla', 'mia'];
 
   const teamResults = useMemo(() => {
     const needle = q.trim().toLowerCase();

@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { CATALOG_ERROR_TITLE, LIVE_MIX_DISCLAIMER } from '@/lib/honesty';
+import { CATALOG_ERROR_TITLE, CATALOG_LOADING_NOTE, LIVE_MIX_DISCLAIMER } from '@/lib/honesty';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
@@ -15,13 +15,13 @@ export function CatalogStatus() {
         <Text style={styles.bannerText}>{LIVE_MIX_DISCLAIMER}</Text>
       </View>
       {status.loading && !status.lastSyncedAt ? (
-        <Text style={styles.note}>Loading England scores…</Text>
+        <Text style={styles.note}>{CATALOG_LOADING_NOTE}</Text>
       ) : null}
       {status.error ? (
         <Pressable
           onPress={() => void football.refresh()}
           accessibilityRole="button"
-          accessibilityLabel="Retry loading England scores"
+          accessibilityLabel="Retry loading live scores"
           style={styles.retry}
         >
           <Text style={styles.err}>{CATALOG_ERROR_TITLE} · tap to retry</Text>

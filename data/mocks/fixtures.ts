@@ -136,6 +136,8 @@ const featured: SeedFixture[] = [
     [ev('e18', 'goal', 64, 'ath', 'Williams')],
     [1, 0],
   ),
+  fx('fx-slovan-dac', 'nikeliga', 'slovan', 'dac', -18, 'Tehelné pole'),
+  fx('fx-trnava-zilina', 'nikeliga', 'trnava', 'zilina', 160, 'City Arena'),
   fx(
     'fx-int-mil',
     'seriea',

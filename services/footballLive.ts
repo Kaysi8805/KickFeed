@@ -13,9 +13,14 @@ import { foldName } from '@/data/mocks/players';
 import { FOOTBALL_TTL, TtlCache, fixturesTtlMs } from '@/lib/ttlCache';
 import type { FootballHttp } from '@/services/footballApi';
 import {
-  CHAMPIONSHIP_ID,
-  ENGLAND_LEAGUE_IDS,
+  LIVE_LEAGUE_IDS as LIVE_LEAGUE_ID_LIST,
+  LIVE_GEO_LABEL,
+  MOCK_IDS_HIDDEN_WHEN_LIVE,
   PREMIER_LEAGUE_ID,
+  isLiveCountryId,
+  liveLeagueName,
+} from '@/lib/footballCoverage';
+import {
   createApiFootballHttp,
   fixtureDateWindow,
   footballSeasonFromEnv,
@@ -26,8 +31,9 @@ import {
   canonicalLeagueId,
   emptyLineup,
   hasLiveFixture,
-  isLiveEnglandLeague,
+  isLiveLeague,
   leagueAliases,
+  liveCountryIdForLeague,
   mapFixture,
   mapLineup,
   mapMatchEvent,
@@ -40,8 +46,8 @@ import {
 } from '@/services/footballMap';
 import type { ApiEvent, ApiFixture, ApiLineup, ApiScorer, ApiSquadResponse, ApiStandingRow } from '@/services/footballApi';
 
-const LIVE_LEAGUE_IDS = new Set<string>(ENGLAND_LEAGUE_IDS);
-const MOCK_LEAGUE_IDS = new Set(['epl', 'facup']);
+const LIVE_LEAGUE_IDS = new Set<string>(LIVE_LEAGUE_ID_LIST);
+const MOCK_LEAGUE_IDS = new Set<string>(MOCK_IDS_HIDDEN_WHEN_LIVE);
 
 type LineupPair = { home: Lineup; away: Lineup };
 
@@ -158,7 +164,7 @@ export function createLiveFootballProvider(opts: {
     loading: false,
     error: null,
     lastSyncedAt: null,
-    geoLabel: 'England · Premier League + Championship',
+    geoLabel: LIVE_GEO_LABEL,
   };
 
   const emit = () => {
@@ -194,8 +200,9 @@ export function createLiveFootballProvider(opts: {
   const ingestTeamsFromFixtures = (rows: ApiFixture[]) => {
     for (const row of rows) {
       const leagueId = String(row.league.id);
-      rememberTeam(snap, mapTeam(row.teams.home), leagueId);
-      rememberTeam(snap, mapTeam(row.teams.away), leagueId);
+      const countryId = liveCountryIdForLeague(leagueId);
+      rememberTeam(snap, mapTeam(row.teams.home, countryId), leagueId);
+      rememberTeam(snap, mapTeam(row.teams.away, countryId), leagueId);
     }
   };
 
@@ -211,7 +218,8 @@ export function createLiveFootballProvider(opts: {
 
   const ingestStandings = (leagueId: string, rows: ApiStandingRow[]) => {
     snap.standings.set(leagueId, rows.map(mapStandingRow));
-    for (const row of rows) rememberTeam(snap, mapTeam(row.team), leagueId);
+    const countryId = liveCountryIdForLeague(leagueId);
+    for (const row of rows) rememberTeam(snap, mapTeam(row.team, countryId), leagueId);
   };
 
   const ingestScorers = (leagueId: string, rows: ApiScorer[]) => {
@@ -339,19 +347,23 @@ export function createLiveFootballProvider(opts: {
 
   async function hydrate(force = false): Promise<void> {
     if (hydratePromise && !force) return hydratePromise;
-    if (status.ready && !force && !status.error && cache.hasFresh(`fixtures:${PREMIER_LEAGUE_ID}:${windowParams().season}:${windowParams().from}:${windowParams().to}`, now())) {
+    const params = windowParams();
+    const fixturesFresh = LIVE_LEAGUE_ID_LIST.every((id) =>
+      cache.hasFresh(`fixtures:${id}:${params.season}:${params.from}:${params.to}`, now()),
+    );
+    if (status.ready && !force && !status.error && fixturesFresh) {
       return Promise.resolve();
     }
     setStatus({ loading: true, error: null });
     hydratePromise = (async () => {
       const errors: string[] = [];
-      const tasks: Array<[string, () => Promise<void>]> = [
-        ['PL fixtures', () => fetchLeagueFixtures(PREMIER_LEAGUE_ID)],
-        ['PL standings', () => fetchLeagueStandings(PREMIER_LEAGUE_ID)],
-        ['Championship fixtures', () => fetchLeagueFixtures(CHAMPIONSHIP_ID)],
-        ['Championship standings', () => fetchLeagueStandings(CHAMPIONSHIP_ID)],
-        ['PL scorers', () => fetchLeagueScorers(PREMIER_LEAGUE_ID)],
-      ];
+      const tasks: Array<[string, () => Promise<void>]> = [];
+      for (const id of LIVE_LEAGUE_ID_LIST) {
+        const name = liveLeagueName(id);
+        tasks.push([`${name} fixtures`, () => fetchLeagueFixtures(id)]);
+        tasks.push([`${name} standings`, () => fetchLeagueStandings(id)]);
+      }
+      tasks.push(['PL scorers', () => fetchLeagueScorers(PREMIER_LEAGUE_ID)]);
       for (const [label, task] of tasks) {
         try {
           await task();
@@ -378,8 +390,10 @@ export function createLiveFootballProvider(opts: {
     getStatus: () => status,
     hydrate: () => hydrate(false),
     refresh: () => {
-      cache.delete(`fixtures:${PREMIER_LEAGUE_ID}:${windowParams().season}:${windowParams().from}:${windowParams().to}`);
-      cache.delete(`fixtures:${CHAMPIONSHIP_ID}:${windowParams().season}:${windowParams().from}:${windowParams().to}`);
+      const params = windowParams();
+      for (const id of LIVE_LEAGUE_ID_LIST) {
+        cache.delete(`fixtures:${id}:${params.season}:${params.from}:${params.to}`);
+      }
       return hydrate(true);
     },
     subscribe: (listener) => {
@@ -452,9 +466,11 @@ export function createLiveFootballProvider(opts: {
     getCountries: (continentId) => fallback.getCountries(continentId),
     getCountry: (id) => fallback.getCountry(id),
     getLeagues: (countryId) => {
-      if (countryId === 'eng') return LIVE_LEAGUES;
+      if (countryId && isLiveCountryId(countryId)) {
+        return LIVE_LEAGUES.filter((l) => l.countryId === countryId);
+      }
       if (countryId) return fallback.getLeagues(countryId).filter((l) => !MOCK_LEAGUE_IDS.has(l.id));
-      const rest = fallback.getLeagues().filter((l) => l.countryId !== 'eng' && !MOCK_LEAGUE_IDS.has(l.id));
+      const rest = fallback.getLeagues().filter((l) => !isLiveCountryId(l.countryId) && !MOCK_LEAGUE_IDS.has(l.id));
       return [...LIVE_LEAGUES, ...rest];
     },
     getFeaturedLeagues: () => LIVE_LEAGUES,
@@ -463,7 +479,7 @@ export function createLiveFootballProvider(opts: {
       if (!leagueId) {
         const live = [...snap.teams.values()];
         const liveNames = new Set(live.map((t) => foldName(t.name)));
-        const rest = fallback.getTeams().filter((t) => t.countryId !== 'eng' && !liveNames.has(foldName(t.name)));
+        const rest = fallback.getTeams().filter((t) => !isLiveCountryId(t.countryId) && !liveNames.has(foldName(t.name)));
         return [...live, ...rest];
       }
       const canonical = resolveLeagueId(leagueId);
@@ -493,7 +509,9 @@ export function createLiveFootballProvider(opts: {
       if (team) {
         const ids = snap.teamLeagueIds.get(team.id) ?? new Set();
         const live = LIVE_LEAGUES.filter((l) => ids.has(l.id));
-        return live.length ? live : LIVE_LEAGUES.filter((l) => l.id === PREMIER_LEAGUE_ID);
+        if (live.length) return live;
+        const byCountry = LIVE_LEAGUES.filter((l) => l.countryId === team.countryId);
+        return byCountry.length ? byCountry : LIVE_LEAGUES.filter((l) => l.id === PREMIER_LEAGUE_ID);
       }
       return fallback.getTeamCompetitions(teamId);
     },
@@ -539,12 +557,13 @@ export function createLiveFootballProvider(opts: {
         return true;
       });
       if (filter?.teamId && !liveTeam(filter.teamId)) return fallback.getFixtures(filter);
-      if (filter?.leagueId && !isLiveEnglandLeague(filter.leagueId)) return fallback.getFixtures(filter);
+      if (filter?.leagueId && !isLiveLeague(filter.leagueId)) return fallback.getFixtures(filter);
       if (filter) return live;
       const rest = fallback.getFixtures().filter((f) => {
         if (isAliasedMockFixture(snap, f.id)) return false;
-        if (isLiveEnglandLeague(f.leagueId)) return false;
-        if (fallback.getLeague(f.leagueId)?.countryId === 'eng') return false;
+        if (isLiveLeague(f.leagueId)) return false;
+        const countryId = fallback.getLeague(f.leagueId)?.countryId;
+        if (countryId && isLiveCountryId(countryId)) return false;
         return true;
       });
       return [...live, ...rest].sort((a, b) => Date.parse(a.kickoff) - Date.parse(b.kickoff));

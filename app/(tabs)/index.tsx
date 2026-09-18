@@ -67,7 +67,7 @@ export default function FeedScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {liveFav.length > 0 ? (
           <View style={styles.block}>
-            <Text style={styles.section}>{catalog.source === 'live' ? 'For you · live England' : 'For you · live'}</Text>
+            <Text style={styles.section}>{catalog.source === 'live' ? `For you · live · ${catalog.geoLabel}` : 'For you · live'}</Text>
             {liveFav.map((f) => (
               <MatchRow key={f.id} fixture={f} compact />
             ))}

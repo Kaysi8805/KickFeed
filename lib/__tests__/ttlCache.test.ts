@@ -9,6 +9,7 @@ describe('TtlCache', () => {
     expect(cache.hasFresh('fixtures', 999)).toBe(true);
     expect(cache.peek('fixtures')).toBe('pl');
     expect(cache.get('fixtures', 1_000)).toBeUndefined();
+    expect(cache.peek('fixtures')).toBe('pl');
   });
 
   it('uses a shorter ttl when any fixture is live', () => {

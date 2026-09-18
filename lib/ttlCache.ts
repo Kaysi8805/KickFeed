@@ -4,15 +4,11 @@ export class TtlCache<V> {
 
   get(key: string, now = Date.now()): V | undefined {
     const hit = this.store.get(key);
-    if (!hit) return undefined;
-    if (hit.expiresAt <= now) {
-      this.store.delete(key);
-      return undefined;
-    }
+    if (!hit || hit.expiresAt <= now) return undefined;
     return hit.value;
   }
 
-  /** Return a value even if stale; does not evict. */
+  /** Return a value even if stale; does not evict. Used by the BFF to survive 429s. */
   peek(key: string): V | undefined {
     return this.store.get(key)?.value;
   }

@@ -1,14 +1,24 @@
 /** User-facing disclaimers so live/mock mix and editorial TV are obvious in demos. */
 
-export const LIVE_MIX_DISCLAIMER = 'England live · other leagues mock';
+import { LIVE_GEO_LABEL, LIVE_GEO_SHORT } from '@/lib/footballCoverage';
+
+export const LIVE_MIX_DISCLAIMER = `${LIVE_GEO_SHORT} live · other leagues mock`;
 
 export const TV_EDITORIAL_DISCLAIMER =
   'Editorial TV listings — not a licensed FotMob-style guide.';
 
-export const CATALOG_ERROR_TITLE = 'Couldn’t load England scores';
+export const CATALOG_ERROR_TITLE = 'Couldn’t load live scores';
 
 export const CATALOG_ERROR_BODY =
   'Live fixtures didn’t load. Retry from here, or check the other match windows if anything is already cached.';
+
+export const CATALOG_LOADING_NOTE = `Loading ${LIVE_GEO_LABEL}…`;
+
+export const LIVE_COUNTRY_EMPTY =
+  `Live scores cover ${LIVE_GEO_SHORT}. Other countries stay on the mock tree.`;
+
+export const LIVE_LEAGUE_UNKNOWN =
+  'Live scores cover Premier League, Championship, Niké Liga, and La Liga. Other competitions stay mock.';
 
 export const LIVE_RANKING_ERROR_TITLE = 'Couldn’t load KickFeed ranking';
 
@@ -22,7 +32,7 @@ export function rankingDisclaimer(
 ): string {
   if (source === 'live') {
     return catalogSource === 'live'
-      ? 'Live ranking — KickFeed Postgres. Finished scores follow the catalog (England live · other leagues mock).'
+      ? `Live ranking — KickFeed Postgres. Finished scores follow the catalog (${LIVE_MIX_DISCLAIMER}).`
       : 'Live ranking — KickFeed Postgres. Finished scores follow the mock catalog until a football key is set.';
   }
   if (supabaseConfigured) {
@@ -44,7 +54,7 @@ export function matchesEmptyBody(
         ? 'Flip to Live or Upcoming'
         : 'Flip to Live or Today';
   if (source === 'live') {
-    return `${flip} — live England fixtures land here when the API has them.`;
+    return `${flip} — live fixtures for ${LIVE_GEO_SHORT} land here when the API has them.`;
   }
   return `${flip} — the mock clock always has fixtures around now.`;
 }

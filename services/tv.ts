@@ -2,7 +2,7 @@ import type { Fixture, TvAiring, TvChannel, TvCountryBroadcasts, TvScheduleEntry
 import { seedTvListings, tvChannels, tvCountries, type SeedTvListing } from '@/data/mocks/tv';
 import { isSameMatch, resolveMatchDeepLink } from '@/lib/matchSocial';
 import { isSameCalendarDay } from '@/lib/tvCountry';
-import { canonicalLeagueId } from '@/services/footballMap';
+import { canonicalLeagueId, isLiveEnglandLeague } from '@/services/footballMap';
 import { football } from '@/services/football';
 import type { ResolvedAirings, TvLookupCatalog, TvProvider } from '@/services/tvTypes';
 
@@ -39,7 +39,7 @@ export function sameEnglandLeague(listingLeagueId: string, fixtureLeagueId: stri
 }
 
 export function isEnglandCompetition(leagueId: string): boolean {
-  return canonicalLeagueId(leagueId) != null;
+  return isLiveEnglandLeague(leagueId);
 }
 
 function airingsFrom(listing: SeedTvListing): TvAiring[] {

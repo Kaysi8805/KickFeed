@@ -98,6 +98,8 @@ describe('England league mapping', () => {
     expect(isEnglandCompetition('elc')).toBe(true);
     expect(isEnglandCompetition('40')).toBe(true);
     expect(isEnglandCompetition('laliga')).toBe(false);
+    expect(isEnglandCompetition('nikeliga')).toBe(false);
+    expect(isEnglandCompetition('332')).toBe(false);
     expect(sameEnglandLeague('epl', '39')).toBe(true);
     expect(sameEnglandLeague('elc', '40')).toBe(true);
     expect(sameEnglandLeague('epl', '40')).toBe(false);
