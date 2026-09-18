@@ -40,3 +40,4 @@ bff/.dev.vars
 # generated native folders
 /ios
 /android
+.secrets/
