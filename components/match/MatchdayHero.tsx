@@ -8,7 +8,7 @@ import { entityHref } from '@/lib/entityNav';
 import { kickoffLabel } from '@/lib/format';
 import { matchdayWhyLabel, type MatchdayWhy } from '@/lib/matchdayHome';
 import { football } from '@/services/football';
-import { colors, radius, shadow, spacing, type } from '@/theme';
+import { colors, radius, spacing, type } from '@/theme';
 
 function lastGoalLine(fixture: Fixture): string | undefined {
   const goal = [...fixture.events].reverse().find((e) => e.type === 'goal');
@@ -94,7 +94,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.pitch,
     marginBottom: spacing.md,
-    ...shadow.card,
   },
   meta: {
     flexDirection: 'row',
