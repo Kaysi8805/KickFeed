@@ -94,7 +94,7 @@ export default function FavoritesScreen() {
           <EmptyState
             compact
             title="No clubs yet"
-            body="Star clubs so live scores pin on Feed and Following."
+            body="Star clubs so live scores pin on Home and Following."
             actionLabel="Edit favorites"
             onAction={() => router.push('/pick-favorites')}
           />

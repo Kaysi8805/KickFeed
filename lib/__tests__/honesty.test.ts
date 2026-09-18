@@ -6,6 +6,7 @@ import {
   LIVE_MIX_DISCLAIMER,
   TV_EDITORIAL_DISCLAIMER,
   matchesEmptyBody,
+  matchdayEmptyBody,
 } from '@/lib/honesty';
 
 describe('honesty copy', () => {
@@ -28,6 +29,13 @@ describe('honesty copy', () => {
     expect(matchesEmptyBody('upcoming', 'mock')).toMatch(/^Flip to Live or Today/);
     expect(matchesEmptyBody('today', 'mock')).not.toMatch(/Flip to Today/);
     expect(matchesEmptyBody('live', 'live')).toMatch(/Slovakia/);
+  });
+
+  it('keeps matchday empty copy honest about live coverage vs mock', () => {
+    expect(matchdayEmptyBody(false, 'live')).toMatch(/England/);
+    expect(matchdayEmptyBody(false, 'live')).toMatch(/Star clubs/);
+    expect(matchdayEmptyBody(true, 'mock')).toMatch(/Feed is one tap away/);
+    expect(matchdayEmptyBody(true, 'live')).toMatch(/mock/);
   });
 
   it('does not glue a raw upstream error into the catalog retry sentence', () => {
