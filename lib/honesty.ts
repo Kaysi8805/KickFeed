@@ -43,6 +43,21 @@ export function rankingDisclaimer(
 
 export type MatchWindowFilter = 'live' | 'today' | 'upcoming';
 
+export const MATCHDAY_EMPTY_TITLE = 'Quiet matchday';
+
+export const MATCHDAY_EMPTY_NO_FAVORITES_TITLE = 'Pick a club for matchday';
+
+export function matchdayEmptyBody(hasFavorites: boolean, source: 'live' | 'mock'): string {
+  if (!hasFavorites) {
+    return source === 'live'
+      ? `Star clubs or leagues you follow. Until then, Home features a live ${LIVE_GEO_SHORT} match when one is on.`
+      : 'Star clubs or leagues you follow. Until then, Home features a live mock match from England, Niké Liga, or La Liga when one is on.';
+  }
+  return source === 'live'
+    ? `Nothing kicking off soon, live, or just finished for your clubs and leagues. Live coverage is ${LIVE_GEO_SHORT} — other competitions stay mock.`
+    : 'Nothing kicking off soon, live, or just finished for your clubs and leagues. Feed is one tap away.';
+}
+
 export function matchesEmptyBody(
   filter: MatchWindowFilter,
   source: 'live' | 'mock',

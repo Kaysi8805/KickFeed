@@ -46,6 +46,18 @@ export const MOCK_IDS_HIDDEN_WHEN_LIVE = ['epl', 'facup', 'laliga', 'nikeliga'] 
 export const LIVE_GEO_LABEL = 'England · Slovakia · La Liga';
 export const LIVE_GEO_SHORT = 'England, Slovakia & La Liga';
 
+/**
+ * Home “featured” fallback when the user has no relevant favorite fixture.
+ * Premier League first, then Slovakia (launch geo), then La Liga, then Championship.
+ * Mock aliases sit beside live ids so the same picker works without a key.
+ */
+export const MATCHDAY_FEATURED_LEAGUE_PRIORITY: ReadonlyArray<readonly string[]> = [
+  [PREMIER_LEAGUE_ID, 'epl'],
+  [SLOVAK_SUPER_LIGA_ID, 'nikeliga'],
+  [LA_LIGA_ID, 'laliga'],
+  [CHAMPIONSHIP_ID, 'elc', 'efl'],
+];
+
 export const API_FOOTBALL_DAILY_LIMIT = 100;
 
 export const LIVE_LEAGUE_META: ReadonlyArray<{
