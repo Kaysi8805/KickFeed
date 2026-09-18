@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { EntityText } from '@/components/feed/EntityText';
+import { SafetyMenu } from '@/components/moderation/SafetyMenu';
 import { Avatar } from '@/components/ui/Avatar';
 import type { Post, User } from '@/data/types';
 import { entityHref } from '@/lib/entityNav';
@@ -42,6 +43,13 @@ export function PostCard({
           </Text>
         </View>
         {live ? <Text style={styles.liveTag}>LIVE MATCH</Text> : null}
+        <SafetyMenu
+          targetType="post"
+          targetId={post.id}
+          targetUserId={author.id}
+          targetName={author.name}
+          compact={compact}
+        />
       </Pressable>
       <EntityText text={post.text} style={styles.body} />
       {post.imageUri ? (

@@ -18,9 +18,13 @@ import { colors, radius, spacing, type } from '@/theme';
 
 export default function SearchScreen() {
   useFootballCatalog();
-  const { users } = useApp();
+  const { users, blockedUserIds } = useApp();
   const [q, setQ] = useState('');
-  const results = useMemo(() => searchEntities(q, users), [q, users]);
+  const searchableUsers = useMemo(
+    () => users.filter((u) => !blockedUserIds.includes(u.id)),
+    [users, blockedUserIds],
+  );
+  const results = useMemo(() => searchEntities(q, searchableUsers), [q, searchableUsers]);
   const needle = q.trim();
   const ready = needle.length >= 2;
   const hits = searchHasHits(results);

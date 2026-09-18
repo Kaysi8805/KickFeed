@@ -18,6 +18,7 @@ v1 is **local-first**: seeded fan profiles for **demo mode**, optional **Supabas
 - **Predictions & MOTM** — before kickoff, pick a home/away score and see community aggregates (other demo fans are seeded). Picks lock at kickoff / once the match is live. During and after the match, vote once for MOTM from lineups (squad fallback). Not a betting product.
 - **Prediction leaderboards** — global and per-league ranks by prediction points (optional MOTM bonus). Your rank + top 10. Demo board is this device + seeded fans; email sign-in writes picks to KickFeed Postgres. Honesty banners say which table you are on.
 - **Notifications** — in-app center for match-chat replies, your prediction/MOTM confirmations, goals/kickoff demo alerts for fixtures you care about, follows, and friend posts. Device alerts are opt-in on Profile: **kickoff soon** (one reminder per favorite match) and **goals** when live scores tick up. Remote Expo push tokens need an EAS `projectId`; without it the app stays on local/in-app alerts and does not crash.
+- **Report, block, slow-mode** — report a post, profile, or match-chat message with a short reason. Block a fan to hide their posts, match-chat, and notifications on this account. Match hub discussion has a 20s slow-mode (plus a short burst cap) so spam does not take over the thread. Demo saves stay in AsyncStorage; email sessions also write `user_blocks` / `user_reports` in KickFeed Postgres. Not a moderation dashboard.
 
 ## Run
 
@@ -59,11 +60,11 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 ```
 
 5. Restart Expo (`npx expo start`) so the public env vars are inlined. Expo Go is supported (`@supabase/supabase-js` + AsyncStorage session).
-6. Optional: in the Supabase SQL editor, run the files in [`supabase/migrations/`](supabase/migrations/) (profiles, prediction tables, then write-lock RPCs). Profiles are the join key (`id` = `auth.users.id`). Live ranking writes go through kickoff-lock RPCs — not direct table upserts. See [`supabase/README.md`](supabase/README.md).
+6. Optional: in the Supabase SQL editor, run the files in [`supabase/migrations/`](supabase/migrations/) (profiles, prediction tables, write-lock RPCs, then **reports/blocks**). Profiles are the join key (`id` = `auth.users.id`). Live ranking writes go through kickoff-lock RPCs — not direct table upserts. Reports/blocks use RLS on `user_reports` / `user_blocks` (own rows only). See [`supabase/README.md`](supabase/README.md).
 
 Google / Apple providers can be enabled in the same Auth settings later — OAuth stays a stub.
 
-**Identity:** demo seeds stay `maya` / `omar` / …; real accounts use `auth.users.id` (uuid). Favorites, predictions, MOTM, and leaderboard rows all key off that same id. Social graph stays on local AsyncStorage; live ranking additionally upserts the signed-in user’s picks to Postgres.
+**Identity:** demo seeds stay `maya` / `omar` / …; real accounts use `auth.users.id` (uuid). Favorites, predictions, MOTM, leaderboard rows, **blocks**, and **reports** all key off that same id. Social graph stays on local AsyncStorage; live ranking additionally upserts the signed-in user’s picks to Postgres; email sessions also upsert that user’s blocks/reports.
 
 ## EAS push (Karol)
 
@@ -171,7 +172,7 @@ Mock club ids (`ars`, `liv`, `epl`, `slovan`, `laliga`) still resolve after hydr
 
 ## Demo mode
 
-On first launch without Supabase env, choose a demo profile. With Supabase env, email sign-in is first; **Continue with demo** still opens the picker. State (favorites including players, follows, posts, comments, **score predictions**, **MOTM votes**, notification read flags) is persisted with AsyncStorage under `kickfeed.v1.state` (`schemaVersion` 2). Per-user maps (favorites, predictions, MOTM, likes, following) are keyed by `currentUserId`: seeded ids like `maya` in demo mode, or the Supabase `auth.users` uuid when signed in with email. Demo and email data can coexist on one device. Post `matchId` values are kept as stored — live remapping is display-time only. Predictions and MOTM votes use the same related-id matching as match chat, so mock ids (`fx-liv-ars`) and live England ids stay one ballot when a key is set.
+On first launch without Supabase env, choose a demo profile. With Supabase env, email sign-in is first; **Continue with demo** still opens the picker. State (favorites including players, follows, posts, comments, **score predictions**, **MOTM votes**, **blocks**, **reports**, notification read flags) is persisted with AsyncStorage under `kickfeed.v1.state` (`schemaVersion` 2). Per-user maps (favorites, predictions, MOTM, likes, following, blocks) are keyed by `currentUserId`: seeded ids like `maya` in demo mode, or the Supabase `auth.users` uuid when signed in with email. Demo and email data can coexist on one device. Post `matchId` values are kept as stored — live remapping is display-time only. Predictions and MOTM votes use the same related-id matching as match chat, so mock ids (`fx-liv-ars`) and live England ids stay one ballot when a key is set.
 
 Corrupt JSON is discarded. A missing or newer `schemaVersion` still keeps valid slices (signed-in demo user or uuid, follows, posts, …) and stamps the current version. Unknown `currentUserId` values (not a demo id and not a uuid) are cleared. On boot, a live Supabase session wins; if the session is gone, a leftover uuid is dropped so demo restore still works.
 
@@ -188,7 +189,8 @@ app/                 Expo Router screens (tabs + stack)
   leaderboard        Global / per-league prediction ranking
   tv                 TV schedule by country (UK / SK / US)
   search             Global search (clubs, players, leagues, fans)
-components/          UI, feed cards, match rows, entity links, search entry, TV chips, leaderboard
+components/          UI, feed cards, match rows, entity links, search entry, TV chips, leaderboard, report/block sheets
+lib/moderation.ts    Report/block helpers + match-chat slow-mode
 lib/matchSocial.ts   Attach/match-post helpers (live vs mock ids)
 lib/favoritePush.ts  Kickoff-soon / goal device-alert planner (no extra polling)
 lib/easProject.ts    EXPO_PUBLIC_EAS_PROJECT_ID + Constants.easConfig / extra.eas
@@ -200,10 +202,11 @@ lib/footballBff.ts    Allowlisted API-Football proxy + TTL cache (Worker/Node)
 bff/                 Cloudflare Worker + local Node loopback (FOOTBALL_API_KEY server-side)
 data/types.ts        Shared domain types
 data/mocks/          Seeded users, teams, squads, leagues, fixtures, posts, TV, predictions/MOTM
-supabase/             Optional SQL for `profiles` + `predictions` / `motm_votes`; not used by CI
+supabase/             Optional SQL for `profiles`, predictions/MOTM, and `user_blocks` / `user_reports`; not used by CI
 lib/userIdentity.ts  Demo id vs Supabase uuid helpers; profile → User
 services/auth.ts     Email/password AuthProvider + demo list; OAuth stub
 services/leaderboard.ts  Postgres fetch/upsert when Supabase is configured
+services/moderation.ts   Postgres fetch/insert for blocks + reports (email session only)
 services/supabase.ts Expo client from EXPO_PUBLIC_SUPABASE_* (null without env)
 services/football.ts     FootballProvider + mock + auto-select live adapter
 services/footballLive.ts API-Football live adapter (England + SK + La Liga, in-memory TTL cache)
@@ -211,7 +214,7 @@ lib/footballCoverage.ts Live league ids / geo labels (BFF allowlist + adapter)
 services/footballMap.ts  API entity → KickFeed types
 services/tv.ts           TvProvider + editorial mock listings (licensed swap later)
 services/notifications.ts  Expo Notifications: EAS projectId, local kickoff/goal alerts, opt-in store
-services/AppProvider.tsx   App state (follows, favorites, posts, TV country, predictions, MOTM)
+services/AppProvider.tsx   App state (follows, favorites, posts, TV country, predictions, MOTM, blocks, reports)
 theme/               Color, type, and spacing tokens
 ```
 
@@ -287,13 +290,16 @@ Karol’s batches:
 - **Leaderboards — done.** Prediction leaderboards (global + per-league) keyed by demo id or `auth.users` uuid.
 - **Live geos — done.** Slovakia Niké Liga + La Liga on the existing BFF allowlist + quota TTLs.
 - **Matchday Home — done.** Home pins live/next favorite (or featured live coverage) above the feed.
-- **This PR.** Favorite kickoff-soon + goal device alerts via Expo Notifications + EAS `projectId`. No extra football polling. Not in this PR: server-side Expo Push worker, DMs, licensed TV, Apple/Google polish, more geos. Not gambling.
+- **EAS push — done.** Favorite kickoff-soon + goal device alerts via Expo Notifications + EAS `projectId`. No extra football polling.
+- **This PR.** Report / block + basic match-chat slow-mode. Demo = AsyncStorage; email session = Postgres RLS. Not in this PR: moderation dashboard, DMs, licensed TV, Apple/Google polish, more geos. Not gambling.
 
 ## Honesty banners
 
 When the live catalog is on (BFF URL or public API key), Feed / Matches / Leagues / Following show **England, Slovakia & La Liga live · other leagues mock**. TV schedule and the match TV card show **Editorial TV listings — not a licensed FotMob-style guide.** Mock-only demos hide the mix banner.
 
 Leaderboards show **Demo ranking — this device and seeded fans** when Supabase env is missing (or you stayed on a demo profile), and **Live ranking — KickFeed Postgres** when signed in with email. The two tables are not mixed.
+
+Reports and blocks show the same split: **this device in demo mode** vs **KickFeed Postgres for this email account**. There is no public moderation inbox in the app.
 
 ## UX polish (Batch 7)
 
@@ -321,6 +327,16 @@ Points (finished matches only; live/upcoming wait):
 Rank: points, then exacts, results, MOTM hits, scored matches, handle. Top 10 plus the current user’s rank (demo id or Supabase uuid — same key as social state). Related mock/live match ids score once.
 
 **Live** (Supabase env + email session): writes go through `kickfeed_upsert_prediction` / `kickfeed_upsert_motm_vote` (server `now()` + kickoff lock). Board reads Postgres. Direct table writes are revoked. **Demo** (env missing or Continue with demo): seeded AsyncStorage board only. Not gambling.
+
+## Report, block, and match-chat slow-mode
+
+Open a post (···), a fan profile, or a match-hub message:
+
+- **Report** — pick a short reason (spam, harassment, impersonation, off-topic, or something else). One report per target per account. KickFeed stores it; there is no public moderation inbox.
+- **Block** — unfollows that fan and hides their posts, match-chat messages, and notifications on this account. Unblock from their profile or **Profile → Blocked fans**.
+- **Slow-mode** — match discussion allows one message every 20 seconds in that thread, and at most 5 messages across hubs in 2 minutes. The composer says how long to wait.
+
+**Demo** (no Supabase env, or Continue with demo): blocks/reports stay in `kickfeed.v1.state`. **Live** (email session): the same lists also write to `user_blocks` / `user_reports` (RLS: own rows only). Karol applies [`supabase/migrations/20260918180000_reports_blocks.sql`](supabase/migrations/20260918180000_reports_blocks.sql) in the SQL editor after the earlier profile/leaderboard files.
 
 ## Theme
 

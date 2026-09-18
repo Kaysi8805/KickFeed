@@ -1,6 +1,6 @@
 # KickFeed Supabase (optional)
 
-Email auth and **prediction leaderboards** use `@supabase/supabase-js`. **CI and first-run demo do not need a project.**
+Email auth, **prediction leaderboards**, and **reports/blocks** use `@supabase/supabase-js`. **CI and first-run demo do not need a project.**
 
 1. Create a project at [supabase.com](https://supabase.com).
 2. Authentication → Providers → enable **Email**. For local demos, Authentication → Providers → Email → turn **Confirm email** off (or keep it on and click the link).
@@ -9,8 +9,11 @@ Email auth and **prediction leaderboards** use `@supabase/supabase-js`. **CI and
    - [`migrations/20260917120000_profiles.sql`](migrations/20260917120000_profiles.sql) — `profiles.id` = `auth.users.id`
    - [`migrations/20260917190000_prediction_leaderboards.sql`](migrations/20260917190000_prediction_leaderboards.sql) — `predictions` / `motm_votes`
    - [`migrations/20260917200000_leaderboard_write_lock.sql`](migrations/20260917200000_leaderboard_write_lock.sql) — kickoff lock RPCs; direct writes revoked
+   - [`migrations/20260918180000_reports_blocks.sql`](migrations/20260918180000_reports_blocks.sql) — `user_blocks` / `user_reports` with RLS (own rows only)
 
 Identity is the same key as AsyncStorage social state: demo seed (`maya`) **or** `auth.users` uuid (`user_id text`). RLS only allows **reads** of `predictions` / `motm_votes` for signed-in users. Writes go through `kickfeed_upsert_prediction` / `kickfeed_upsert_motm_vote` (server clock vs stored kickoff; client timestamps ignored). Demo ids stay on-device. Live ranking reads Postgres; missing env uses the seeded local board.
+
+Reports and blocks: authenticated users can insert/select their own `user_reports` and insert/select/delete their own `user_blocks`. There is no admin inbox in the app. Demo ids never pass `auth.uid()` so they stay in AsyncStorage.
 
 Handles are `localpart_` + 8 hex chars of the user uuid (`fan@gmail.com` vs `fan@yahoo.com` do not collide).
 

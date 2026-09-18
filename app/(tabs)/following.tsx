@@ -32,8 +32,11 @@ export default function FavoritesScreen() {
     posts,
     likedPostIds,
     toggleLike,
+    blockedUserIds,
   } = useApp();
-  const suggested = users.filter((u) => u.id !== currentUser?.id && !followingIds.includes(u.id));
+  const suggested = users.filter(
+    (u) => u.id !== currentUser?.id && !followingIds.includes(u.id) && !blockedUserIds.includes(u.id),
+  );
   const following = users.filter((u) => followingIds.includes(u.id));
   const teams = favoriteTeamIds.map((id) => football.getTeam(id)).filter(Boolean);
   const leagues = favoriteLeagueIds.map((id) => football.getLeague(id)).filter(Boolean);

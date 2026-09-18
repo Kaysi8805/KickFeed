@@ -25,6 +25,29 @@ export const LIVE_RANKING_ERROR_TITLE = 'Couldn’t load KickFeed ranking';
 export const LIVE_RANKING_ERROR_BODY =
   'Synced picks didn’t load. Retry from here — this is the live table, not the seeded demo board.';
 
+export const MODERATION_LIVE_COPY =
+  'Reports and blocks sync to KickFeed Postgres for this email account. There is no public moderation inbox in the app.';
+
+export const MODERATION_DEMO_COPY =
+  'Reports and blocks stay on this device in demo mode. Email sign-in stores them in KickFeed Postgres.';
+
+export const CHAT_SLOW_MODE_HINT =
+  'Slow mode — 20s between messages so match chat stays readable.';
+
+export const BLOCKED_PROFILE_TITLE = 'You’ve blocked this fan';
+
+export const BLOCKED_PROFILE_BODY =
+  'Their posts and match-chat messages are hidden on this account. Unblock to see them again — KickFeed is not a full moderation dashboard.';
+
+export const BLOCKED_LIST_EMPTY_TITLE = 'No blocked fans';
+
+export const BLOCKED_LIST_EMPTY_BODY =
+  'Block from a post, profile, or match-chat message. Their content is hidden here as far as this account can see.';
+
+export function moderationDisclaimer(live: boolean): string {
+  return live ? MODERATION_LIVE_COPY : MODERATION_DEMO_COPY;
+}
+
 export function rankingDisclaimer(
   source: 'demo' | 'live',
   supabaseConfigured: boolean,
