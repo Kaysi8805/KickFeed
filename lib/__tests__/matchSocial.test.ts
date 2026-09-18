@@ -12,6 +12,7 @@ import {
   resolvePostFixture,
   sameTeamPair,
   sortFeedPosts,
+  type MatchCatalog,
 } from '@/lib/matchSocial';
 import { mockFootballProvider } from '@/services/football';
 import { createLiveFootballProvider } from '@/services/footballLive';
@@ -162,5 +163,49 @@ describe('live catalog id stability', () => {
     const drafts = favoriteMatchAlertDrafts({ maya: { teams: ['ars', 'liv'], players: [] } }, live);
     expect(drafts.some((d) => d.type === 'kickoff' && d.matchId === '9001' && d.recipientId === 'maya')).toBe(true);
     expect(drafts.every((d) => d.matchId !== 'fx-liv-ars')).toBe(true);
+  });
+});
+
+describe('favoriteMatchAlertDrafts kickoff soon', () => {
+  it('includes upcoming favorite fixtures inside the 30-minute window', () => {
+    const now = Date.parse('2026-09-18T15:00:00.000Z');
+    const catalog: MatchCatalog = {
+      getFixtures: () => [
+        {
+          id: 'soon',
+          leagueId: 'epl',
+          homeTeamId: 'liv',
+          awayTeamId: 'ars',
+          kickoff: new Date(now + 12 * 60_000).toISOString(),
+          status: 'upcoming',
+          homeScore: 0,
+          awayScore: 0,
+          events: [],
+          venue: 'Anfield',
+        },
+        {
+          id: 'later',
+          leagueId: 'epl',
+          homeTeamId: 'liv',
+          awayTeamId: 'che',
+          kickoff: new Date(now + 3 * 60 * 60_000).toISOString(),
+          status: 'upcoming',
+          homeScore: 0,
+          awayScore: 0,
+          events: [],
+          venue: 'Anfield',
+        },
+      ],
+      getFixture: () => undefined,
+      getTeam: () => undefined,
+      getPlayer: () => undefined,
+      relatedIds: (_kind, id) => [id],
+      getStatus: () => ({ source: 'mock', ready: true, loading: false, error: null, lastSyncedAt: null, geoLabel: 'mock' }),
+    };
+    const drafts = favoriteMatchAlertDrafts({ maya: { teams: ['liv'], players: [] } }, catalog, now);
+    expect(drafts.some((d) => d.type === 'kickoff' && d.matchId === 'soon' && d.title.startsWith('Kickoff soon'))).toBe(
+      true,
+    );
+    expect(drafts.some((d) => d.matchId === 'later')).toBe(false);
   });
 });

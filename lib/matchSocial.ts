@@ -11,6 +11,24 @@ export interface MatchAlertDraft {
   relatedMatchIds?: string[];
 }
 
+/** Device + in-app kickoff reminder window (tighter than Matchday Home’s 90m). */
+export const FAVORITE_KICKOFF_SOON_MS = 30 * 60_000;
+/** Local DATE trigger fires this long before kickoff when the match is further out. */
+export const FAVORITE_KICKOFF_LEAD_MS = 15 * 60_000;
+/** Do not pre-schedule kickoff reminders beyond this horizon (no extra API polling). */
+export const FAVORITE_KICKOFF_SCHEDULE_HORIZON_MS = 6 * 60 * 60_000;
+/** Skip “kickoff” banners once the match has been underway this long. */
+export const FAVORITE_LIVE_KICKOFF_GRACE_MS = 10 * 60_000;
+
+export function isFavoriteKickoffAlertFixture(fixture: Fixture, now = Date.now()): boolean {
+  if (fixture.status === 'live' || fixture.status === 'ht') return true;
+  if (fixture.status !== 'upcoming') return false;
+  const kickoff = Date.parse(fixture.kickoff);
+  if (!Number.isFinite(kickoff)) return false;
+  const until = kickoff - now;
+  return until <= FAVORITE_KICKOFF_SOON_MS && until >= -FAVORITE_LIVE_KICKOFF_GRACE_MS;
+}
+
 export type MatchCatalog = Pick<
   FootballProvider,
   'getFixture' | 'getFixtures' | 'getTeam' | 'getPlayer' | 'relatedIds' | 'getStatus'
@@ -242,9 +260,10 @@ export function participantsFromUsers(ids: string[], users: User[]): User[] {
 export function favoriteMatchAlertDrafts(
   favorites: Record<string, { teams: string[]; players?: string[] }>,
   provider: MatchCatalog,
+  now = Date.now(),
 ): MatchAlertDraft[] {
   const drafts: MatchAlertDraft[] = [];
-  const fixtures = provider.getFixtures().filter((f) => f.status === 'live' || f.status === 'ht');
+  const fixtures = provider.getFixtures().filter((f) => isFavoriteKickoffAlertFixture(f, now));
   for (const [userId, slice] of Object.entries(favorites)) {
     const teams = slice.teams ?? [];
     const players = slice.players ?? [];
@@ -252,14 +271,16 @@ export function favoriteMatchAlertDrafts(
       if (!fixtureTouchesFavorites(provider, fixture, teams, players)) continue;
       const related = relatedFixtureIds(provider, fixture.id);
       const label = fixtureScoreLabel(provider, fixture);
+      const live = fixture.status === 'live' || fixture.status === 'ht';
       drafts.push({
         type: 'kickoff',
         recipientId: userId,
         matchId: fixture.id,
         relatedMatchIds: related,
-        title: `Kickoff — ${label}`,
-        body: `${label} is live. Join the match hub.`,
+        title: live ? `Kickoff — ${label}` : `Kickoff soon — ${label}`,
+        body: live ? `${label} is live. Join the match hub.` : 'Starts soon. Open the match hub.',
       });
+      if (!live) continue;
       const goal = [...fixture.events].reverse().find((e) => e.type === 'goal');
       if (goal) {
         const scorerTeam = provider.getTeam(goal.teamId);
@@ -270,6 +291,15 @@ export function favoriteMatchAlertDrafts(
           relatedMatchIds: related,
           title: `GOAL — ${label}`,
           body: `${goal.playerName}${scorerTeam ? ` (${scorerTeam.shortName})` : ''} · ${goal.minute}'`,
+        });
+      } else if (fixture.homeScore + fixture.awayScore > 0) {
+        drafts.push({
+          type: 'goal',
+          recipientId: userId,
+          matchId: fixture.id,
+          relatedMatchIds: related,
+          title: `GOAL — ${label}`,
+          body: `${label} · score update`,
         });
       }
     }
