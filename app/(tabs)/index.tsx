@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scroll: { paddingHorizontal: spacing.lg, paddingBottom: 32 },
+  scroll: { paddingHorizontal: spacing.lg, paddingBottom: 72 },
   statusPad: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm, gap: spacing.sm },
   block: { marginBottom: spacing.md },
   section: {
