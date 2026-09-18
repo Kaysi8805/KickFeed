@@ -108,6 +108,9 @@ export default function ProfileScreen() {
             <Pressable style={styles.btn} onPress={() => router.push('/pick-favorites')}>
               <Text style={styles.btnText}>Favorites</Text>
             </Pressable>
+            <Pressable style={styles.btn} onPress={() => router.push('/leaderboard')}>
+              <Text style={styles.btnText}>Leaderboard</Text>
+            </Pressable>
           </View>
           {tvCountry ? (
             <Pressable style={styles.tvRow} onPress={() => router.push('/tv')}>
@@ -146,10 +149,10 @@ export default function ProfileScreen() {
         {pushNote ? <Text style={styles.demoNote}>{pushNote}</Text> : null}
         <Text style={styles.demoNote}>
           {authMode === 'supabase'
-            ? 'Favorites, predictions, and MOTM votes on this device are stored under your Supabase user id. Leaderboards come next.'
+            ? 'Favorites, predictions, and MOTM votes on this device are stored under your Supabase user id. Live ranking syncs those picks to KickFeed Postgres.'
             : supabaseConfigured
-              ? 'Demo profile — local only. Sign out and use email to attach this device to a real account.'
-              : 'Demo mode — add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for email sign-in.'}
+              ? 'Demo profile — local ranking only. Sign out and use email to join the live KickFeed table.'
+              : 'Demo mode — ranking is this device + seeded fans. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for live ranking.'}
         </Text>
       </ScrollView>
     </Screen>
@@ -209,7 +212,7 @@ const styles = StyleSheet.create({
   },
   playerNum: { ...type.caption, color: colors.lime, fontSize: 11 },
   playerName: { ...type.caption, color: colors.text },
-  actions: { flexDirection: 'row', gap: 8, marginTop: spacing.lg },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: spacing.lg },
   btn: {
     backgroundColor: colors.surface,
     borderRadius: radius.full,

@@ -258,6 +258,20 @@ export function signInAccount(state: Persisted, user: User, mode: AuthMode): Per
   };
 }
 
+/** Merge KickFeed ranking profiles so /user/[id] resolves live-board fans. Local slices win. */
+export function rememberProfiles(state: Persisted, users: User[]): Persisted {
+  if (!users.length) return state;
+  let changed = false;
+  const profiles = { ...state.profiles };
+  for (const user of users) {
+    if (!isPersistedUserId(user.id) || isDemoUserId(user.id)) continue;
+    if (profiles[user.id]) continue;
+    profiles[user.id] = profileSliceFromUser(user);
+    changed = true;
+  }
+  return changed ? { ...state, profiles } : state;
+}
+
 /**
  * Supabase session wins on boot. If the session is gone, drop a leftover uuid so
  * demo restore still works and we never keep a signed-in uuid without a session.

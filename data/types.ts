@@ -150,7 +150,7 @@ export interface Lineup {
 }
 
 export interface User {
-  /** Demo seed id (`maya`) or Supabase `auth.users.id` (uuid). Leaderboards attach to this later. */
+  /** Demo seed id (`maya`) or Supabase `auth.users.id` (uuid). Leaderboards use this same key. */
   id: string;
   name: string;
   handle: string;

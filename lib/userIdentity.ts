@@ -10,7 +10,7 @@ type FavoriteIds = {
 /** Seeded demo profile ids (`maya`, `omar`, …). */
 export const DEMO_USER_IDS = new Set(demoUsers.map((u) => u.id));
 
-/** auth.users ids are UUIDs. Leaderboards in a later batch attach to the same id. */
+/** auth.users ids are UUIDs. Leaderboards attach to the same id as social state. */
 export const SUPABASE_USER_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

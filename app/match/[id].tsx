@@ -153,6 +153,14 @@ export default function MatchDetailScreen() {
           right={
             <View style={styles.headerRight}>
               <Pressable
+                onPress={() => router.push({ pathname: '/leaderboard', params: { leagueId: fixture.leagueId } })}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Prediction leaderboard"
+              >
+                <Text style={styles.leagueLink}>Rank</Text>
+              </Pressable>
+              <Pressable
                 onPress={() => router.push('/tv')}
                 hitSlop={8}
                 accessibilityRole="button"
@@ -332,6 +340,9 @@ export default function MatchDetailScreen() {
             community={matchPredictions}
             signedIn={!!currentUser}
             onSave={(homeScore, awayScore) => setPrediction(fixture, homeScore, awayScore)}
+            onOpenLeaderboard={() =>
+              router.push({ pathname: '/leaderboard', params: { leagueId: fixture.leagueId } })
+            }
           />
         ) : null}
 

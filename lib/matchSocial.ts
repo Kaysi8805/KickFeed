@@ -57,6 +57,13 @@ export function resolveMatchDeepLink(provider: MatchCatalog, requestedId: string
   if (exact) {
     return { requestedId, catalogId: exact.id, fixture: exact, source, via: 'exact' };
   }
+  const relatedHits = catalog.filter((f) =>
+    provider.relatedIds('match', requestedId).some((id) => id === f.id && id !== requestedId),
+  );
+  if (relatedHits.length === 1) {
+    const hit = relatedHits[0]!;
+    return { requestedId, catalogId: hit.id, fixture: hit, source, via: 'alias' };
+  }
   if (source !== 'live') {
     const mock = provider.getFixture(requestedId);
     if (mock) {
@@ -88,6 +95,8 @@ export function relatedFixtureIds(provider: MatchCatalog, id: string): string[] 
   const link = resolveMatchDeepLink(provider, id);
   const ids = new Set<string>([id, link.catalogId]);
   if (link.via === 'alias') ids.add(link.requestedId);
+  for (const rel of provider.relatedIds('match', id)) ids.add(rel);
+  for (const rel of provider.relatedIds('match', link.catalogId)) ids.add(rel);
   return [...ids];
 }
 

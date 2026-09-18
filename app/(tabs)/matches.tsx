@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { LeaderboardButton } from '@/components/leaderboard/LeaderboardButton';
 import { CatalogStatus } from '@/components/football/CatalogStatus';
 import { MatchRow } from '@/components/match/MatchRow';
 import { SearchButton } from '@/components/search/SearchEntry';
@@ -56,6 +57,7 @@ export default function MatchesScreen() {
         <View style={styles.titleRow}>
           <Text style={styles.title}>Matches</Text>
           <View style={styles.actions}>
+            <LeaderboardButton />
             <TvButton />
             <SearchButton />
           </View>
