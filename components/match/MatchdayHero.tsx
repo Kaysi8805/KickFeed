@@ -33,24 +33,31 @@ export function MatchdayHero({
   const done = fixture.status === 'finished';
   const soon = fixture.status === 'upcoming';
   const goal = lastGoalLine(fixture);
+  const openMatch = () => router.push(entityHref('match', fixture.id));
+  const matchLabel = `${home.shortName} versus ${away.shortName}. Open match hub.`;
 
   return (
-    <Pressable
-      onPress={() => router.push(entityHref('match', fixture.id))}
-      accessibilityRole="button"
-      accessibilityLabel={`${home.shortName} versus ${away.shortName}. Open match hub.`}
-      style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}
-    >
+    <View style={styles.card}>
       <View style={styles.meta}>
         <Text style={styles.why}>{matchdayWhyLabel(why)}</Text>
         {league ? (
-          <Pressable onPress={() => router.push(entityHref('league', league.id))} hitSlop={8}>
+          <Pressable
+            onPress={() => router.push(entityHref('league', league.id))}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`${league.shortName} league`}
+          >
             <Text style={styles.league}>{league.shortName}</Text>
           </Pressable>
         ) : null}
       </View>
       <View style={styles.row}>
-        <Pressable onPress={() => router.push(entityHref('team', home.id))} style={styles.side}>
+        <Pressable
+          onPress={() => router.push(entityHref('team', home.id))}
+          style={({ pressed }) => [styles.side, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={home.shortName}
+        >
           <Crest team={home} size={52} />
           <Text style={styles.team} numberOfLines={2}>
             {home.shortName}
@@ -70,7 +77,12 @@ export function MatchdayHero({
           {live ? <LiveBadge minute={fixture.minute} ht={fixture.status === 'ht'} /> : null}
           {done ? <Text style={styles.ft}>Full time</Text> : null}
         </View>
-        <Pressable onPress={() => router.push(entityHref('team', away.id))} style={styles.side}>
+        <Pressable
+          onPress={() => router.push(entityHref('team', away.id))}
+          style={({ pressed }) => [styles.side, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={away.shortName}
+        >
           <Crest team={away} size={52} />
           <Text style={styles.team} numberOfLines={2}>
             {away.shortName}
@@ -79,10 +91,15 @@ export function MatchdayHero({
       </View>
       {goal ? <Text style={styles.goal}>{goal}</Text> : null}
       {fixture.venue ? <Text style={styles.venue}>{fixture.venue}</Text> : null}
-      <View style={styles.cta}>
+      <Pressable
+        onPress={openMatch}
+        accessibilityRole="button"
+        accessibilityLabel={matchLabel}
+        style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
+      >
         <Text style={styles.ctaText}>Open match hub</Text>
-      </View>
-    </Pressable>
+      </Pressable>
+    </View>
   );
 }
 
@@ -111,6 +128,7 @@ const styles = StyleSheet.create({
   league: { ...type.micro, color: colors.limeMuted, textTransform: 'uppercase' },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   side: { flex: 1, alignItems: 'center', gap: 8 },
+  pressed: { opacity: 0.9 },
   team: { ...type.caption, color: colors.text, textAlign: 'center' },
   mid: { alignItems: 'center', minWidth: 96, gap: 6 },
   score: { ...type.score, color: colors.text },

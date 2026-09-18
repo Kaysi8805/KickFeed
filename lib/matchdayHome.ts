@@ -56,22 +56,19 @@ export interface MatchdayHomeInput {
 const CARE_RANK: Record<MatchdayCare, number> = { club: 0, league: 1, featured: 2 };
 const PHASE_RANK: Record<MatchdayPhase, number> = { live: 0, soon: 1, finished: 2 };
 
+/** Scheduled KO − 90m through typical full-time + 90m. Shared by soon + finished. */
+const MATCHDAY_HORIZON_AFTER_KO_MS = MATCHDAY_MATCH_LENGTH_MS + MATCHDAY_JUST_FINISHED_MS;
+
 export function matchdayPhase(fixture: Fixture, now = Date.now()): MatchdayPhase | null {
   if (fixture.status === 'live' || fixture.status === 'ht') return 'live';
   const kickoff = Date.parse(fixture.kickoff);
   if (!Number.isFinite(kickoff)) return null;
-  if (fixture.status === 'upcoming') {
-    const until = kickoff - now;
-    if (until >= 0 && until <= MATCHDAY_KICKOFF_SOON_MS) return 'soon';
-    return null;
-  }
-  if (fixture.status === 'finished') {
-    const elapsed = now - kickoff;
-    if (elapsed >= 0 && elapsed <= MATCHDAY_MATCH_LENGTH_MS + MATCHDAY_JUST_FINISHED_MS) {
-      return 'finished';
-    }
-    return null;
-  }
+  const elapsed = now - kickoff;
+  // One clock window so a delayed kickoff (upcoming, elapsed > 0) does not fall
+  // through the gap between "soon" (previously elapsed <= 0) and live/FT.
+  if (elapsed < -MATCHDAY_KICKOFF_SOON_MS || elapsed > MATCHDAY_HORIZON_AFTER_KO_MS) return null;
+  if (fixture.status === 'upcoming') return 'soon';
+  if (fixture.status === 'finished' && elapsed >= 0) return 'finished';
   return null;
 }
 
@@ -173,6 +170,10 @@ function comparePicks(provider: MatchdayCatalog, a: MatchdayPick, b: MatchdayPic
   return Date.parse(a.fixture.kickoff) - Date.parse(b.fixture.kickoff);
 }
 
+export function fixtureHasTeams(provider: MatchdayCatalog, fixture: Fixture): boolean {
+  return Boolean(provider.getTeam(fixture.homeTeamId) && provider.getTeam(fixture.awayTeamId));
+}
+
 function collectPicks(
   provider: MatchdayCatalog,
   input: MatchdayHomeInput,
@@ -184,6 +185,7 @@ function collectPicks(
   const playerIds = input.playerIds ?? [];
   const out: MatchdayPick[] = [];
   for (const fixture of provider.getFixtures()) {
+    if (!fixtureHasTeams(provider, fixture)) continue;
     const phase = matchdayPhase(fixture, now);
     if (!phase) continue;
     const care = fixtureCare(provider, fixture, teamIds, leagueIds, playerIds);
@@ -207,8 +209,4 @@ export function pickMatchdayHome(provider: MatchdayCatalog, input: MatchdayHomeI
   const hero = picks[0];
   const also = picks.slice(1, 1 + MATCHDAY_ALSO_LIMIT);
   return { hero, also, hasFavorites };
-}
-
-export function defaultHomePane(home: MatchdayHome): 'matchday' | 'feed' {
-  return home.hero ? 'matchday' : 'feed';
 }

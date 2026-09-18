@@ -1,8 +1,7 @@
-import type { Fixture, Player } from '@/data/types';
+import type { Fixture, Player, Team } from '@/data/types';
 import {
   MATCHDAY_JUST_FINISHED_MS,
   MATCHDAY_MATCH_LENGTH_MS,
-  defaultHomePane,
   featuredLeaguePriority,
   matchdayPhase,
   matchdayWhyLabel,
@@ -37,14 +36,31 @@ function fx(partial: Partial<Fixture> & Pick<Fixture, 'id'>): Fixture {
   };
 }
 
+function stubTeam(id: string): Team {
+  return {
+    id,
+    name: id,
+    shortName: id,
+    code: id.slice(0, 3).toUpperCase(),
+    color: '#111111',
+    accent: '#00ff88',
+    countryId: 'eng',
+  };
+}
+
 function catalog(
   fixtures: Fixture[],
-  opts?: { related?: Record<string, string[]>; players?: Record<string, Player> },
+  opts?: {
+    related?: Record<string, string[]>;
+    players?: Record<string, Player>;
+    missingTeamIds?: string[];
+  },
 ): MatchdayCatalog {
+  const missing = new Set(opts?.missingTeamIds ?? []);
   return {
     getFixtures: () => fixtures,
     getFixture: (id) => fixtures.find((f) => f.id === id),
-    getTeam: () => undefined,
+    getTeam: (id) => (missing.has(id) ? undefined : stubTeam(id)),
     getPlayer: (id) => opts?.players?.[id],
     relatedIds: (kind, id) => opts?.related?.[`${kind}:${id}`] ?? [id],
     getStatus: () => MOCK_FOOTBALL_STATUS,
@@ -75,6 +91,27 @@ describe('matchdayPhase', () => {
     });
     expect(matchdayPhase(justFt, NOW)).toBe('finished');
     expect(matchdayPhase(old, NOW)).toBeNull();
+  });
+
+  it('keeps a delayed kickoff in the soon window instead of dropping it', () => {
+    const delayed = fx({
+      id: 'delayed',
+      status: 'upcoming',
+      kickoff: iso(-12 * 60_000),
+    });
+    const stillOnHorizon = fx({
+      id: 'late-delay',
+      status: 'upcoming',
+      kickoff: iso(-(MATCHDAY_MATCH_LENGTH_MS + 20 * 60_000)),
+    });
+    const postponed = fx({
+      id: 'postponed',
+      status: 'upcoming',
+      kickoff: iso(-(MATCHDAY_MATCH_LENGTH_MS + MATCHDAY_JUST_FINISHED_MS + 5 * 60_000)),
+    });
+    expect(matchdayPhase(delayed, NOW)).toBe('soon');
+    expect(matchdayPhase(stillOnHorizon, NOW)).toBe('soon');
+    expect(matchdayPhase(postponed, NOW)).toBeNull();
   });
 });
 
@@ -203,7 +240,46 @@ describe('pickMatchdayHome', () => {
     });
     expect(home.hero).toBeUndefined();
     expect(home.also).toEqual([]);
-    expect(defaultHomePane(home)).toBe('feed');
+  });
+
+  it('skips a higher-ranked fixture when either team is missing so the hero is not blank', () => {
+    const ghostPl = fx({
+      id: 'ghost-pl',
+      leagueId: 'epl',
+      homeTeamId: 'missing-h',
+      awayTeamId: 'missing-a',
+      homeScore: 4,
+      awayScore: 4,
+    });
+    const home = pickMatchdayHome(
+      catalog([ghostPl, nikeLive], { missingTeamIds: ['missing-h', 'missing-a'] }),
+      { teamIds: [], leagueIds: [], now: NOW },
+    );
+    expect(home.hero?.fixture.id).toBe('nike-live');
+    expect(home.also.map((p) => p.fixture.id)).not.toContain('ghost-pl');
+  });
+
+  it('pins a delayed favorite kickoff instead of leaving a matchday gap', () => {
+    const delayedFav = fx({
+      id: 'fav-delayed',
+      status: 'upcoming',
+      kickoff: iso(-8 * 60_000),
+      homeTeamId: 'liv',
+      awayTeamId: 'mun',
+    });
+    const featuredLive = fx({
+      id: 'nike-delay-live',
+      leagueId: 'nikeliga',
+      homeTeamId: 'slovan',
+      awayTeamId: 'dac',
+    });
+    const home = pickMatchdayHome(catalog([featuredLive, delayedFav]), {
+      teamIds: ['liv'],
+      leagueIds: [],
+      now: NOW,
+    });
+    expect(home.hero?.fixture.id).toBe('fav-delayed');
+    expect(home.hero?.why).toBe('favorite-soon');
   });
 
   it('uses a featured live match when the user’s club is not in a matchday window', () => {
@@ -261,7 +337,6 @@ describe('pickMatchdayHome', () => {
     });
     expect(home.hero?.fixture.id).toBe('fx-liv-ars');
     expect(home.hero?.why).toBe('favorite-live');
-    expect(defaultHomePane(home)).toBe('matchday');
   });
 });
 
