@@ -1,11 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
 import type { AppNotification, Comment, Fixture, MotmVote, Post, ScorePrediction, User } from '@/data/types';
 import { motmVoteForUser, predictionForUser, type MotmCandidate } from '@/lib/engagement';
 import { shouldPersistLeaderboard } from '@/lib/leaderboard';
+import { defaultPushPrefs, emptyPushSnapshot, planFavoriteDeviceAlerts, type PushPrefs, type PushSnapshot } from '@/lib/favoritePush';
 import { attachMatchId, favoriteMatchAlertDrafts, relatedFixtureIds } from '@/lib/matchSocial';
+import {
+  applyDeviceAlerts,
+  cancelAllDeviceAlerts,
+  loadPushStore,
+  peekEasProjectId,
+  persistPushState,
+  registerForPushNotifications,
+  type PushRegisterResult,
+} from '@/services/notifications';
 import { isSupabaseConfigured, getSupabaseClient } from '@/services/supabase';
 import {
   addComment as addCommentState,
@@ -80,6 +90,10 @@ interface AppContextValue {
   rememberProfiles: (users: User[]) => void;
   markNotificationsRead: () => void;
   followerCount: (userId: string) => number;
+  pushPrefs: PushPrefs;
+  easProjectId: string | null;
+  enableDeviceAlerts: () => Promise<PushRegisterResult>;
+  setPushPref: (patch: Partial<Pick<PushPrefs, 'kickoff' | 'goals' | 'enabled'>>) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -87,7 +101,15 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<Persisted>(defaults);
   const [ready, setReady] = useState(false);
+  const [pushPrefs, setPushPrefs] = useState<PushPrefs>(defaultPushPrefs);
+  const [easProjectId, setEasProjectId] = useState<string | null>(null);
+  const [pushReady, setPushReady] = useState(false);
   const supabaseConfigured = isSupabaseConfigured();
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const prefsRef = useRef(pushPrefs);
+  prefsRef.current = pushPrefs;
+  const snapshotRef = useRef<PushSnapshot>(emptyPushSnapshot());
 
   useEffect(() => {
     let cancelled = false;
@@ -160,13 +182,55 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const store = await loadPushStore();
+        if (cancelled) return;
+        setPushPrefs(store.prefs);
+        snapshotRef.current = store.snapshot;
+        const projectId = await peekEasProjectId();
+        if (cancelled) return;
+        setEasProjectId(projectId ?? null);
+      } catch {
+        /* demo still works without push storage */
+      } finally {
+        if (!cancelled) setPushReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !pushReady) return;
     const syncAlerts = () => {
-      setState((prev) => mergeMatchAlerts(prev, favoriteMatchAlertDrafts(prev.favorites, football)));
+      const prev = stateRef.current;
+      setState((s) => mergeMatchAlerts(s, favoriteMatchAlertDrafts(s.favorites, football)));
+      const userId = prev.currentUserId;
+      if (!userId) return;
+      const slice = prev.favorites[userId];
+      const plan = planFavoriteDeviceAlerts({
+        userId,
+        teamIds: slice?.teams ?? [],
+        playerIds: slice?.players ?? [],
+        provider: football,
+        prefs: prefsRef.current,
+        snapshot: snapshotRef.current,
+      });
+      snapshotRef.current = plan.snapshot;
+      void persistPushState(prefsRef.current, plan.snapshot);
+      void applyDeviceAlerts(plan.alerts);
     };
     syncAlerts();
-    return football.subscribe(syncAlerts);
-  }, [ready]);
+    const stop = football.subscribe(syncAlerts);
+    const tick = setInterval(syncAlerts, 30_000);
+    return () => {
+      stop();
+      clearInterval(tick);
+    };
+  }, [ready, pushReady, pushPrefs]);
 
   useEffect(() => {
     if (!ready) return;
@@ -194,6 +258,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [patch],
   );
+
+  const enableDeviceAlerts = useCallback(async (): Promise<PushRegisterResult> => {
+    const result = await registerForPushNotifications();
+    if (result.projectId) setEasProjectId(result.projectId);
+    else setEasProjectId(null);
+    if (result.permission === 'granted') {
+      const next = { ...prefsRef.current, enabled: true };
+      setPushPrefs(next);
+      void persistPushState(next, snapshotRef.current);
+    }
+    return result;
+  }, []);
+
+  const setPushPref = useCallback((patchPrefs: Partial<Pick<PushPrefs, 'kickoff' | 'goals' | 'enabled'>>) => {
+    setPushPrefs((prev) => {
+      const next = { ...prev, ...patchPrefs };
+      prefsRef.current = next;
+      if (next.enabled === false && prev.enabled) {
+        void cancelAllDeviceAlerts();
+        snapshotRef.current = {
+          ...snapshotRef.current,
+          scheduled: {},
+        };
+      }
+      void persistPushState(next, snapshotRef.current);
+      return next;
+    });
+  }, []);
 
   const value = useMemo<AppContextValue>(
     () => ({
@@ -321,9 +413,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       rememberProfiles,
       markNotificationsRead: () => patch(markNotificationsReadState),
       followerCount: (userId) => Object.values(state.following).filter((ids) => ids.includes(userId)).length,
+      pushPrefs,
+      easProjectId,
+      enableDeviceAlerts,
+      setPushPref,
     }),
     [
       currentUser,
+      easProjectId,
+      enableDeviceAlerts,
       favoriteLeagueIds,
       favoritePlayerIds,
       favoriteTeamIds,
@@ -331,8 +429,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       likedPostIds,
       notifications,
       patch,
+      pushPrefs,
       rememberProfiles,
       ready,
+      setPushPref,
       state,
       supabaseConfigured,
       unreadCount,

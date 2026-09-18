@@ -1,11 +1,13 @@
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthScreen } from '@/components/AuthScreen';
 import { AppProvider, useApp } from '@/services/AppProvider';
+import { subscribeNotificationResponse } from '@/services/notifications';
 import { colors } from '@/theme';
 
 function Boot() {
@@ -18,6 +20,13 @@ function Boot() {
 
 function RootNav() {
   const { ready, currentUser } = useApp();
+  useEffect(() => {
+    if (!ready || !currentUser) return;
+    const sub = subscribeNotificationResponse((matchId) => {
+      router.push(`/match/${matchId}`);
+    });
+    return () => sub.remove();
+  }, [ready, currentUser?.id]);
   if (!ready) return <Boot />;
   if (!currentUser) return <AuthScreen />;
 
