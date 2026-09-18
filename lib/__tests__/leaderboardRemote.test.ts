@@ -20,7 +20,9 @@ describe('ranking honesty', () => {
     expect(rankingDisclaimer('demo', false, 'mock')).toMatch(/not a live/i);
     expect(rankingDisclaimer('demo', true, 'mock')).toMatch(/email sign-in/i);
     expect(rankingDisclaimer('live', true, 'live')).toMatch(/KickFeed Postgres/i);
-    expect(rankingDisclaimer('live', true, 'live')).toMatch(/England live/i);
+    expect(rankingDisclaimer('live', true, 'live')).toMatch(/England/i);
+    expect(rankingDisclaimer('live', true, 'live')).toMatch(/Slovakia/i);
+    expect(rankingDisclaimer('live', true, 'live')).toMatch(/other leagues mock/i);
     expect(rankingDisclaimer('live', true, 'mock')).toMatch(/mock catalog/i);
     expect(LIVE_RANKING_ERROR_BODY).toMatch(/live table/i);
     expect(LIVE_RANKING_ERROR_BODY).not.toMatch(/%s|\$\{/);

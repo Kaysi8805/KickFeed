@@ -45,7 +45,7 @@ export default function TeamDetailScreen() {
           title="Unknown club"
           body={
             catalog.source === 'live'
-              ? 'This team isn’t in the live England catalog. Demo posts still link mock clubs by name.'
+              ? 'This team isn’t in the live catalog (England, Slovakia, La Liga). Demo posts still link mock clubs by name.'
               : 'This team isn’t in the mock catalog.'
           }
         />
@@ -113,7 +113,7 @@ export default function TeamDetailScreen() {
         <Text style={styles.section}>Recent</Text>
         {recent.length === 0 ? (
           <Text style={styles.muted}>
-            {catalog.source === 'live' ? 'No recent fixtures in the cached England window.' : 'No recent mock fixtures for this club.'}
+            {catalog.source === 'live' ? 'No recent fixtures in the cached live window.' : 'No recent mock fixtures for this club.'}
           </Text>
         ) : (
           recent.map((f) => <MatchRow key={f.id} fixture={f} compact />)

@@ -78,7 +78,7 @@ export default function MatchesScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {catalog.source === 'live' && catalog.loading && grouped.length === 0 ? (
-          <EmptyState title="Loading matches" body="Fetching Premier League and Championship fixtures." />
+          <EmptyState title="Loading matches" body={`Fetching ${catalog.geoLabel} fixtures.`} />
         ) : catalog.source === 'live' && catalog.error && grouped.length === 0 ? (
           <EmptyState
             title={CATALOG_ERROR_TITLE}

@@ -13,6 +13,7 @@ import { entityBackHref, entityHref } from '@/lib/entityNav';
 import { safeBack } from '@/lib/navBack';
 import { routeId } from '@/lib/routeParams';
 import { isFavoriteId } from '@/lib/favoriteIds';
+import { LIVE_LEAGUE_UNKNOWN } from '@/lib/honesty';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
@@ -40,7 +41,7 @@ export default function LeagueScreen() {
           title="Unknown league"
           body={
             catalog.source === 'live'
-              ? 'Batch 3 live scores cover England (Premier League + Championship). Other competitions stay mock until a later geo batch.'
+              ? LIVE_LEAGUE_UNKNOWN
               : 'This competition isn’t in the mock catalog.'
           }
         />

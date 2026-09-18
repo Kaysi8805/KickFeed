@@ -36,7 +36,7 @@ export default function PlayerDetailScreen() {
           title="Unknown player"
           body={
             catalog.source === 'live'
-              ? 'This player isn’t in the cached England squads yet. Open their club page to load the squad, or search again after hydrate.'
+              ? 'This player isn’t in the cached live squads yet. Open their club page to load the squad, or search again after hydrate.'
               : 'This player isn’t in the mock catalog.'
           }
         />
@@ -100,7 +100,7 @@ export default function PlayerDetailScreen() {
             ? stats
               ? 'Season numbers come from API-Football top scorers when the player is on that list.'
               : 'Full season stats aren’t on the free-tier hydrate (squad pages may still work).'
-            : 'Season numbers are mock. Set EXPO_PUBLIC_FOOTBALL_API_KEY for live England scorers.'}
+            : 'Season numbers are mock. Set EXPO_PUBLIC_FOOTBALL_BFF_URL (or a public API key) for live scorers.'}
         </Text>
 
         <Text style={styles.section}>Recent appearances</Text>

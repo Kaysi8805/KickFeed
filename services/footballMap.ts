@@ -25,7 +25,15 @@ import type {
   ApiStandingRow,
   ApiTeamRef,
 } from '@/services/footballApi';
-import { CHAMPIONSHIP_ID, PREMIER_LEAGUE_ID } from '@/services/footballApi';
+import {
+  CHAMPIONSHIP_ID,
+  LA_LIGA_ID,
+  PREMIER_LEAGUE_ID,
+  SLOVAK_SUPER_LIGA_ID,
+  countryIdForLiveLeague,
+  isEnglandLiveLeagueId,
+  isLiveLeagueId,
+} from '@/lib/footballCoverage';
 
 export const LIVE_LEAGUES: League[] = [
   {
@@ -44,6 +52,22 @@ export const LIVE_LEAGUES: League[] = [
     type: 'league',
     featured: true,
   },
+  {
+    id: SLOVAK_SUPER_LIGA_ID,
+    name: 'Niké Liga',
+    shortName: 'Niké Liga',
+    countryId: 'svk',
+    type: 'league',
+    featured: true,
+  },
+  {
+    id: LA_LIGA_ID,
+    name: 'La Liga',
+    shortName: 'La Liga',
+    countryId: 'esp',
+    type: 'league',
+    featured: true,
+  },
 ];
 
 const LEAGUE_ALIASES: Record<string, string> = {
@@ -56,6 +80,14 @@ const LEAGUE_ALIASES: Record<string, string> = {
   championship: CHAMPIONSHIP_ID,
   'efl championship': CHAMPIONSHIP_ID,
   [CHAMPIONSHIP_ID]: CHAMPIONSHIP_ID,
+  nikeliga: SLOVAK_SUPER_LIGA_ID,
+  'nike liga': SLOVAK_SUPER_LIGA_ID,
+  superliga: SLOVAK_SUPER_LIGA_ID,
+  'super liga': SLOVAK_SUPER_LIGA_ID,
+  [SLOVAK_SUPER_LIGA_ID]: SLOVAK_SUPER_LIGA_ID,
+  laliga: LA_LIGA_ID,
+  'la liga': LA_LIGA_ID,
+  [LA_LIGA_ID]: LA_LIGA_ID,
 };
 
 const FINISHED = new Set(['FT', 'AET', 'PEN', 'AWD', 'WO']);
@@ -75,7 +107,18 @@ export function leagueAliases(canonicalId: string): string[] {
 }
 
 export function isLiveEnglandLeague(id: string): boolean {
-  return canonicalLeagueId(id) != null;
+  const canonical = canonicalLeagueId(id) ?? id;
+  return isEnglandLiveLeagueId(canonical);
+}
+
+export function isLiveLeague(id: string): boolean {
+  const canonical = canonicalLeagueId(id) ?? id;
+  return isLiveLeagueId(canonical);
+}
+
+export function liveCountryIdForLeague(leagueId: string): string {
+  const canonical = canonicalLeagueId(leagueId) ?? leagueId;
+  return countryIdForLiveLeague(canonical) ?? 'eng';
 }
 
 export function mapMatchStatus(short: string | null | undefined): MatchStatus | 'skip' {

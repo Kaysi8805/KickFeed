@@ -67,7 +67,7 @@ export default function LeaguesScreen() {
                 <Text style={styles.chev}>Standings →</Text>
               </Pressable>
             ))}
-            <Text style={styles.section}>{catalog.source === 'live' ? 'Browse (England live + mock geos)' : 'Browse worldwide'}</Text>
+            <Text style={styles.section}>{catalog.source === 'live' ? `Browse (${catalog.geoLabel} live + mock geos)` : 'Browse worldwide'}</Text>
             {continents.map((c) => (
               <Pressable key={c.id} onPress={() => router.push(`/continent/${c.id}`)} style={styles.row}>
                 <View>

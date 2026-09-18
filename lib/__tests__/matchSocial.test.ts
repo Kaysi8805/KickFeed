@@ -146,9 +146,9 @@ describe('live catalog id stability', () => {
     expect(resolvePostFixture(post({ id: 'p1', matchId: 'fx-liv-ars' }), live)).toBeUndefined();
 
     const clasico = resolveMatchDeepLink(live, 'fx-rma-bar');
-    expect(clasico.via).toBe('exact');
-    expect(clasico.fixture?.id).toBe('fx-rma-bar');
-    expect(clasico.source).toBe('live');
+    expect(clasico.via).toBe('missing');
+    expect(clasico.fixture).toBeUndefined();
+    expect(clasico.catalogId).toBe('fx-rma-bar');
   });
 
   it('builds goal-style drafts on live ids for users who favorite those clubs', async () => {

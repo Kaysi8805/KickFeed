@@ -20,6 +20,13 @@ describe('searchEntities', () => {
     expect(hits.leagues.some((l) => l.id === 'epl')).toBe(true);
   });
 
+  it('finds Slovakia Niké Liga and Slovan in the mock catalog', () => {
+    const liga = searchEntities('Nike', demoUsers);
+    expect(liga.leagues.some((l) => l.id === 'nikeliga')).toBe(true);
+    const club = searchEntities('Slovan', demoUsers);
+    expect(club.teams.some((t) => t.id === 'slovan')).toBe(true);
+  });
+
   it('finds demo fans by name and handle', () => {
     const byName = searchEntities('Maya', demoUsers);
     expect(byName.users.some((u) => u.id === 'maya')).toBe(true);

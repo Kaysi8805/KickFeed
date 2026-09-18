@@ -14,6 +14,7 @@ import {
   canonicalLeagueId,
   leagueAliases,
   mockClubStyle,
+  isLiveLeague,
 } from '@/services/footballMap';
 import {
   createApiFootballHttp,
@@ -131,11 +132,16 @@ describe('football mappers', () => {
     expect(ev).toMatchObject({ type: 'goal', playerId: '306', detail: 'Assist: Mac Allister' });
   });
 
-  it('aliases Premier League mock ids and reuses mock Arsenal colors', () => {
+  it('aliases Premier League, Niké Liga, and La Liga mock ids and reuses mock Arsenal colors', () => {
     expect(canonicalLeagueId('epl')).toBe('39');
     expect(leagueAliases('39')).toContain('epl');
+    expect(canonicalLeagueId('nikeliga')).toBe('332');
+    expect(canonicalLeagueId('laliga')).toBe('140');
+    expect(isLiveLeague('nikeliga')).toBe(true);
+    expect(isLiveLeague('78')).toBe(false);
     expect(mockClubStyle('Arsenal').mockId).toBe('ars');
     expect(mapTeam({ id: 42, name: 'Arsenal' }).color).toBe('#EF0107');
+    expect(mapTeam({ id: 541, name: 'Real Madrid' }, 'esp').countryId).toBe('esp');
     expect(emptyLineup().players).toEqual([]);
   });
 });

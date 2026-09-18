@@ -75,7 +75,7 @@ export default function ComposeScreen() {
           </View>
           <Text style={styles.hint}>
             {catalog.source === 'live'
-              ? 'Live, today, and upcoming England fixtures from the scores provider.'
+              ? 'Live, today, and upcoming fixtures from the live catalog (England, Slovakia, La Liga).'
               : 'Live, today, and upcoming fixtures from the mock catalog.'}
           </Text>
           {selected ? (

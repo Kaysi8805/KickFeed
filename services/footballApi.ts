@@ -1,13 +1,17 @@
-/** API-Football (api-sports.io) v3 shapes used by the England live adapter. */
+/** API-Football (api-sports.io) v3 shapes used by the live adapter. */
 
 export const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
 export const API_FOOTBALL_SIGNUP = 'https://dashboard.api-football.com/register';
 export const API_FOOTBALL_DOCS = 'https://www.api-football.com/documentation-v3';
 
-/** Premier League + EFL Championship (free-tier, one extra pair of calls). FA Cup skipped to save the 100 req/day budget. */
-export const ENGLAND_LEAGUE_IDS = ['39', '40'] as const;
-export const PREMIER_LEAGUE_ID = '39';
-export const CHAMPIONSHIP_ID = '40';
+export {
+  CHAMPIONSHIP_ID,
+  ENGLAND_LEAGUE_IDS,
+  LA_LIGA_ID,
+  LIVE_LEAGUE_IDS,
+  PREMIER_LEAGUE_ID,
+  SLOVAK_SUPER_LIGA_ID,
+} from '@/lib/footballCoverage';
 
 export interface ApiEnvelope<T> {
   get?: string;

@@ -11,6 +11,7 @@ export const continents: Continent[] = [
 
 export const countries: Country[] = [
   { id: 'eng', name: 'England', continentId: 'europe', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+  { id: 'svk', name: 'Slovakia', continentId: 'europe', flag: '🇸🇰' },
   { id: 'esp', name: 'Spain', continentId: 'europe', flag: '🇪🇸' },
   { id: 'ita', name: 'Italy', continentId: 'europe', flag: '🇮🇹' },
   { id: 'ger', name: 'Germany', continentId: 'europe', flag: '🇩🇪' },
@@ -41,6 +42,7 @@ export const countries: Country[] = [
 export const leagues: League[] = [
   { id: 'epl', name: 'Premier League', shortName: 'EPL', countryId: 'eng', type: 'league', featured: true },
   { id: 'facup', name: 'FA Cup', shortName: 'FA Cup', countryId: 'eng', type: 'cup' },
+  { id: 'nikeliga', name: 'Niké Liga', shortName: 'Niké Liga', countryId: 'svk', type: 'league', featured: true },
   { id: 'laliga', name: 'La Liga', shortName: 'La Liga', countryId: 'esp', type: 'league', featured: true },
   { id: 'seriea', name: 'Serie A', shortName: 'Serie A', countryId: 'ita', type: 'league', featured: true },
   { id: 'bundesliga', name: 'Bundesliga', shortName: 'Bundesliga', countryId: 'ger', type: 'league', featured: true },
@@ -102,6 +104,13 @@ export const teams: Team[] = [
   team('tot', 'Tottenham', 'Spurs', 'TOT', '#132257', '#FFFFFF', 'eng'),
   team('whu', 'West Ham', 'West Ham', 'WHU', '#7A263A', '#1BB1E7', 'eng'),
   team('wol', 'Wolves', 'Wolves', 'WOL', '#FDB913', '#231F20', 'eng'),
+
+  team('slovan', 'Slovan Bratislava', 'Slovan', 'SLB', '#005EB8', '#FFFFFF', 'svk'),
+  team('trnava', 'Spartak Trnava', 'Trnava', 'TRN', '#D21034', '#FFFFFF', 'svk'),
+  team('dac', 'DAC', 'DAC', 'DAC', '#FFD100', '#005EB8', 'svk'),
+  team('zilina', 'MŠK Žilina', 'Žilina', 'ZIL', '#FFD100', '#005EB8', 'svk'),
+  team('kosice', 'FC Košice', 'Košice', 'KOS', '#F9A01B', '#003DA5', 'svk'),
+  team('ruzomberok', 'MFK Ružomberok', 'Ružomberok', 'RUZ', '#F68B1F', '#00529B', 'svk'),
 
   team('rma', 'Real Madrid', 'Real Madrid', 'RMA', '#FEBE10', '#00529F', 'esp'),
   team('bar', 'Barcelona', 'Barça', 'BAR', '#A50044', '#004D98', 'esp'),
@@ -197,6 +206,7 @@ export const teams: Team[] = [
 export const leagueRosters: Record<string, string[]> = {
   epl: ['liv', 'ars', 'mci', 'che', 'new', 'tot', 'avl', 'mun', 'bha', 'ful', 'bre', 'cry', 'whu', 'eve', 'nfo', 'wol', 'bou', 'ips', 'lei', 'sou'],
   facup: ['liv', 'ars', 'mci', 'mun'],
+  nikeliga: ['slovan', 'dac', 'zilina', 'trnava', 'kosice', 'ruzomberok'],
   laliga: ['rma', 'bar', 'atm', 'gir', 'ath', 'rso', 'bet', 'vil', 'val', 'sev'],
   seriea: ['int', 'mil', 'juv', 'nap', 'ata', 'rom', 'laz', 'fio', 'bol', 'nap2'],
   bundesliga: ['bay', 'lev', 'dor', 'stu', 'rbl', 'sge', 'wob', 'scf'],

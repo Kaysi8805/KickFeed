@@ -115,7 +115,7 @@ export default function MatchDetailScreen() {
           title="Match not found"
           body={
             catalog.source === 'live'
-              ? 'This id isn’t in the live England window (no unique club-pair alias from a demo match). Mock scores are not shown here.'
+              ? 'This id isn’t in the live fixture window (no unique club-pair alias from a demo match). Mock scores are not shown here.'
               : 'This fixture isn’t in the mock catalog.'
           }
         />
@@ -201,7 +201,7 @@ export default function MatchDetailScreen() {
             ) : null}
             <Text style={styles.venue}>{fixture.venue}</Text>
             {deepLink?.via === 'alias' ? (
-              <Text style={styles.venue}>Live England catalog · linked from demo match id</Text>
+              <Text style={styles.venue}>Live catalog · linked from demo match id</Text>
             ) : null}
             {myPrediction ? (
               <Pressable onPress={() => setTab('predict')}>
@@ -326,7 +326,7 @@ export default function MatchDetailScreen() {
               <Text style={styles.statN}>{possession.away}%</Text>
             </View>
             <Text style={styles.hint}>
-              Shot maps and xG are still later. Live scores for England come from API-Football when a key is set.
+              Shot maps and xG are still later. Live scores for England, Slovakia, and La Liga come from API-Football when a BFF URL or key is set.
             </Text>
           </View>
         ) : null}

@@ -170,7 +170,7 @@ export default function FavoritesScreen() {
             title="Nothing live for you"
             body={
               catalog.source === 'live'
-                ? 'Favorite an England club or player to pin live fixtures here.'
+                ? 'Favorite a live club or player (England, Slovakia, or La Liga) to pin fixtures here.'
                 : 'Favorite a club or player to pin their live matches here.'
             }
           />
@@ -185,7 +185,7 @@ export default function FavoritesScreen() {
             title="Nothing coming up"
             body={
               catalog.source === 'live'
-                ? 'Favorite an England club, player, or the Premier League to pin their next fixtures here.'
+                ? 'Favorite a live club, player, or league (England, Slovakia, or La Liga) to pin their next fixtures here.'
                 : 'Favorite a club, player, or competition to pin their next matches here.'
             }
           />
