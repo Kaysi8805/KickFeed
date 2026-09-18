@@ -5,6 +5,7 @@ import {
   defaultPushPrefs,
   deviceAlertsCopy,
   emptyPushSnapshot,
+  matchIdFromNotificationResponse,
   parsePushStore,
   type DeviceAlert,
   type PushPrefs,
@@ -238,6 +239,11 @@ export async function applyDeviceAlerts(alerts: DeviceAlert[]): Promise<void> {
         }
         if (!allowed) continue;
         if (alert.action === 'present') {
+          try {
+            await Notifications.cancelScheduledNotificationAsync(identifier);
+          } catch {
+            /* nothing pending with this id */
+          }
           await Notifications.scheduleNotificationAsync({
             identifier,
             content: {
@@ -288,13 +294,49 @@ export function subscribeNotificationResponse(onMatch: (matchId: string) => void
   if (Platform.OS === 'web') return { remove: () => undefined };
   let sub: { remove: () => void } | undefined;
   let cancelled = false;
-  void loadNotifications().then((Notifications) => {
+  const handled = new Set<string>();
+
+  const openFromResponse = (response: unknown) => {
+    const matchId = matchIdFromNotificationResponse(response);
+    if (!matchId) return;
+    const identifier =
+      response &&
+      typeof response === 'object' &&
+      (response as { notification?: { request?: { identifier?: unknown } } }).notification?.request
+        ?.identifier;
+    const key = typeof identifier === 'string' && identifier ? identifier : `match:${matchId}`;
+    if (handled.has(key)) return;
+    handled.add(key);
+    onMatch(matchId);
+  };
+
+  void loadNotifications().then(async (Notifications) => {
     if (!Notifications || cancelled) return;
     try {
+      let last: unknown = null;
+      try {
+        last =
+          typeof Notifications.getLastNotificationResponse === 'function'
+            ? Notifications.getLastNotificationResponse()
+            : await Notifications.getLastNotificationResponseAsync();
+      } catch {
+        last = null;
+      }
+      if (!cancelled && last) {
+        openFromResponse(last);
+        try {
+          if (typeof Notifications.clearLastNotificationResponse === 'function') {
+            Notifications.clearLastNotificationResponse();
+          } else {
+            await Notifications.clearLastNotificationResponseAsync();
+          }
+        } catch {
+          /* next launch can still read it; listener dedupes by identifier */
+        }
+      }
+      if (cancelled) return;
       sub = Notifications.addNotificationResponseReceivedListener((response) => {
-        const data = response.notification.request.content.data as { matchId?: unknown } | undefined;
-        const matchId = data?.matchId;
-        if (typeof matchId === 'string' && matchId.trim()) onMatch(matchId.trim());
+        openFromResponse(response);
       });
     } catch {
       /* ignore */

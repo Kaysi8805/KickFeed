@@ -21,11 +21,12 @@ function Boot() {
 function RootNav() {
   const { ready, currentUser } = useApp();
   useEffect(() => {
+    if (!ready || !currentUser) return;
     const sub = subscribeNotificationResponse((matchId) => {
       router.push(`/match/${matchId}`);
     });
     return () => sub.remove();
-  }, []);
+  }, [ready, currentUser?.id]);
   if (!ready) return <Boot />;
   if (!currentUser) return <AuthScreen />;
 

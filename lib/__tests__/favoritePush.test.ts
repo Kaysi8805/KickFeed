@@ -5,6 +5,8 @@ import {
   emptyPushSnapshot,
   goalFingerprint,
   kickoffFingerprint,
+  matchIdFromNotificationData,
+  matchIdFromNotificationResponse,
   parsePushStore,
   planFavoriteDeviceAlerts,
 } from '@/lib/favoritePush';
@@ -301,5 +303,56 @@ describe('planFavoriteDeviceAlerts', () => {
     });
     expect(off.alerts).toEqual([expect.objectContaining({ action: 'cancel', fingerprint: kickoffFingerprint('maya', 'later') })]);
     expect(off.snapshot.scheduled).toEqual({});
+  });
+
+  it('cancels a pending T−15 DATE when the same match later enters the 30-minute soon window', () => {
+    const kickoff = new Date(NOW + 2 * 60 * 60_000).toISOString();
+    const fixture = fx({ id: 'later', status: 'upcoming', kickoff });
+    const first = planFavoriteDeviceAlerts({
+      userId: 'maya',
+      teamIds: ['liv'],
+      provider: catalog([fixture]),
+      prefs: enabled,
+      snapshot: emptyPushSnapshot(),
+      now: NOW,
+    });
+    const fp = kickoffFingerprint('maya', 'later');
+    expect(first.alerts).toEqual([
+      expect.objectContaining({ action: 'schedule', type: 'kickoff', matchId: 'later', fingerprint: fp }),
+    ]);
+    expect(first.snapshot.scheduled[fp]).toBe(Date.parse(kickoff) - FAVORITE_KICKOFF_LEAD_MS);
+
+    const soonNow = NOW + 2 * 60 * 60_000 - 20 * 60_000;
+    const second = planFavoriteDeviceAlerts({
+      userId: 'maya',
+      teamIds: ['liv'],
+      provider: catalog([fixture]),
+      prefs: enabled,
+      snapshot: first.snapshot,
+      now: soonNow,
+    });
+    expect(second.alerts.map((a) => a.action)).toEqual(['cancel', 'present']);
+    expect(second.alerts[0]).toEqual({ action: 'cancel', fingerprint: fp });
+    expect(second.alerts[1]).toMatchObject({
+      action: 'present',
+      type: 'kickoff',
+      matchId: 'later',
+      fingerprint: fp,
+    });
+    expect(second.snapshot.scheduled[fp]).toBeUndefined();
+    expect(second.snapshot.presented).toContain(fp);
+  });
+});
+
+describe('notification tap payload', () => {
+  it('reads matchId from Expo notification data and ignores blanks', () => {
+    expect(matchIdFromNotificationData({ matchId: '9001' })).toBe('9001');
+    expect(matchIdFromNotificationData({ matchId: '  ' })).toBeUndefined();
+    expect(matchIdFromNotificationData(null)).toBeUndefined();
+    expect(
+      matchIdFromNotificationResponse({
+        notification: { request: { content: { data: { matchId: 'fx-liv-ars' } } } },
+      }),
+    ).toBe('fx-liv-ars');
   });
 });

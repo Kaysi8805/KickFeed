@@ -141,6 +141,25 @@ export function deviceAlertsCopy(input: DeviceAlertsCopyInput): string {
   return 'Local match alerts on this device. Remote Expo push needs an EAS projectId (eas init or EXPO_PUBLIC_EAS_PROJECT_ID). In-app notifications still work.';
 }
 
+export function matchIdFromNotificationData(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const matchId = (data as { matchId?: unknown }).matchId;
+  if (typeof matchId !== 'string') return undefined;
+  const id = matchId.trim();
+  return id || undefined;
+}
+
+export function matchIdFromNotificationResponse(response: unknown): string | undefined {
+  if (!response || typeof response !== 'object') return undefined;
+  const notification = (response as { notification?: unknown }).notification;
+  if (!notification || typeof notification !== 'object') return undefined;
+  const request = (notification as { request?: unknown }).request;
+  if (!request || typeof request !== 'object') return undefined;
+  const content = (request as { content?: unknown }).content;
+  if (!content || typeof content !== 'object') return undefined;
+  return matchIdFromNotificationData((content as { data?: unknown }).data);
+}
+
 export function kickoffFingerprint(userId: string, matchId: string): string {
   return `kickoff:${userId}:${matchId}`;
 }
@@ -161,6 +180,29 @@ function markPresented(snapshot: PushSnapshot, fingerprint: string): void {
   if (!snapshot.presented.includes(fingerprint)) snapshot.presented.push(fingerprint);
   delete snapshot.scheduled[fingerprint];
   if (snapshot.presented.length > 80) snapshot.presented = snapshot.presented.slice(-80);
+}
+
+function emitKickoffPresent(
+  alerts: DeviceAlert[],
+  snapshot: PushSnapshot,
+  fixture: Fixture,
+  fingerprint: string,
+  copy: { title: string; body: string },
+): void {
+  // Presenting soon/live must cancel a previously scheduled DATE (T−15).
+  // markPresented drops snapshot.scheduled, so without an explicit cancel the OS trigger stays armed.
+  if (snapshot.scheduled[fingerprint] != null) {
+    alerts.push({ action: 'cancel', fingerprint });
+  }
+  alerts.push({
+    action: 'present',
+    type: 'kickoff',
+    fingerprint,
+    matchId: fixture.id,
+    title: copy.title,
+    body: copy.body,
+  });
+  markPresented(snapshot, fingerprint);
 }
 
 function latestGoalLine(provider: MatchCatalog, fixture: Fixture): { title: string; body: string } {
@@ -251,25 +293,9 @@ export function planFavoriteDeviceAlerts(input: {
 
     if (wantKickoff && !alreadyKick) {
       if (live && until >= -FAVORITE_LIVE_KICKOFF_GRACE_MS) {
-        const copy = kickoffCopy(input.provider, fixture, 'live');
-        alerts.push({
-          action: 'present',
-          type: 'kickoff',
-          fingerprint: fpKick,
-          matchId: fixture.id,
-          ...copy,
-        });
-        markPresented(snapshot, fpKick);
+        emitKickoffPresent(alerts, snapshot, fixture, fpKick, kickoffCopy(input.provider, fixture, 'live'));
       } else if (fixture.status === 'upcoming' && until <= FAVORITE_KICKOFF_SOON_MS && until >= -FAVORITE_LIVE_KICKOFF_GRACE_MS) {
-        const copy = kickoffCopy(input.provider, fixture, 'soon');
-        alerts.push({
-          action: 'present',
-          type: 'kickoff',
-          fingerprint: fpKick,
-          matchId: fixture.id,
-          ...copy,
-        });
-        markPresented(snapshot, fpKick);
+        emitKickoffPresent(alerts, snapshot, fixture, fpKick, kickoffCopy(input.provider, fixture, 'soon'));
       } else if (
         fixture.status === 'upcoming' &&
         until > FAVORITE_KICKOFF_SOON_MS &&

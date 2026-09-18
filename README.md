@@ -101,7 +101,7 @@ Device match alerts are **opt-in** (Profile → Enable device match alerts). Kic
 
 - **Kickoff soon** — one banner per favorite match. If kickoff is within 30 minutes (or the match just went live, first 10 minutes), it presents now. If kickoff is 30 minutes–6 hours away, a local notification is scheduled for T−15 minutes.
 - **Goals** — first sight of a live score is a baseline (no dump). The next score tick for that favorite match presents `GOAL`. Same catalog as Matches / Home.
-- Tapping a banner opens the match hub when `matchId` is present.
+- Tapping a banner (including the notification that cold-starts the app) opens the match hub when `matchId` is present.
 
 Demo/mock: Maya’s Liverpool–Arsenal clock still drives in-app alerts; device banners need the OS permission on a real device. CI and Expo web never call the Expo Push API.
 
