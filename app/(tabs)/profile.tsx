@@ -5,9 +5,16 @@ import { Pressable, ScrollView, StyleSheet, Text, View, Platform } from 'react-n
 import { PostCard } from '@/components/feed/PostCard';
 import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { deviceAlertsCopy } from '@/lib/favoritePush';
+import {
+  BLOCKED_LIST_EMPTY_BODY,
+  BLOCKED_LIST_EMPTY_TITLE,
+  moderationDisclaimer,
+} from '@/lib/honesty';
+import { shouldPersistModeration } from '@/lib/moderation';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { scheduleDemoNotification } from '@/services/notifications';
@@ -34,6 +41,8 @@ export default function ProfileScreen() {
     easProjectId,
     enableDeviceAlerts,
     setPushPref,
+    blockedUserIds,
+    unblockUser,
   } = useApp();
   const [pushBusy, setPushBusy] = useState(false);
   const [pushNote, setPushNote] = useState<string | null>(null);
@@ -42,6 +51,8 @@ export default function ProfileScreen() {
   const teams = currentUser.favoriteTeamIds.map((id) => football.getTeam(id)).filter(Boolean);
   const players = favoritePlayerIds.map((id) => football.getPlayer(id)).filter(Boolean);
   const tvCountry = tv.getCountry(resolveTvCountryId(currentUser.tvCountryId));
+  const blockedPeople = users.filter((u) => blockedUserIds.includes(u.id));
+  const honesty = moderationDisclaimer(shouldPersistModeration(supabaseConfigured, authMode));
   const pushHint =
     pushNote ??
     deviceAlertsCopy({
@@ -153,6 +164,29 @@ export default function ProfileScreen() {
             );
           })
         )}
+        <Text style={styles.section}>Blocked fans</Text>
+        {blockedPeople.length === 0 ? (
+          <EmptyState compact title={BLOCKED_LIST_EMPTY_TITLE} body={BLOCKED_LIST_EMPTY_BODY} />
+        ) : (
+          blockedPeople.map((u) => (
+            <Pressable key={u.id} onPress={() => router.push(entityHref('user', u.id))} style={styles.blockedRow}>
+              <Avatar initials={u.initials} color={u.avatarColor} size={36} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.blockedName}>{u.name}</Text>
+                <Text style={styles.blockedHandle}>@{u.handle}</Text>
+              </View>
+              <Pressable
+                onPress={() => unblockUser(u.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Unblock ${u.name}`}
+                style={styles.unblock}
+              >
+                <Text style={styles.unblockText}>Unblock</Text>
+              </Pressable>
+            </Pressable>
+          ))
+        )}
+        <Text style={styles.demoNote}>{honesty}</Text>
         <Pressable style={styles.switcher} onPress={signOut}>
           <Text style={styles.switcherText}>
             {authMode === 'supabase' ? 'Sign out' : supabaseConfigured ? 'Switch account' : 'Switch demo user'}
@@ -221,10 +255,10 @@ export default function ProfileScreen() {
         </View>
         <Text style={styles.demoNote}>
           {authMode === 'supabase'
-            ? 'Favorites, predictions, and MOTM votes on this device are stored under your Supabase user id. Live ranking syncs those picks to KickFeed Postgres.'
+            ? 'Favorites, predictions, MOTM votes, reports, and blocks on this device are stored under your Supabase user id. Live ranking and safety lists sync to KickFeed Postgres.'
             : supabaseConfigured
-              ? 'Demo profile — local ranking only. Sign out and use email to join the live KickFeed table.'
-              : 'Demo mode — ranking is this device + seeded fans. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for live ranking.'}
+              ? 'Demo profile — local ranking and safety lists only. Sign out and use email to join the live KickFeed table.'
+              : 'Demo mode — ranking and safety lists are this device + seeded fans. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for live ranking, reports, and blocks.'}
         </Text>
       </ScrollView>
     </Screen>
@@ -308,8 +342,31 @@ const styles = StyleSheet.create({
   },
   tvLabel: { ...type.caption, color: colors.text },
   tvLink: { ...type.caption, color: colors.lime },
-  section: { ...type.micro, color: colors.textMuted, marginBottom: spacing.sm },
+  section: { ...type.micro, color: colors.textMuted, marginBottom: spacing.sm, marginTop: spacing.lg },
   muted: { ...type.body, color: colors.textMuted, marginBottom: spacing.lg },
+  blockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  blockedName: { ...type.subtitle, fontSize: 15, color: colors.text },
+  blockedHandle: { ...type.caption, color: colors.textMuted, fontWeight: '500' },
+  unblock: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  unblockText: { ...type.caption, color: colors.lime },
   switcher: {
     marginTop: spacing.xl,
     alignItems: 'center',

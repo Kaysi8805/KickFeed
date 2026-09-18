@@ -4,9 +4,12 @@ import {
   CATALOG_ERROR_BODY,
   CATALOG_ERROR_TITLE,
   LIVE_MIX_DISCLAIMER,
+  MODERATION_DEMO_COPY,
+  MODERATION_LIVE_COPY,
   TV_EDITORIAL_DISCLAIMER,
   matchesEmptyBody,
   matchdayEmptyBody,
+  moderationDisclaimer,
 } from '@/lib/honesty';
 
 describe('honesty copy', () => {
@@ -42,5 +45,13 @@ describe('honesty copy', () => {
     expect(CATALOG_ERROR_TITLE).toBe('Couldn’t load live scores');
     expect(CATALOG_ERROR_BODY).not.toMatch(/%s|\$\{/);
     expect(CATALOG_ERROR_BODY.toLowerCase()).not.toContain('invalid api key');
+  });
+
+  it('keeps report/block copy honest about demo device vs Postgres', () => {
+    expect(moderationDisclaimer(false)).toBe(MODERATION_DEMO_COPY);
+    expect(moderationDisclaimer(true)).toBe(MODERATION_LIVE_COPY);
+    expect(MODERATION_DEMO_COPY).toMatch(/this device/i);
+    expect(MODERATION_LIVE_COPY).toMatch(/Postgres/i);
+    expect(MODERATION_LIVE_COPY).toMatch(/no public moderation inbox/i);
   });
 });

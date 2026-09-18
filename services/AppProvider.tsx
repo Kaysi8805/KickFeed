@@ -2,11 +2,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import type { AppNotification, Comment, Fixture, MotmVote, Post, ScorePrediction, User } from '@/data/types';
+import type { AppNotification, Comment, Fixture, MotmVote, Post, ReportTargetType, ScorePrediction, User } from '@/data/types';
 import { motmVoteForUser, predictionForUser, type MotmCandidate } from '@/lib/engagement';
 import { shouldPersistLeaderboard } from '@/lib/leaderboard';
 import { defaultPushPrefs, emptyPushSnapshot, planFavoriteDeviceAlerts, type PushPrefs, type PushSnapshot } from '@/lib/favoritePush';
 import { attachMatchId, favoriteMatchAlertDrafts, relatedFixtureIds } from '@/lib/matchSocial';
+import {
+  isBlockedUser,
+  shouldPersistModeration,
+  visibleByAuthor,
+  type ReportResult,
+} from '@/lib/moderation';
 import {
   applyDeviceAlerts,
   cancelAllDeviceAlerts,
@@ -20,13 +26,17 @@ import { isSupabaseConfigured, getSupabaseClient } from '@/services/supabase';
 import {
   addComment as addCommentState,
   addPost as addPostState,
+  addReport as addReportState,
   applyAuthStateChange,
   applyRestoredSession,
+  blockUser as blockUserState,
+  blockedIdsFor,
   defaults,
   follow as followState,
   hydratePersisted,
   markNotificationsRead as markNotificationsReadState,
   mergeMatchAlerts,
+  mergeRemoteModeration,
   notificationsFor,
   rememberProfiles as rememberProfilesState,
   Persisted,
@@ -39,6 +49,7 @@ import {
   toggleFavoritePlayer as toggleFavoritePlayerState,
   toggleFavoriteTeam as toggleFavoriteTeamState,
   toggleLike as toggleLikeState,
+  unblockUser as unblockUserState,
   unfollow as unfollowState,
   unreadCountFor,
   updateProfile as updateProfileState,
@@ -52,6 +63,13 @@ import {
   upsertRemoteMotmVote,
   upsertRemotePrediction,
 } from '@/services/leaderboard';
+import {
+  asModerationClient,
+  deleteRemoteBlock,
+  insertRemoteBlock,
+  insertRemoteReport,
+  syncRemoteModeration,
+} from '@/services/moderation';
 
 const STORAGE_KEY = 'kickfeed.v1.state';
 
@@ -72,6 +90,17 @@ interface AppContextValue {
   likedPostIds: string[];
   predictions: ScorePrediction[];
   motmVotes: MotmVote[];
+  blockedUserIds: string[];
+  isBlocked: (userId: string) => boolean;
+  blockUser: (userId: string) => void;
+  unblockUser: (userId: string) => void;
+  report: (input: {
+    targetType: ReportTargetType;
+    targetId: string;
+    targetUserId: string;
+    reason: string;
+  }) => ReportResult;
+  hasReported: (targetType: ReportTargetType, targetId: string) => boolean;
   signInDemo: (userId: string) => void;
   signInWithEmail: (email: string, password: string) => Promise<EmailAuthResult>;
   signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<EmailAuthResult>;
@@ -237,16 +266,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => undefined);
   }, [state, ready]);
 
+  useEffect(() => {
+    if (!ready) return;
+    const userId = state.currentUserId;
+    if (!userId || !shouldPersistModeration(supabaseConfigured, state.authMode)) return;
+    let cancelled = false;
+    void (async () => {
+      const remote = await syncRemoteModeration(userId);
+      if (cancelled || 'error' in remote) return;
+      setState((prev) => {
+        if (prev.currentUserId !== userId) return prev;
+        return mergeRemoteModeration(prev, userId, remote.blocks, remote.reports);
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, state.currentUserId, state.authMode, supabaseConfigured]);
+
   const users = useMemo(() => usersFromState(state), [state]);
 
   const currentUser = users.find((u) => u.id === state.currentUserId) ?? null;
-  const followingIds = currentUser ? (state.following[currentUser.id] ?? []) : [];
+  const blockedUserIds = blockedIdsFor(state, currentUser?.id ?? null);
+  const followingIds = currentUser
+    ? (state.following[currentUser.id] ?? []).filter((id) => !blockedUserIds.includes(id))
+    : [];
   const favoriteTeamIds = currentUser?.favoriteTeamIds ?? [];
   const favoriteLeagueIds = currentUser?.favoriteLeagueIds ?? [];
   const favoritePlayerIds = currentUser ? (state.favorites[currentUser.id]?.players ?? []) : [];
   const likedPostIds = currentUser ? (state.likes[currentUser.id] ?? []) : [];
   const notifications = notificationsFor(state, currentUser?.id ?? null);
   const unreadCount = unreadCountFor(state, currentUser?.id ?? null);
+  const visiblePosts = visibleByAuthor(state.posts, blockedUserIds).sort(
+    (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+  );
+  const visibleComments = visibleByAuthor(state.comments, blockedUserIds);
 
   const patch = useCallback((fn: (prev: Persisted) => Persisted) => {
     setState((prev) => fn(prev));
@@ -298,13 +352,61 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       favoriteTeamIds,
       favoriteLeagueIds,
       favoritePlayerIds,
-      posts: [...state.posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
-      comments: state.comments,
+      posts: visiblePosts,
+      comments: visibleComments,
       notifications,
       unreadCount,
       likedPostIds,
       predictions: state.predictions,
       motmVotes: state.motmVotes,
+      blockedUserIds,
+      isBlocked: (userId) => isBlockedUser(blockedUserIds, userId),
+      blockUser: (userId) =>
+        patch((p) => {
+          const next = blockUserState(p, userId);
+          if (
+            shouldPersistModeration(supabaseConfigured, next.authMode) &&
+            next.currentUserId &&
+            next !== p
+          ) {
+            void insertRemoteBlock(asModerationClient(getSupabaseClient()), next.currentUserId, userId);
+          }
+          return next;
+        }),
+      unblockUser: (userId) =>
+        patch((p) => {
+          const next = unblockUserState(p, userId);
+          if (shouldPersistModeration(supabaseConfigured, next.authMode) && next.currentUserId && next !== p) {
+            void deleteRemoteBlock(asModerationClient(getSupabaseClient()), next.currentUserId, userId);
+          }
+          return next;
+        }),
+      report: (input) => {
+        let result: ReportResult = { ok: false, error: 'Couldn’t save this report.' };
+        patch((p) => {
+          const next = addReportState(p, input, Date.now());
+          result = next.result;
+          if (
+            next.result.ok &&
+            !next.result.duplicate &&
+            shouldPersistModeration(supabaseConfigured, next.state.authMode) &&
+            next.state.currentUserId
+          ) {
+            const saved = next.state.reports[0];
+            if (saved) {
+              void insertRemoteReport(asModerationClient(getSupabaseClient()), saved);
+            }
+          }
+          return next.state;
+        });
+        return result;
+      },
+      hasReported: (targetType, targetId) =>
+        !!currentUser &&
+        state.reports.some(
+          (row) =>
+            row.reporterId === currentUser.id && row.targetType === targetType && row.targetId === targetId,
+        ),
       signInDemo: (userId) => {
         void (async () => {
           try {
@@ -419,6 +521,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setPushPref,
     }),
     [
+      blockedUserIds,
       currentUser,
       easProjectId,
       enableDeviceAlerts,
@@ -437,6 +540,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       supabaseConfigured,
       unreadCount,
       users,
+      visibleComments,
+      visiblePosts,
     ],
   );
 

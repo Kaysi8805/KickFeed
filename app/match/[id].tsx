@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { PostCard } from '@/components/feed/PostCard';
@@ -8,6 +8,7 @@ import { LiveBadge } from '@/components/match/LiveBadge';
 import { MotmSection } from '@/components/match/MotmSection';
 import { PredictSection } from '@/components/match/PredictSection';
 import { TvMatchSection } from '@/components/tv/TvMatchSection';
+import { SafetyMenu } from '@/components/moderation/SafetyMenu';
 import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -27,6 +28,7 @@ import {
   resolveMatchDeepLink,
 } from '@/lib/matchSocial';
 import { routeId } from '@/lib/routeParams';
+import { matchChatSlowMode, slowModeComposerCopy } from '@/lib/moderation';
 import { useLiveTick } from '@/lib/useLiveTick';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import {
@@ -81,10 +83,19 @@ export default function MatchDetailScreen() {
   const [tab, setTab] = useState<Tab>(() => tabFromParam(tabParam));
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<string | undefined>();
+  const [chatNow, setChatNow] = useState(() => Date.now());
+  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     setTab(tabFromParam(tabParam));
   }, [tabParam]);
+
+  useEffect(() => {
+    if (tab !== 'chat') return;
+    setChatNow(Date.now());
+    const id = setInterval(() => setChatNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [tab]);
 
   const deepLink = id ? resolveMatchDeepLink(football, id) : undefined;
   const fixture = deepLink?.fixture;
@@ -143,6 +154,9 @@ export default function MatchDetailScreen() {
   const myMotm = motmVoteForUser(matchMotmVotes, currentUser?.id, relatedIds);
   const ballot = motmCandidates(football, fixture);
   const hubEngage = hubEngageState(fixture.status, !!myPrediction, !!myMotm);
+  const slowMode = matchChatSlowMode(comments, currentUser?.id, chatNow, relatedIds);
+  const slowCopy = slowModeComposerCopy(slowMode);
+  const canSend = !!currentUser && !!draft.trim() && slowMode.ok;
 
   return (
     <Screen padded={false}>
@@ -180,7 +194,12 @@ export default function MatchDetailScreen() {
           }
         />
       </View>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.board}>
           <Pressable style={styles.side} onPress={() => router.push(entityHref('team', home.id))}>
             <Crest team={home} size={56} />
@@ -436,9 +455,20 @@ export default function MatchDetailScreen() {
                       <Avatar initials={author?.initials ?? '?'} color={author?.avatarColor ?? colors.surfaceAlt} size={32} />
                     </Pressable>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.cname}>
-                        {author?.name ?? 'Fan'} <Text style={styles.ctime}>{timeAgo(c.createdAt)}</Text>
-                      </Text>
+                      <View style={styles.commentHead}>
+                        <Text style={styles.cname}>
+                          {author?.name ?? 'Fan'} <Text style={styles.ctime}>{timeAgo(c.createdAt)}</Text>
+                        </Text>
+                        {author ? (
+                          <SafetyMenu
+                            targetType="comment"
+                            targetId={c.id}
+                            targetUserId={author.id}
+                            targetName={author.name}
+                            compact
+                          />
+                        ) : null}
+                      </View>
                       <Text style={styles.ctext}>{c.text}</Text>
                       <Pressable onPress={() => setReplyTo(c.id)}>
                         <Text style={styles.reply}>Reply</Text>
@@ -447,9 +477,20 @@ export default function MatchDetailScreen() {
                         const ra = users.find((u) => u.id === r.authorId);
                         return (
                           <View key={r.id} style={styles.replyBox}>
-                            <Text style={styles.cname}>
-                              {ra?.name ?? 'Fan'} <Text style={styles.ctime}>{timeAgo(r.createdAt)}</Text>
-                            </Text>
+                            <View style={styles.commentHead}>
+                              <Text style={styles.cname}>
+                                {ra?.name ?? 'Fan'} <Text style={styles.ctime}>{timeAgo(r.createdAt)}</Text>
+                              </Text>
+                              {ra ? (
+                                <SafetyMenu
+                                  targetType="comment"
+                                  targetId={r.id}
+                                  targetUserId={ra.id}
+                                  targetName={ra.name}
+                                  compact
+                                />
+                              ) : null}
+                            </View>
                             <Text style={styles.ctext}>{r.text}</Text>
                           </View>
                         );
@@ -471,36 +512,42 @@ export default function MatchDetailScreen() {
                 Replying to {replyAuthor?.name ?? 'a comment'} · tap to cancel
               </Text>
             </Pressable>
-          ) : (
-            <Text style={styles.composerHint}>{label}</Text>
-          )}
+          ) : null}
+          <Text style={styles.composerHint}>{slowCopy}</Text>
           <View style={styles.inputRow}>
             <TextInput
               style={styles.input}
-              placeholder={currentUser ? `Talk ${home.code} vs ${away.code}…` : 'Sign in to chat'}
+              placeholder={
+                !currentUser
+                  ? 'Sign in to chat'
+                  : !slowMode.ok
+                    ? slowCopy
+                    : `Talk ${home.code} vs ${away.code}…`
+              }
               placeholderTextColor={colors.textDim}
               value={draft}
-              editable={!!currentUser}
+              editable={!!currentUser && slowMode.ok}
               onChangeText={setDraft}
               accessibilityLabel="Match discussion"
             />
             <Pressable
               onPress={() => {
-                if (!currentUser || !draft.trim()) return;
+                if (!canSend) return;
                 addComment(fixture.id, draft.trim(), replyTo);
                 setDraft('');
                 setReplyTo(undefined);
+                requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
               }}
-              disabled={!currentUser || !draft.trim()}
+              disabled={!canSend}
               accessibilityRole="button"
-              accessibilityState={{ disabled: !currentUser || !draft.trim() }}
+              accessibilityState={{ disabled: !canSend }}
               accessibilityLabel="Send comment"
-              style={[styles.send, (!currentUser || !draft.trim()) && styles.sendOff]}
+              style={[styles.send, !canSend && styles.sendOff]}
             >
               <Ionicons
                 name="send"
                 size={16}
-                color={!currentUser || !draft.trim() ? colors.textDim : colors.bg}
+                color={!canSend ? colors.textDim : colors.bg}
               />
             </Pressable>
           </View>
@@ -580,6 +627,7 @@ const styles = StyleSheet.create({
   },
   engageLine: { ...type.caption, color: colors.lime, fontWeight: '700' },
   comment: { flexDirection: 'row', gap: 8, marginBottom: spacing.md },
+  commentHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   cname: { ...type.caption, color: colors.text },
   ctime: { color: colors.textDim, fontWeight: '500' },
   ctext: { ...type.body, color: colors.text, marginTop: 2 },

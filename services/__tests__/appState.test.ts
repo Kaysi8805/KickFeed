@@ -1,13 +1,17 @@
 import {
   addComment,
   addPost,
+  addReport,
   applyAuthStateChange,
   applyRestoredSession,
+  blockUser,
+  blockedIdsFor,
   defaults,
   follow,
   hydratePersisted,
   markNotificationsRead,
   mergeMatchAlerts,
+  mergeRemoteModeration,
   rememberProfiles,
   setMotmVote,
   setPrediction,
@@ -17,10 +21,12 @@ import {
   toggleFavoritePlayer,
   toggleFavoriteTeam,
   toggleLike,
+  unblockUser,
   unreadCountFor,
   updateProfile,
   usersFromState,
 } from '@/services/appState';
+import { CHAT_SLOW_MODE_COOLDOWN_MS } from '@/lib/moderation';
 import { describe, expect, it } from 'vitest';
 
 describe('hydratePersisted', () => {
@@ -443,6 +449,146 @@ describe('supabase vs demo identity', () => {
     expect(refreshed.currentUserId).toBe(uuid);
     expect(applyAuthStateChange(signedIn, 'SIGNED_OUT', null).currentUserId).toBeNull();
     expect(applyAuthStateChange(signedIn, 'INITIAL_SESSION', account).currentUserId).toBe(uuid);
+  });
+});
+
+describe('reports, blocks, and match-chat slow-mode', () => {
+  it('hydrates blocks/reports for demo ids and supabase uuids, ignoring junk', () => {
+    const uuid = '11111111-1111-4111-8111-111111111111';
+    const next = hydratePersisted(
+      JSON.stringify({
+        schemaVersion: 2,
+        currentUserId: 'maya',
+        blocks: { maya: ['omar', 'ghost', 'maya'], [uuid]: [uuid, 'jordan'] },
+        reports: [
+          {
+            id: 'r-1',
+            reporterId: 'maya',
+            targetType: 'post',
+            targetId: 'p1',
+            targetUserId: 'jordan',
+            reason: 'Spam or scam',
+            createdAt: '2026-09-18T18:00:00.000Z',
+          },
+          { id: 'bad', reporterId: 'maya', targetType: 'post', targetId: 'p1', targetUserId: 'jordan', reason: 'x' },
+        ],
+      }),
+    );
+    expect(next.blocks.maya).toEqual(['omar']);
+    expect(next.blocks[uuid]).toEqual(['jordan']);
+    expect(next.reports).toHaveLength(1);
+    expect(next.reports[0]?.targetId).toBe('p1');
+    expect(hydratePersisted(JSON.stringify({ schemaVersion: 1, currentUserId: 'maya' })).blocks).toEqual({});
+  });
+
+  it('blocks a fan, unfollows them, and hides their notifications', () => {
+    const base = defaults();
+    const mayaUnread = unreadCountFor(base, 'maya');
+    let state = signInDemo(base, 'maya');
+    expect(state.following.maya).toContain('omar');
+    state = blockUser(state, 'omar');
+    expect(blockedIdsFor(state, 'maya')).toContain('omar');
+    expect(state.following.maya).not.toContain('omar');
+    expect(unreadCountFor(state, 'maya')).toBe(mayaUnread - 1);
+    state = follow(state, 'omar', 'Maya Chen');
+    expect(state.following.maya).not.toContain('omar');
+    state = unblockUser(state, 'omar');
+    expect(blockedIdsFor(state, 'maya')).not.toContain('omar');
+    expect(unreadCountFor(state, 'maya')).toBe(mayaUnread);
+    state = blockUser(state, 'jordan');
+    expect(unreadCountFor(state, 'maya')).toBe(mayaUnread - 1);
+    expect(blockUser(state, 'maya')).toBe(state);
+  });
+
+  it('records a short report once per target and keys uuid identities the same way', () => {
+    const uuid = '22222222-2222-4222-8222-222222222222';
+    let state = signInAccount(defaults(), {
+      id: uuid,
+      name: 'Karol',
+      handle: 'karol',
+      bio: '',
+      avatarColor: '#22C55E',
+      initials: 'KA',
+      favoriteTeamIds: [],
+      favoriteLeagueIds: [],
+      email: 'fan@example.com',
+    }, 'supabase');
+    const first = addReport(state, {
+      targetType: 'comment',
+      targetId: 'c1',
+      targetUserId: 'jordan',
+      reason: 'Harassment or hate',
+    }, 9_000);
+    expect(first.result).toEqual({ ok: true });
+    expect(first.state.reports[0]?.reporterId).toBe(uuid);
+    const again = addReport(first.state, {
+      targetType: 'comment',
+      targetId: 'c1',
+      targetUserId: 'jordan',
+      reason: 'Spam or scam',
+    }, 9_001);
+    expect(again.result).toEqual({ ok: true, duplicate: true });
+    expect(again.state.reports).toHaveLength(1);
+    const bad = addReport(first.state, {
+      targetType: 'profile',
+      targetId: uuid,
+      targetUserId: uuid,
+      reason: 'Spam or scam',
+    });
+    expect(bad.result.ok).toBe(false);
+  });
+
+  it('rate-limits match chat for the current identity', () => {
+    const t0 = Date.now() + 60_000;
+    let state = signInDemo(defaults(), 'maya');
+    state = addComment(state, 'fx-liv-ars', 'First', undefined, t0, ['fx-liv-ars']);
+    expect(state.comments.at(-1)?.text).toBe('First');
+    const blocked = addComment(state, 'fx-liv-ars', 'Too soon', undefined, t0 + 1_000, ['fx-liv-ars']);
+    expect(blocked.comments).toHaveLength(state.comments.length);
+    const later = addComment(
+      state,
+      'fx-liv-ars',
+      'After cooldown',
+      undefined,
+      t0 + CHAT_SLOW_MODE_COOLDOWN_MS,
+      ['fx-liv-ars'],
+    );
+    expect(later.comments.at(-1)?.text).toBe('After cooldown');
+  });
+
+  it('merges remote blocks/reports onto the signed-in uuid without clobbering demo slices', () => {
+    const uuid = '33333333-3333-4333-8333-333333333333';
+    let state = signInDemo(defaults(), 'maya');
+    state = blockUser(state, 'omar');
+    state = signInAccount(state, {
+      id: uuid,
+      name: 'Karol',
+      handle: 'karol',
+      bio: '',
+      avatarColor: '#22C55E',
+      initials: 'KA',
+      favoriteTeamIds: [],
+      favoriteLeagueIds: [],
+    }, 'supabase');
+    const merged = mergeRemoteModeration(
+      state,
+      uuid,
+      ['jordan', 'ghost'],
+      [
+        {
+          id: 'r-cloud',
+          reporterId: uuid,
+          targetType: 'profile',
+          targetId: 'jordan',
+          targetUserId: 'jordan',
+          reason: 'Spam or scam',
+          createdAt: '2026-09-18T18:00:00.000Z',
+        },
+      ],
+    );
+    expect(merged.blocks.maya).toContain('omar');
+    expect(merged.blocks[uuid]).toEqual(['jordan']);
+    expect(merged.reports.some((row) => row.id === 'r-cloud')).toBe(true);
   });
 });
 

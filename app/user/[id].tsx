@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PostCard } from '@/components/feed/PostCard';
+import { SafetyMenu } from '@/components/moderation/SafetyMenu';
 import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -13,6 +14,8 @@ import { football } from '@/services/football';
 import { fetchRemoteProfileById } from '@/services/leaderboard';
 import { colors, radius, spacing, type } from '@/theme';
 import { entityBackHref, entityHref } from '@/lib/entityNav';
+import { BLOCKED_PROFILE_BODY, BLOCKED_PROFILE_TITLE, moderationDisclaimer } from '@/lib/honesty';
+import { shouldPersistModeration } from '@/lib/moderation';
 import { safeBack } from '@/lib/navBack';
 import { routeId } from '@/lib/routeParams';
 import { isPersistedUserId, isSupabaseUserId, userFromProfile } from '@/lib/userIdentity';
@@ -21,7 +24,7 @@ import type { User } from '@/data/types';
 export default function UserScreen() {
   const { id: rawId } = useLocalSearchParams<{ id: string | string[] }>();
   const id = routeId(rawId);
-  const { users, currentUser, followingIds, follow, unfollow, posts, likedPostIds, toggleLike, followerCount, rememberProfiles } =
+  const { users, currentUser, followingIds, follow, unfollow, posts, likedPostIds, toggleLike, followerCount, rememberProfiles, isBlocked, blockUser, unblockUser, authMode, supabaseConfigured } =
     useApp();
   const fromState = id ? users.find((u) => u.id === id) : undefined;
   const [fetched, setFetched] = useState<User | undefined>();
@@ -54,8 +57,10 @@ export default function UserScreen() {
 
   const mine = currentUser?.id === user.id;
   const following = followingIds.includes(user.id);
+  const blocked = isBlocked(user.id);
   const userPosts = posts.filter((p) => p.authorId === user.id);
   const teams = user.favoriteTeamIds.map((tid) => football.getTeam(tid)).filter(Boolean);
+  const honesty = moderationDisclaimer(shouldPersistModeration(supabaseConfigured, authMode));
 
   return (
     <Screen padded={false}>
@@ -81,17 +86,48 @@ export default function UserScreen() {
             )}
           </View>
           {!mine ? (
-            <Pressable
-              onPress={() => (following ? unfollow(user.id) : follow(user.id))}
-              style={[styles.follow, following && styles.unfollow]}
-            >
-              <Text style={[styles.followText, following && styles.unfollowText]}>
-                {following ? 'Following' : 'Follow'}
-              </Text>
-            </Pressable>
+            <View style={styles.profileActions}>
+              {blocked ? (
+                <Pressable
+                  onPress={() => unblockUser(user.id)}
+                  style={[styles.follow, styles.unfollow]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Unblock ${user.name}`}
+                >
+                  <Text style={[styles.followText, styles.unfollowText]}>Unblock</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() => (following ? unfollow(user.id) : follow(user.id))}
+                  style={[styles.follow, following && styles.unfollow]}
+                >
+                  <Text style={[styles.followText, following && styles.unfollowText]}>
+                    {following ? 'Following' : 'Follow'}
+                  </Text>
+                </Pressable>
+              )}
+              {!blocked ? (
+                <Pressable
+                  onPress={() => blockUser(user.id)}
+                  style={[styles.follow, styles.unfollow]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Block ${user.name}`}
+                >
+                  <Text style={[styles.followText, styles.unfollowText]}>Block</Text>
+                </Pressable>
+              ) : null}
+              <SafetyMenu
+                targetType="profile"
+                targetId={user.id}
+                targetUserId={user.id}
+                targetName={user.name}
+              />
+            </View>
           ) : null}
         </View>
-        {userPosts.length === 0 ? (
+        {blocked ? (
+          <EmptyState title={BLOCKED_PROFILE_TITLE} body={`${BLOCKED_PROFILE_BODY} ${honesty}`} />
+        ) : userPosts.length === 0 ? (
           <EmptyState
             title="No posts on this device"
             body={
@@ -126,7 +162,6 @@ const styles = StyleSheet.create({
   counts: { ...type.caption, color: colors.textDim, marginTop: spacing.sm, fontWeight: '500' },
   crests: { flexDirection: 'row', gap: 8, marginTop: spacing.md },
   follow: {
-    marginTop: spacing.lg,
     backgroundColor: colors.lime,
     paddingHorizontal: 22,
     paddingVertical: 8,
@@ -135,4 +170,5 @@ const styles = StyleSheet.create({
   followText: { ...type.caption, color: colors.bg, fontWeight: '800' },
   unfollow: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   unfollowText: { color: colors.text },
+  profileActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: spacing.lg },
 });

@@ -234,5 +234,6 @@ export const seedNotifications: AppNotification[] = [
     read: false,
     recipientId: 'maya',
     matchId: 'fx-liv-ars',
+    userId: 'omar',
   },
 ];

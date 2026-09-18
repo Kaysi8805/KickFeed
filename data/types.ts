@@ -255,3 +255,19 @@ export interface AppNotification {
   /** Actor or related user (never equal to recipientId for self-activity). */
   userId?: string;
 }
+
+export const REPORT_TARGET_TYPES = ['post', 'profile', 'comment'] as const;
+
+export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
+
+/** Report of a post, profile, or match-chat message. Keyed by demo id or auth uuid. */
+export interface UserReport {
+  id: string;
+  reporterId: string;
+  targetType: ReportTargetType;
+  targetId: string;
+  /** Author of the post/comment, or the profile being reported. */
+  targetUserId: string;
+  reason: string;
+  createdAt: string;
+}

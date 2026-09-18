@@ -1,8 +1,18 @@
-import type { AppNotification, Comment, Fixture, MatchStatus, MotmVote, Post, ScorePrediction, User } from '@/data/types';
+import type { AppNotification, Comment, Fixture, MatchStatus, MotmVote, Post, ScorePrediction, User, UserReport } from '@/data/types';
 import { seedMotmVotes, seedPredictions } from '@/data/mocks/engagement';
 import { demoUsers, seedComments, seedFollowing, seedNotifications, seedPosts } from '@/data/mocks/social';
 import { clampScore, isMotmOpen, isPredictionOpen, motmVoteForUser, predictionForUser } from '@/lib/engagement';
 import type { MatchAlertDraft } from '@/lib/matchSocial';
+import {
+  buildUserReport,
+  matchChatSlowMode,
+  parseUserReport,
+  reportKey,
+  uniqueBlockedIds,
+  visibleNotifications,
+  type ReportInput,
+  type ReportResult,
+} from '@/lib/moderation';
 import {
   inferAuthMode,
   isDemoUserId,
@@ -36,6 +46,9 @@ export interface Persisted {
   notifications: AppNotification[];
   predictions: ScorePrediction[];
   motmVotes: MotmVote[];
+  /** blockerId → blocked user ids (demo seed or auth uuid). */
+  blocks: Record<string, string[]>;
+  reports: UserReport[];
 }
 
 export function defaults(): Persisted {
@@ -56,6 +69,8 @@ export function defaults(): Persisted {
     notifications: seedNotifications,
     predictions: seedPredictions,
     motmVotes: seedMotmVotes,
+    blocks: {},
+    reports: [],
   };
 }
 
@@ -147,6 +162,16 @@ function pickFavorites(value: unknown, fallback: Persisted['favorites']): Persis
   return out;
 }
 
+function pickBlocks(value: unknown, fallback: Persisted['blocks']): Persisted['blocks'] {
+  if (!isPlainObject(value)) return fallback;
+  const out: Persisted['blocks'] = { ...fallback };
+  for (const [userId, ids] of Object.entries(value)) {
+    if (!isPersistedUserId(userId)) continue;
+    out[userId] = uniqueBlockedIds(ids, userId);
+  }
+  return out;
+}
+
 /**
  * Parse AsyncStorage JSON.
  * Corrupt JSON → full defaults.
@@ -179,6 +204,8 @@ export function hydratePersisted(raw: string | null): Persisted {
     notifications: pickArray(parsed.notifications, base.notifications),
     predictions: pickPredictions(parsed.predictions, base.predictions),
     motmVotes: pickMotmVotes(parsed.motmVotes, base.motmVotes),
+    blocks: pickBlocks(parsed.blocks, base.blocks),
+    reports: pickParsedRows(parsed.reports, base.reports, parseUserReport),
   };
 }
 
@@ -311,16 +338,30 @@ function isSelfActivity(n: AppNotification, userId: string): boolean {
   return n.userId === userId;
 }
 
+export function blockedIdsFor(state: Persisted, userId: string | null): string[] {
+  if (!userId) return [];
+  return uniqueBlockedIds(state.blocks[userId], userId);
+}
+
 export function notificationsFor(state: Persisted, userId: string | null): AppNotification[] {
   if (!userId) return [];
-  return state.notifications
-    .filter((n) => n.recipientId === userId && !isSelfActivity(n, userId))
-    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const blocked = blockedIdsFor(state, userId);
+  return visibleNotifications(
+    state.notifications.filter((n) => n.recipientId === userId && !isSelfActivity(n, userId)),
+    blocked,
+  ).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
 export function unreadCountFor(state: Persisted, userId: string | null): number {
   if (!userId) return 0;
-  return state.notifications.filter((n) => n.recipientId === userId && !n.read && !isSelfActivity(n, userId)).length;
+  const blocked = new Set(blockedIdsFor(state, userId));
+  return state.notifications.filter(
+    (n) =>
+      n.recipientId === userId &&
+      !n.read &&
+      !isSelfActivity(n, userId) &&
+      !(n.userId && blocked.has(n.userId)),
+  ).length;
 }
 
 export function signInDemo(state: Persisted, userId: string): Persisted {
@@ -336,6 +377,7 @@ export function signOut(state: Persisted): Persisted {
 
 export function follow(state: Persisted, targetUserId: string, actorDisplayName: string, now = Date.now()): Persisted {
   if (!state.currentUserId || targetUserId === state.currentUserId) return state;
+  if (blockedIdsFor(state, state.currentUserId).includes(targetUserId)) return state;
   const mine = new Set(state.following[state.currentUserId] ?? []);
   mine.add(targetUserId);
   const notification: AppNotification = {
@@ -484,6 +526,13 @@ export function addComment(
   relatedMatchIds: string[] = [matchId],
 ): Persisted {
   if (!state.currentUserId) return state;
+  const slow = matchChatSlowMode(
+    state.comments,
+    state.currentUserId,
+    now,
+    relatedMatchIds.length ? relatedMatchIds : [matchId],
+  );
+  if (!slow.ok) return state;
   const authorId = state.currentUserId;
   const authorName =
     state.profiles[authorId]?.name ?? demoUsers.find((u) => u.id === authorId)?.name ?? 'A fan';
@@ -691,4 +740,96 @@ export function setMotmVote(
     ? state.notifications
     : [notification, ...state.notifications];
   return { ...state, motmVotes: [...state.motmVotes, vote], notifications };
+}
+
+export function blockUser(state: Persisted, targetUserId: string): Persisted {
+  if (!state.currentUserId || !isPersistedUserId(targetUserId) || targetUserId === state.currentUserId) {
+    return state;
+  }
+  const actor = state.currentUserId;
+  const mine = uniqueBlockedIds([...(state.blocks[actor] ?? []), targetUserId], actor);
+  return unfollow(
+    {
+      ...state,
+      blocks: { ...state.blocks, [actor]: mine },
+    },
+    targetUserId,
+  );
+}
+
+export function unblockUser(state: Persisted, targetUserId: string): Persisted {
+  if (!state.currentUserId) return state;
+  const actor = state.currentUserId;
+  const next = (state.blocks[actor] ?? []).filter((id) => id !== targetUserId);
+  if (next.length === (state.blocks[actor] ?? []).length) return state;
+  return { ...state, blocks: { ...state.blocks, [actor]: next } };
+}
+
+export function hasReport(
+  state: Persisted,
+  reporterId: string,
+  targetType: UserReport['targetType'],
+  targetId: string,
+): boolean {
+  const key = reportKey({ reporterId, targetType, targetId });
+  return state.reports.some((row) => reportKey(row) === key);
+}
+
+export function addReport(
+  state: Persisted,
+  input: Omit<ReportInput, 'reporterId'> & { reporterId?: string },
+  now = Date.now(),
+): { state: Persisted; result: ReportResult } {
+  const reporterId = input.reporterId ?? state.currentUserId;
+  if (!reporterId) return { state, result: { ok: false, error: 'Sign in to report.' } };
+  const report = buildUserReport(
+    {
+      reporterId,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      targetUserId: input.targetUserId,
+      reason: input.reason,
+    },
+    now,
+  );
+  if (!report) return { state, result: { ok: false, error: 'Add a short reason (3–280 characters).' } };
+  if (hasReport(state, report.reporterId, report.targetType, report.targetId)) {
+    return { state, result: { ok: true, duplicate: true } };
+  }
+  return { state: { ...state, reports: [report, ...state.reports] }, result: { ok: true } };
+}
+
+/**
+ * Union remote blocks/reports for this identity onto the local blob.
+ * Local rows win on duplicate report keys. Other users’ demo slices stay put.
+ */
+export function mergeRemoteModeration(
+  state: Persisted,
+  userId: string,
+  remoteBlockedIds: string[],
+  remoteReports: UserReport[],
+): Persisted {
+  if (!isPersistedUserId(userId)) return state;
+  const blocks = uniqueBlockedIds([...(state.blocks[userId] ?? []), ...remoteBlockedIds], userId);
+  const byKey = new Map<string, UserReport>();
+  for (const row of remoteReports) {
+    if (row.reporterId !== userId) continue;
+    byKey.set(reportKey(row), row);
+  }
+  for (const row of state.reports) {
+    byKey.set(reportKey(row), row);
+  }
+  const sameBlocks =
+    blocks.length === (state.blocks[userId] ?? []).length &&
+    blocks.every((id) => (state.blocks[userId] ?? []).includes(id));
+  const nextReports = [...byKey.values()];
+  const sameReports =
+    nextReports.length === state.reports.length &&
+    nextReports.every((row) => state.reports.some((local) => local.id === row.id));
+  if (sameBlocks && sameReports) return state;
+  return {
+    ...state,
+    blocks: { ...state.blocks, [userId]: blocks },
+    reports: nextReports,
+  };
 }
