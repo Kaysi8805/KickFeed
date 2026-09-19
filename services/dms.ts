@@ -37,13 +37,13 @@ export function parseRemoteDirectMessage(value: unknown): DirectMessage | null {
   });
 }
 
+/** Insert payload. Omit created_at so Postgres default + insert trigger stamp now(). */
 export function dmToRemote(row: DirectMessage): Record<string, unknown> {
   return {
     id: row.id,
     sender_id: row.senderId,
     recipient_id: row.recipientId,
     body: row.text,
-    created_at: row.createdAt,
   };
 }
 

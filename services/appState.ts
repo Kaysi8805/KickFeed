@@ -399,21 +399,26 @@ export function dmReadsFor(state: Persisted, userId: string | null): Record<stri
 export function notificationsFor(state: Persisted, userId: string | null): AppNotification[] {
   if (!userId) return [];
   const blocked = blockedIdsFor(state, userId);
+  const cannotDm = cannotDmPeerIds(state, userId);
   return visibleNotifications(
     state.notifications.filter((n) => n.recipientId === userId && !isSelfActivity(n, userId)),
     blocked,
-  ).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  )
+    .filter((row) => row.type !== 'dm' || !row.userId || !cannotDm.includes(row.userId))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
 export function unreadCountFor(state: Persisted, userId: string | null): number {
   if (!userId) return 0;
   const blocked = new Set(blockedIdsFor(state, userId));
+  const cannotDm = new Set(cannotDmPeerIds(state, userId));
   return state.notifications.filter(
     (n) =>
       n.recipientId === userId &&
       !n.read &&
       !isSelfActivity(n, userId) &&
-      !(n.userId && blocked.has(n.userId)),
+      !(n.userId && blocked.has(n.userId)) &&
+      !(n.type === 'dm' && n.userId && cannotDm.has(n.userId)),
   ).length;
 }
 

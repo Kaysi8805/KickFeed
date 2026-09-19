@@ -118,6 +118,8 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- Client timestamps cannot backdate a row past the slow-mode window.
+  new.created_at := now();
   if private.dm_rate_limited(new.sender_id, new.recipient_id) then
     raise exception 'slow_mode';
   end if;

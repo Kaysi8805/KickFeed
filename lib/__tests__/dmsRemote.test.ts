@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
   asDmsClient,
+  dmToRemote,
   fetchRemoteDirectMessages,
   insertRemoteDirectMessage,
   parseRemoteDirectMessage,
@@ -67,6 +70,14 @@ describe('remote dm rows', () => {
       table: 'direct_messages',
       row: { sender_id: UUID, recipient_id: 'jordan', body: 'YNWA' },
     });
+    expect(inserts[0]?.row).not.toHaveProperty('created_at');
+    expect(dmToRemote({
+      id: 'dm-9',
+      senderId: UUID,
+      recipientId: 'jordan',
+      text: 'YNWA',
+      createdAt: '2026-09-19T12:02:00.000Z',
+    })).not.toHaveProperty('created_at');
   });
 
   it('treats unique violations as already-saved and maps slow_mode', async () => {
@@ -105,5 +116,12 @@ describe('remote dm rows', () => {
         })
       ).error,
     ).toBe('slow_mode');
+  });
+
+  it('stamps created_at in the insert trigger so client clocks cannot skip slow-mode', () => {
+    for (const file of ['20260919120000_direct_messages.sql', '20260919133000_dm_stamp_created_at.sql']) {
+      const sql = readFileSync(join(process.cwd(), 'supabase/migrations', file), 'utf8');
+      expect(sql).toMatch(/new\.created_at\s*:=\s*now\(\)/i);
+    }
   });
 });

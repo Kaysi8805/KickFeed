@@ -16,6 +16,7 @@ import {
   mergeMatchAlerts,
   mergeRemoteDirectMessages,
   mergeRemoteModeration,
+  notificationsFor,
   rememberProfiles,
   sendDirectMessage,
   setMotmVote,
@@ -642,6 +643,41 @@ describe('direct messages', () => {
     state = signInDemo(state, 'omar');
     expect(cannotDmPeerIds(state, 'omar')).toContain('maya');
     expect(canMessagePeer(state, 'maya')).toBe(false);
+  });
+
+  it('hides DM notification previews when the other person blocked you', () => {
+    let state = signInDemo(defaults(), 'omar');
+    const sent = sendDirectMessage(state, 'maya', 'sofa ping', 40_000);
+    expect(sent.result.ok).toBe(true);
+    state = sent.state;
+    expect(notificationsFor(state, 'maya').some((n) => n.type === 'dm' && n.userId === 'omar')).toBe(true);
+    const unreadWithDm = unreadCountFor(state, 'maya');
+    state = blockUser(state, 'maya');
+    expect(notificationsFor(state, 'maya').some((n) => n.type === 'dm' && n.userId === 'omar')).toBe(false);
+    expect(unreadCountFor(state, 'maya')).toBe(unreadWithDm - 1);
+
+    const uuid = '77777777-7777-4777-8777-777777777777';
+    state = signInDemo(defaults(), 'maya');
+    state = {
+      ...state,
+      notifications: [
+        {
+          id: 'n-dm-live',
+          type: 'dm',
+          title: 'Live fan sent a message',
+          body: 'hello',
+          createdAt: '2026-09-19T12:00:00.000Z',
+          read: false,
+          recipientId: 'maya',
+          userId: uuid,
+        },
+        ...state.notifications,
+      ],
+    };
+    expect(notificationsFor(state, 'maya').some((n) => n.id === 'n-dm-live')).toBe(true);
+    const merged = mergeRemoteModeration(state, 'maya', [], [], [uuid]);
+    expect(notificationsFor(merged, 'maya').some((n) => n.id === 'n-dm-live')).toBe(false);
+    expect(unreadCountFor(merged, 'maya')).toBe(unreadCountFor(state, 'maya') - 1);
   });
 
   it('rate-limits DMs in a thread the same way as match chat', () => {

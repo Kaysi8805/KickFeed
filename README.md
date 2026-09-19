@@ -343,7 +343,7 @@ Open a post (···), a fan profile, or a match-hub message:
 - **Block** — unfollows that fan and hides their posts, match-chat messages, DMs, and notifications on this account. Unblock from their profile or **Profile → Blocked fans**.
 - **Slow-mode** — match discussion allows one message every 20 seconds in that thread, and at most 5 messages across hubs in 2 minutes. **DMs** use the same 20s per thread, plus at most 8 messages across conversations in 2 minutes. The composer says how long to wait.
 
-**Demo** (no Supabase env, or Continue with demo): blocks/reports/DMs stay in `kickfeed.v1.state`. **Live** (email session): the same lists also write to `user_blocks` / `user_reports` / `direct_messages` (RLS: participants / own rows). Karol applies [`supabase/migrations/20260918180000_reports_blocks.sql`](supabase/migrations/20260918180000_reports_blocks.sql) then [`supabase/migrations/20260919120000_direct_messages.sql`](supabase/migrations/20260919120000_direct_messages.sql) in the SQL editor after the earlier profile/leaderboard files.
+**Demo** (no Supabase env, or Continue with demo): blocks/reports/DMs stay in `kickfeed.v1.state`. **Live** (email session): the same lists also write to `user_blocks` / `user_reports` / `direct_messages` (RLS: participants / own rows). Karol applies [`supabase/migrations/20260918180000_reports_blocks.sql`](supabase/migrations/20260918180000_reports_blocks.sql), [`supabase/migrations/20260919120000_direct_messages.sql`](supabase/migrations/20260919120000_direct_messages.sql), then [`supabase/migrations/20260919133000_dm_stamp_created_at.sql`](supabase/migrations/20260919133000_dm_stamp_created_at.sql) if 19120000 was already applied without the `created_at := now()` trigger.
 
 ## Direct messages
 
@@ -361,7 +361,7 @@ Open a post (···), a fan profile, or a match-hub message:
 
 **Try (email / live)**
 
-1. Set `EXPO_PUBLIC_SUPABASE_*` (see [Supabase email auth](#supabase-email-auth)). Apply the SQL files, including `20260919120000_direct_messages.sql`.
+1. Set `EXPO_PUBLIC_SUPABASE_*` (see [Supabase email auth](#supabase-email-auth)). Apply the SQL files, including `20260919120000_direct_messages.sql` (and `20260919133000_dm_stamp_created_at.sql` if that first DM file was already applied).
 2. Sign in as two real accounts (two devices, or sign out / sign up). Identity is `auth.users.id`.
 3. Open the other fan’s profile → **Message**. Sends write `direct_messages` under RLS. Honesty copy on the inbox says **KickFeed Postgres**.
 4. Demo Maya↔Omar threads stay on-device; they do not mix into the live table.

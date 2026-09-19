@@ -20,7 +20,7 @@ const icons: Record<string, string> = {
 };
 
 export default function NotificationsScreen() {
-  const { notifications, markNotificationsRead } = useApp();
+  const { notifications, markNotificationsRead, canMessage } = useApp();
 
   return (
     <Screen padded={false}>
@@ -47,6 +47,7 @@ export default function NotificationsScreen() {
                   const tab = n.type === 'comment' ? 'chat' : n.type === 'prediction' ? 'predict' : n.type === 'motm' ? 'motm' : undefined;
                   router.push(tab ? `/match/${n.matchId}?tab=${tab}` : `/match/${n.matchId}`);
                 } else if (n.type === 'dm' && n.userId) {
+                  if (!canMessage(n.userId)) return;
                   router.push(`/messages/${n.userId}`);
                 } else if (n.userId) router.push(`/user/${n.userId}`);
               }}
