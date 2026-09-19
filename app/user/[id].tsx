@@ -24,7 +24,7 @@ import type { User } from '@/data/types';
 export default function UserScreen() {
   const { id: rawId } = useLocalSearchParams<{ id: string | string[] }>();
   const id = routeId(rawId);
-  const { users, currentUser, followingIds, follow, unfollow, posts, likedPostIds, toggleLike, followerCount, rememberProfiles, isBlocked, blockUser, unblockUser, authMode, supabaseConfigured } =
+  const { users, currentUser, followingIds, follow, unfollow, posts, likedPostIds, toggleLike, followerCount, rememberProfiles, isBlocked, blockUser, unblockUser, authMode, supabaseConfigured, canMessage } =
     useApp();
   const fromState = id ? users.find((u) => u.id === id) : undefined;
   const [fetched, setFetched] = useState<User | undefined>();
@@ -58,6 +58,7 @@ export default function UserScreen() {
   const mine = currentUser?.id === user.id;
   const following = followingIds.includes(user.id);
   const blocked = isBlocked(user.id);
+  const messageable = !mine && canMessage(user.id);
   const userPosts = posts.filter((p) => p.authorId === user.id);
   const teams = user.favoriteTeamIds.map((tid) => football.getTeam(tid)).filter(Boolean);
   const honesty = moderationDisclaimer(shouldPersistModeration(supabaseConfigured, authMode));
@@ -106,6 +107,16 @@ export default function UserScreen() {
                   </Text>
                 </Pressable>
               )}
+              {messageable ? (
+                <Pressable
+                  onPress={() => router.push(`/messages/${user.id}`)}
+                  style={[styles.follow, styles.unfollow]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Message ${user.name}`}
+                >
+                  <Text style={[styles.followText, styles.unfollowText]}>Message</Text>
+                </Pressable>
+              ) : null}
               {!blocked ? (
                 <Pressable
                   onPress={() => blockUser(user.id)}
@@ -170,5 +181,5 @@ const styles = StyleSheet.create({
   followText: { ...type.caption, color: colors.bg, fontWeight: '800' },
   unfollow: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   unfollowText: { color: colors.text },
-  profileActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: spacing.lg },
+  profileActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: spacing.lg },
 });

@@ -16,10 +16,11 @@ const icons: Record<string, string> = {
   friend_post: '📣',
   prediction: '🔢',
   motm: '⭐',
+  dm: '✉️',
 };
 
 export default function NotificationsScreen() {
-  const { notifications, markNotificationsRead } = useApp();
+  const { notifications, markNotificationsRead, canMessage } = useApp();
 
   return (
     <Screen padded={false}>
@@ -36,7 +37,7 @@ export default function NotificationsScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         {notifications.length === 0 ? (
-          <EmptyState title="All quiet" body="Match chat, predictions, MOTM, goals, kickoffs, and friend posts will land here." />
+          <EmptyState title="All quiet" body="Match chat, DMs, predictions, MOTM, goals, kickoffs, and friend posts will land here." />
         ) : (
           notifications.map((n) => (
             <Pressable
@@ -45,6 +46,9 @@ export default function NotificationsScreen() {
                 if (n.matchId) {
                   const tab = n.type === 'comment' ? 'chat' : n.type === 'prediction' ? 'predict' : n.type === 'motm' ? 'motm' : undefined;
                   router.push(tab ? `/match/${n.matchId}?tab=${tab}` : `/match/${n.matchId}`);
+                } else if (n.type === 'dm' && n.userId) {
+                  if (!canMessage(n.userId)) return;
+                  router.push(`/messages/${n.userId}`);
                 } else if (n.userId) router.push(`/user/${n.userId}`);
               }}
               style={[styles.card, !n.read && styles.unread]}

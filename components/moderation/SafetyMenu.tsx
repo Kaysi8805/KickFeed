@@ -39,7 +39,7 @@ export function SafetyMenu({
     }
     blockUser(targetUserId);
     if (Platform.OS !== 'web') {
-      Alert.alert('Blocked', `${label}’s posts and match-chat messages are hidden on this account.`);
+      Alert.alert('Blocked', `${label}’s posts, match-chat, and DMs are hidden on this account.`);
     }
   }
 
@@ -67,7 +67,9 @@ export function SafetyMenu({
               accessibilityLabel={`Report ${label}`}
               style={styles.row}
             >
-              <Text style={styles.rowText}>Report {targetType === 'profile' ? 'profile' : targetType === 'post' ? 'post' : 'message'}</Text>
+              <Text style={styles.rowText}>
+                Report {targetType === 'profile' ? 'profile' : targetType === 'post' ? 'post' : 'message'}
+              </Text>
             </Pressable>
             <Pressable onPress={onBlock} accessibilityRole="button" accessibilityLabel={blocked ? `Unblock ${label}` : `Block ${label}`} style={styles.row}>
               <Text style={[styles.rowText, !blocked && styles.danger]}>{blocked ? 'Unblock' : 'Block'}</Text>

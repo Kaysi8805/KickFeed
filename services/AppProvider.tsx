@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import type { AppNotification, Comment, Fixture, MotmVote, Post, ReportTargetType, ScorePrediction, User } from '@/data/types';
+import type { AppNotification, Comment, DirectMessage, Fixture, MotmVote, Post, ReportTargetType, ScorePrediction, User } from '@/data/types';
 import { motmVoteForUser, predictionForUser, type MotmCandidate } from '@/lib/engagement';
 import { shouldPersistLeaderboard } from '@/lib/leaderboard';
 import { defaultPushPrefs, emptyPushSnapshot, planFavoriteDeviceAlerts, type PushPrefs, type PushSnapshot } from '@/lib/favoritePush';
@@ -13,6 +13,17 @@ import {
   visibleByAuthor,
   type ReportResult,
 } from '@/lib/moderation';
+import {
+  canDmPeer,
+  dmSlowMode,
+  inboxThreads,
+  messagesForThread,
+  shouldPersistDms,
+  unreadDmCount,
+  visibleDirectMessages,
+  type DmThread,
+  type SendDmResult,
+} from '@/lib/dms';
 import {
   applyDeviceAlerts,
   cancelAllDeviceAlerts,
@@ -31,15 +42,20 @@ import {
   applyRestoredSession,
   blockUser as blockUserState,
   blockedIdsFor,
+  cannotDmPeerIds,
   defaults,
+  dmReadsFor,
   follow as followState,
   hydratePersisted,
+  markDmThreadRead as markDmThreadReadState,
   markNotificationsRead as markNotificationsReadState,
   mergeMatchAlerts,
+  mergeRemoteDirectMessages,
   mergeRemoteModeration,
   notificationsFor,
   rememberProfiles as rememberProfilesState,
   Persisted,
+  sendDirectMessage as sendDirectMessageState,
   setMotmVote as setMotmVoteState,
   setPrediction as setPredictionState,
   signInAccount,
@@ -70,6 +86,7 @@ import {
   insertRemoteReport,
   syncRemoteModeration,
 } from '@/services/moderation';
+import { asDmsClient, insertRemoteDirectMessage, syncRemoteDirectMessages } from '@/services/dms';
 
 const STORAGE_KEY = 'kickfeed.v1.state';
 
@@ -91,7 +108,9 @@ interface AppContextValue {
   predictions: ScorePrediction[];
   motmVotes: MotmVote[];
   blockedUserIds: string[];
+  cannotDmUserIds: string[];
   isBlocked: (userId: string) => boolean;
+  canMessage: (userId: string) => boolean;
   blockUser: (userId: string) => void;
   unblockUser: (userId: string) => void;
   report: (input: {
@@ -101,6 +120,13 @@ interface AppContextValue {
     reason: string;
   }) => ReportResult;
   hasReported: (targetType: ReportTargetType, targetId: string) => boolean;
+  directMessages: DirectMessage[];
+  dmThreads: DmThread[];
+  unreadDmCount: number;
+  threadMessages: (peerId: string) => DirectMessage[];
+  sendDirectMessage: (peerId: string, text: string) => SendDmResult;
+  markDmThreadRead: (peerId: string) => void;
+  dmSlowModeFor: (peerId: string, now?: number) => ReturnType<typeof dmSlowMode>;
   signInDemo: (userId: string) => void;
   signInWithEmail: (email: string, password: string) => Promise<EmailAuthResult>;
   signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<EmailAuthResult>;
@@ -276,7 +302,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (cancelled || 'error' in remote) return;
       setState((prev) => {
         if (prev.currentUserId !== userId) return prev;
-        return mergeRemoteModeration(prev, userId, remote.blocks, remote.reports);
+        return mergeRemoteModeration(prev, userId, remote.blocks, remote.reports, remote.blockedBy);
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, state.currentUserId, state.authMode, supabaseConfigured]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const userId = state.currentUserId;
+    if (!userId || !shouldPersistDms(supabaseConfigured, state.authMode)) return;
+    let cancelled = false;
+    void (async () => {
+      const remote = await syncRemoteDirectMessages(userId);
+      if (cancelled || 'error' in remote) return;
+      setState((prev) => {
+        if (prev.currentUserId !== userId) return prev;
+        return mergeRemoteDirectMessages(prev, userId, remote.messages);
       });
     })();
     return () => {
@@ -288,6 +332,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const currentUser = users.find((u) => u.id === state.currentUserId) ?? null;
   const blockedUserIds = blockedIdsFor(state, currentUser?.id ?? null);
+  const cannotDmUserIds = cannotDmPeerIds(state, currentUser?.id ?? null);
+  const dmReadMap = dmReadsFor(state, currentUser?.id ?? null);
+  const visibleDms = visibleDirectMessages(state.directMessages, currentUser?.id ?? null, cannotDmUserIds);
+  const dmThreadList = inboxThreads(state.directMessages, currentUser?.id ?? null, cannotDmUserIds, dmReadMap);
+  const dmUnread = unreadDmCount(state.directMessages, currentUser?.id ?? null, cannotDmUserIds, dmReadMap);
   const followingIds = currentUser
     ? (state.following[currentUser.id] ?? []).filter((id) => !blockedUserIds.includes(id))
     : [];
@@ -360,7 +409,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       predictions: state.predictions,
       motmVotes: state.motmVotes,
       blockedUserIds,
+      cannotDmUserIds,
       isBlocked: (userId) => isBlockedUser(blockedUserIds, userId),
+      canMessage: (userId) => canDmPeer(currentUser?.id ?? null, userId, cannotDmUserIds),
       blockUser: (userId) =>
         patch((p) => {
           const next = blockUserState(p, userId);
@@ -407,6 +458,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           (row) =>
             row.reporterId === currentUser.id && row.targetType === targetType && row.targetId === targetId,
         ),
+      directMessages: visibleDms,
+      dmThreads: dmThreadList,
+      unreadDmCount: dmUnread,
+      threadMessages: (peerId) =>
+        currentUser ? messagesForThread(visibleDms, currentUser.id, peerId) : [],
+      sendDirectMessage: (peerId, text) => {
+        let result: SendDmResult = { ok: false, error: 'Couldn’t send this message.' };
+        patch((p) => {
+          const next = sendDirectMessageState(p, peerId, text, Date.now());
+          result = next.result;
+          if (
+            next.result.ok &&
+            shouldPersistDms(supabaseConfigured, next.state.authMode) &&
+            next.state.currentUserId
+          ) {
+            void insertRemoteDirectMessage(asDmsClient(getSupabaseClient()), next.result.message);
+          }
+          return next.state;
+        });
+        return result;
+      },
+      markDmThreadRead: (peerId) => patch((p) => markDmThreadReadState(p, peerId)),
+      dmSlowModeFor: (peerId, now = Date.now()) => dmSlowMode(state.directMessages, currentUser?.id, peerId, now),
       signInDemo: (userId) => {
         void (async () => {
           try {
@@ -522,7 +596,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       blockedUserIds,
+      cannotDmUserIds,
       currentUser,
+      dmThreadList,
+      dmUnread,
       easProjectId,
       enableDeviceAlerts,
       favoriteLeagueIds,
@@ -541,6 +618,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unreadCount,
       users,
       visibleComments,
+      visibleDms,
       visiblePosts,
     ],
   );

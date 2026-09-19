@@ -168,6 +168,28 @@ export async function fetchRemoteBlocks(
   }
 }
 
+export async function fetchRemoteIncomingBlocks(
+  client: ModerationClient | null,
+  blockedId: string,
+): Promise<{ ids: string[] } | { error: string }> {
+  if (!client) return { error: 'not_configured' };
+  if (!isPersistedUserId(blockedId)) return { error: 'bad_identity' };
+  try {
+    const { data, error } = await client
+      .from('user_blocks')
+      .select('blocker_id,blocked_id,created_at')
+      .eq('blocked_id', blockedId);
+    if (error) return { error: error.message };
+    const ids = uniqueBlockedIds(
+      (data ?? []).map(parseRemoteBlock).filter((row): row is RemoteBlockRow => row != null).map((row) => row.blockerId),
+      blockedId,
+    );
+    return { ids };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'fetch failed' };
+  }
+}
+
 export async function fetchRemoteReports(
   client: ModerationClient | null,
   reporterId: string,
@@ -247,13 +269,15 @@ export async function insertRemoteReport(
 
 export async function syncRemoteModeration(
   userId: string,
-): Promise<{ blocks: string[]; reports: UserReport[] } | { error: string }> {
+): Promise<{ blocks: string[]; blockedBy: string[]; reports: UserReport[] } | { error: string }> {
   const client = asModerationClient(getSupabaseClient());
-  const [blocks, reports] = await Promise.all([
+  const [blocks, incoming, reports] = await Promise.all([
     fetchRemoteBlocks(client, userId),
+    fetchRemoteIncomingBlocks(client, userId),
     fetchRemoteReports(client, userId),
   ]);
   if ('error' in blocks) return blocks;
+  if ('error' in incoming) return incoming;
   if ('error' in reports) return reports;
-  return { blocks: blocks.ids, reports: reports.reports };
+  return { blocks: blocks.ids, blockedBy: incoming.ids, reports: reports.reports };
 }

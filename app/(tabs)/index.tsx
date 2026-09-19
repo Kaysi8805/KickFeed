@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CatalogStatus } from '@/components/football/CatalogStatus';
+import { InboxButton } from '@/components/dm/InboxButton';
 import { PostCard } from '@/components/feed/PostCard';
 import { MatchdayHero } from '@/components/match/MatchdayHero';
 import { MatchRow } from '@/components/match/MatchRow';
@@ -85,6 +86,7 @@ export default function HomeScreen() {
           <Text style={styles.hello}>Hey {currentUser?.name.split(' ')[0]}</Text>
         </View>
         <View style={styles.topRight}>
+          <InboxButton />
           <Pressable onPress={() => router.push('/notifications')} style={styles.bell}>
             <Ionicons name="notifications" size={22} color={colors.text} />
             {unreadCount > 0 ? (

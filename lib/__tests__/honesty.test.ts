@@ -4,9 +4,12 @@ import {
   CATALOG_ERROR_BODY,
   CATALOG_ERROR_TITLE,
   LIVE_MIX_DISCLAIMER,
+  DM_DEMO_COPY,
+  DM_LIVE_COPY,
   MODERATION_DEMO_COPY,
   MODERATION_LIVE_COPY,
   TV_EDITORIAL_DISCLAIMER,
+  dmDisclaimer,
   matchesEmptyBody,
   matchdayEmptyBody,
   moderationDisclaimer,
@@ -53,5 +56,14 @@ describe('honesty copy', () => {
     expect(MODERATION_DEMO_COPY).toMatch(/this device/i);
     expect(MODERATION_LIVE_COPY).toMatch(/Postgres/i);
     expect(MODERATION_LIVE_COPY).toMatch(/no public moderation inbox/i);
+  });
+
+  it('keeps DM copy honest about demo device vs Postgres, and not a group inbox', () => {
+    expect(dmDisclaimer(false)).toBe(DM_DEMO_COPY);
+    expect(dmDisclaimer(true)).toBe(DM_LIVE_COPY);
+    expect(DM_DEMO_COPY).toMatch(/this device/i);
+    expect(DM_LIVE_COPY).toMatch(/Postgres/i);
+    expect(DM_LIVE_COPY).toMatch(/not a group inbox/i);
+    expect(DM_DEMO_COPY).toMatch(/Slack/i);
   });
 });
