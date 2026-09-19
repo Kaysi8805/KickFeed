@@ -6,13 +6,18 @@ import {
   applyRestoredSession,
   blockUser,
   blockedIdsFor,
+  canMessagePeer,
+  cannotDmPeerIds,
   defaults,
   follow,
   hydratePersisted,
+  markDmThreadRead,
   markNotificationsRead,
   mergeMatchAlerts,
+  mergeRemoteDirectMessages,
   mergeRemoteModeration,
   rememberProfiles,
+  sendDirectMessage,
   setMotmVote,
   setPrediction,
   signInAccount,
@@ -26,6 +31,7 @@ import {
   updateProfile,
   usersFromState,
 } from '@/services/appState';
+import { DM_SLOW_MODE_COOLDOWN_MS } from '@/lib/dms';
 import { CHAT_SLOW_MODE_COOLDOWN_MS } from '@/lib/moderation';
 import { describe, expect, it } from 'vitest';
 
@@ -589,6 +595,103 @@ describe('reports, blocks, and match-chat slow-mode', () => {
     expect(merged.blocks.maya).toContain('omar');
     expect(merged.blocks[uuid]).toEqual(['jordan']);
     expect(merged.reports.some((row) => row.id === 'r-cloud')).toBe(true);
+  });
+});
+
+describe('direct messages', () => {
+  it('hydrates seeded Maya↔Omar threads and keeps uuid identities', () => {
+    const uuid = '44444444-4444-4444-8444-444444444444';
+    const next = hydratePersisted(
+      JSON.stringify({
+        schemaVersion: 2,
+        currentUserId: 'maya',
+        directMessages: [
+          {
+            id: 'dm-keep',
+            senderId: uuid,
+            recipientId: 'maya',
+            text: 'Live fan said hi',
+            createdAt: '2026-09-19T12:00:00.000Z',
+          },
+          { id: 'bad', senderId: 'ghost', recipientId: 'maya', text: 'nope', createdAt: '2026-09-19T12:00:00.000Z' },
+        ],
+      }),
+    );
+    expect(next.directMessages).toHaveLength(1);
+    expect(next.directMessages[0]?.senderId).toBe(uuid);
+    expect(hydratePersisted(JSON.stringify({ schemaVersion: 1, currentUserId: 'maya' })).directMessages.length).toBeGreaterThan(0);
+  });
+
+  it('lets Maya message Omar, then hides the thread after a block', () => {
+    let state = signInDemo(defaults(), 'maya');
+    expect(canMessagePeer(state, 'omar')).toBe(true);
+    const sent = sendDirectMessage(state, 'omar', 'See you at Emirates', 20_000);
+    expect(sent.result.ok).toBe(true);
+    state = sent.state;
+    expect(state.directMessages.at(-1)?.text).toBe('See you at Emirates');
+    expect(state.notifications[0]?.type).toBe('dm');
+    expect(state.notifications[0]?.recipientId).toBe('omar');
+
+    state = blockUser(state, 'omar');
+    expect(cannotDmPeerIds(state, 'maya')).toContain('omar');
+    expect(canMessagePeer(state, 'omar')).toBe(false);
+    const blocked = sendDirectMessage(state, 'omar', 'still trying', 80_000);
+    expect(blocked.result.ok).toBe(false);
+    expect(blocked.state.directMessages).toHaveLength(state.directMessages.length);
+
+    state = signInDemo(state, 'omar');
+    expect(cannotDmPeerIds(state, 'omar')).toContain('maya');
+    expect(canMessagePeer(state, 'maya')).toBe(false);
+  });
+
+  it('rate-limits DMs in a thread the same way as match chat', () => {
+    const t0 = Date.parse('2026-09-19T18:00:00.000Z');
+    let state = signInDemo(defaults(), 'maya');
+    const first = sendDirectMessage(state, 'luca', 'Forza', t0);
+    expect(first.result.ok).toBe(true);
+    state = first.state;
+    const tooSoon = sendDirectMessage(state, 'luca', 'again', t0 + 1_000);
+    expect(tooSoon.result.ok).toBe(false);
+    const later = sendDirectMessage(state, 'luca', 'after wait', t0 + DM_SLOW_MODE_COOLDOWN_MS);
+    expect(later.result.ok).toBe(true);
+    const otherPeer = sendDirectMessage(state, 'sophie', 'different thread', t0 + 1_000);
+    expect(otherPeer.result.ok).toBe(true);
+  });
+
+  it('marks a thread read without clobbering other peers', () => {
+    let state = signInDemo(defaults(), 'maya');
+    state = markDmThreadRead(state, 'omar', Date.parse('2026-09-19T18:00:00.000Z'));
+    expect(state.dmReads.maya.omar).toBeTruthy();
+    expect(state.dmReads.maya.jordan).toBeUndefined();
+    const again = markDmThreadRead(state, 'omar', Date.parse('2026-09-19T17:00:00.000Z'));
+    expect(again).toBe(state);
+  });
+
+  it('merges remote DMs onto the signed-in uuid without dropping demo threads', () => {
+    const uuid = '33333333-3333-4333-8333-333333333333';
+    let state = signInDemo(defaults(), 'maya');
+    const demoCount = state.directMessages.length;
+    state = signInAccount(state, {
+      id: uuid,
+      name: 'Karol',
+      handle: 'karol',
+      bio: '',
+      avatarColor: '#22C55E',
+      initials: 'KA',
+      favoriteTeamIds: [],
+      favoriteLeagueIds: [],
+    }, 'supabase');
+    const merged = mergeRemoteDirectMessages(state, uuid, [
+      {
+        id: 'dm-cloud',
+        senderId: uuid,
+        recipientId: '55555555-5555-4555-8555-555555555555',
+        text: 'Live hello',
+        createdAt: '2026-09-19T12:00:00.000Z',
+      },
+    ]);
+    expect(merged.directMessages.some((row) => row.id === 'dm-cloud')).toBe(true);
+    expect(merged.directMessages.length).toBe(demoCount + 1);
   });
 });
 

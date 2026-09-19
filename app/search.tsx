@@ -18,7 +18,7 @@ import { colors, radius, spacing, type } from '@/theme';
 
 export default function SearchScreen() {
   useFootballCatalog();
-  const { users, blockedUserIds } = useApp();
+  const { users, blockedUserIds, currentUser, canMessage } = useApp();
   const [q, setQ] = useState('');
   const searchableUsers = useMemo(
     () => users.filter((u) => !blockedUserIds.includes(u.id)),
@@ -87,7 +87,11 @@ export default function SearchScreen() {
             {results.users.length > 0 ? (
               <Section title="Fans">
                 {results.users.map((user) => (
-                  <UserHit key={user.id} user={user} />
+                  <UserHit
+                    key={user.id}
+                    user={user}
+                    canMessage={!!currentUser && currentUser.id !== user.id && canMessage(user.id)}
+                  />
                 ))}
               </Section>
             ) : null}
@@ -165,7 +169,7 @@ function LeagueHit({ league }: { league: League }) {
   );
 }
 
-function UserHit({ user }: { user: User }) {
+function UserHit({ user, canMessage }: { user: User; canMessage: boolean }) {
   return (
     <Pressable
       onPress={() => router.push(entityHref('user', user.id))}
@@ -176,7 +180,19 @@ function UserHit({ user }: { user: User }) {
         <Text style={styles.title}>{user.name}</Text>
         <Text style={styles.sub}>@{user.handle}</Text>
       </View>
-      <Text style={styles.chev}>→</Text>
+      {canMessage ? (
+        <Pressable
+          onPress={() => router.push(`/messages/${user.id}`)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`Message ${user.name}`}
+          style={styles.messageBtn}
+        >
+          <Text style={styles.messageText}>Message</Text>
+        </Pressable>
+      ) : (
+        <Text style={styles.chev}>→</Text>
+      )}
     </Pressable>
   );
 }
@@ -219,6 +235,16 @@ const styles = StyleSheet.create({
   title: { ...type.subtitle, fontSize: 15, color: colors.text },
   sub: { ...type.caption, color: colors.textMuted, fontWeight: '500', marginTop: 2 },
   chev: { color: colors.limeMuted },
+  messageBtn: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  messageText: { ...type.caption, color: colors.lime },
   num: {
     width: 32,
     height: 32,

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   asModerationClient,
   fetchRemoteBlocks,
+  fetchRemoteIncomingBlocks,
   insertRemoteBlock,
   insertRemoteReport,
   parseRemoteBlock,
@@ -41,14 +42,20 @@ describe('remote moderation rows', () => {
     expect(missing).toEqual({ error: 'not_configured' });
 
     const tables: Record<string, Record<string, unknown>[]> = {
-      user_blocks: [{ blocker_id: UUID, blocked_id: 'omar', created_at: '2026-09-18T18:00:00.000Z' }],
+      user_blocks: [
+        { blocker_id: UUID, blocked_id: 'omar', created_at: '2026-09-18T18:00:00.000Z' },
+        { blocker_id: 'jordan', blocked_id: UUID, created_at: '2026-09-18T18:00:00.000Z' },
+      ],
       user_reports: [],
     };
     const inserts: Array<{ table: string; row: Record<string, unknown> }> = [];
     const client = asModerationClient({
       from: (table: string) => ({
         select: () => ({
-          eq: async () => ({ data: tables[table] ?? [], error: null }),
+          eq: async (column: string, value: string) => ({
+            data: (tables[table] ?? []).filter((row) => row[column] === value),
+            error: null,
+          }),
         }),
         insert: async (row: Record<string, unknown>) => {
           inserts.push({ table, row });
@@ -66,6 +73,11 @@ describe('remote moderation rows', () => {
     expect('error' in blocks).toBe(false);
     if ('error' in blocks) return;
     expect(blocks.ids).toEqual(['omar']);
+
+    const incoming = await fetchRemoteIncomingBlocks(client, UUID);
+    expect('error' in incoming).toBe(false);
+    if ('error' in incoming) return;
+    expect(incoming.ids).toEqual(['jordan']);
 
     const savedBlock = await insertRemoteBlock(client, UUID, 'jordan');
     expect(savedBlock.error).toBeNull();

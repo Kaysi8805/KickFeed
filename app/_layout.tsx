@@ -52,6 +52,8 @@ function RootNav() {
         <Stack.Screen name="notifications" />
         <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
         <Stack.Screen name="search" />
+        <Stack.Screen name="messages/index" />
+        <Stack.Screen name="messages/[peerId]" />
         <Stack.Screen name="pick-favorites" />
         <Stack.Screen name="tv" />
         <Stack.Screen name="leaderboard" />

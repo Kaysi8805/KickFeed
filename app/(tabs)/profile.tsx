@@ -128,6 +128,9 @@ export default function ProfileScreen() {
             </View>
           ) : null}
           <View style={styles.actions}>
+            <Pressable style={styles.btn} onPress={() => router.push('/messages')}>
+              <Text style={styles.btnText}>Messages</Text>
+            </Pressable>
             <Pressable style={styles.btn} onPress={() => router.push('/edit-profile')}>
               <Text style={styles.btnText}>Edit profile</Text>
             </Pressable>
@@ -255,10 +258,10 @@ export default function ProfileScreen() {
         </View>
         <Text style={styles.demoNote}>
           {authMode === 'supabase'
-            ? 'Favorites, predictions, MOTM votes, reports, and blocks on this device are stored under your Supabase user id. Live ranking and safety lists sync to KickFeed Postgres.'
+            ? 'Favorites, predictions, MOTM votes, reports, blocks, and DMs on this device are stored under your Supabase user id. Live ranking, safety lists, and 1:1 DMs sync to KickFeed Postgres.'
             : supabaseConfigured
-              ? 'Demo profile — local ranking and safety lists only. Sign out and use email to join the live KickFeed table.'
-              : 'Demo mode — ranking and safety lists are this device + seeded fans. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for live ranking, reports, and blocks.'}
+              ? 'Demo profile — local ranking, safety lists, and DMs only. Sign out and use email to join the live KickFeed table.'
+              : 'Demo mode — ranking, safety lists, and DMs are this device + seeded fans. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for live ranking, reports, blocks, and DMs.'}
         </Text>
       </ScrollView>
     </Screen>

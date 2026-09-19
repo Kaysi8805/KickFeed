@@ -14,7 +14,7 @@ export type MatchEventType = 'goal' | 'yellow' | 'red' | 'sub' | 'var';
 
 export type FormResult = 'W' | 'D' | 'L';
 
-export type NotificationType = 'goal' | 'kickoff' | 'follow' | 'comment' | 'friend_post' | 'prediction' | 'motm';
+export type NotificationType = 'goal' | 'kickoff' | 'follow' | 'comment' | 'friend_post' | 'prediction' | 'motm' | 'dm';
 
 export interface Continent {
   id: ContinentId;
@@ -256,18 +256,27 @@ export interface AppNotification {
   userId?: string;
 }
 
-export const REPORT_TARGET_TYPES = ['post', 'profile', 'comment'] as const;
+export const REPORT_TARGET_TYPES = ['post', 'profile', 'comment', 'dm'] as const;
 
 export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
 
-/** Report of a post, profile, or match-chat message. Keyed by demo id or auth uuid. */
+/** Report of a post, profile, match-chat message, or DM. Keyed by demo id or auth uuid. */
 export interface UserReport {
   id: string;
   reporterId: string;
   targetType: ReportTargetType;
   targetId: string;
-  /** Author of the post/comment, or the profile being reported. */
+  /** Author of the post/comment/DM, or the profile being reported. */
   targetUserId: string;
   reason: string;
+  createdAt: string;
+}
+
+/** 1:1 direct message. Keyed by demo seed id or auth.users uuid. */
+export interface DirectMessage {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  text: string;
   createdAt: string;
 }

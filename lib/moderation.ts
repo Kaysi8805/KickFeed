@@ -165,8 +165,8 @@ export function formatSlowModeWait(ms: number): string {
   return `${Math.ceil(sec / 60)}m`;
 }
 
-export function slowModeComposerCopy(decision: SlowModeDecision): string {
-  if (decision.ok) return CHAT_SLOW_MODE_HINT;
+export function slowModeComposerCopy(decision: SlowModeDecision, hint = CHAT_SLOW_MODE_HINT): string {
+  if (decision.ok) return hint;
   const wait = formatSlowModeWait(decision.remainingMs);
   if (decision.kind === 'burst') {
     return `Slow mode — too many messages. Try again in ${wait}.`;

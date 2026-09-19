@@ -1,6 +1,16 @@
-import type { AppNotification, Comment, Fixture, MatchStatus, MotmVote, Post, ScorePrediction, User, UserReport } from '@/data/types';
+import type { AppNotification, Comment, DirectMessage, Fixture, MatchStatus, MotmVote, Post, ScorePrediction, User, UserReport } from '@/data/types';
 import { seedMotmVotes, seedPredictions } from '@/data/mocks/engagement';
-import { demoUsers, seedComments, seedFollowing, seedNotifications, seedPosts } from '@/data/mocks/social';
+import { demoUsers, seedComments, seedDirectMessages, seedFollowing, seedNotifications, seedPosts } from '@/data/mocks/social';
+import {
+  buildDirectMessage,
+  canDmPeer,
+  cannotDmIds,
+  dmNotification,
+  dmSlowMode,
+  involvedInMessage,
+  parseDirectMessage,
+  type SendDmResult,
+} from '@/lib/dms';
 import { clampScore, isMotmOpen, isPredictionOpen, motmVoteForUser, predictionForUser } from '@/lib/engagement';
 import type { MatchAlertDraft } from '@/lib/matchSocial';
 import {
@@ -48,7 +58,12 @@ export interface Persisted {
   motmVotes: MotmVote[];
   /** blockerId → blocked user ids (demo seed or auth uuid). */
   blocks: Record<string, string[]>;
+  /** userId → people who blocked them (live incoming; demo also inverted from `blocks`). */
+  blockedBy: Record<string, string[]>;
   reports: UserReport[];
+  directMessages: DirectMessage[];
+  /** userId → peerId → last-read ISO. Unread is this device. */
+  dmReads: Record<string, Record<string, string>>;
 }
 
 export function defaults(): Persisted {
@@ -70,7 +85,10 @@ export function defaults(): Persisted {
     predictions: seedPredictions,
     motmVotes: seedMotmVotes,
     blocks: {},
+    blockedBy: {},
     reports: [],
+    directMessages: seedDirectMessages,
+    dmReads: {},
   };
 }
 
@@ -172,6 +190,22 @@ function pickBlocks(value: unknown, fallback: Persisted['blocks']): Persisted['b
   return out;
 }
 
+function pickDmReads(value: unknown, fallback: Persisted['dmReads']): Persisted['dmReads'] {
+  if (!isPlainObject(value)) return fallback;
+  const out: Persisted['dmReads'] = { ...fallback };
+  for (const [userId, peers] of Object.entries(value)) {
+    if (!isPersistedUserId(userId) || !isPlainObject(peers)) continue;
+    const slice: Record<string, string> = {};
+    for (const [peerId, stamp] of Object.entries(peers)) {
+      if (!isPersistedUserId(peerId) || peerId === userId) continue;
+      if (typeof stamp !== 'string' || !Number.isFinite(Date.parse(stamp))) continue;
+      slice[peerId] = stamp;
+    }
+    out[userId] = slice;
+  }
+  return out;
+}
+
 /**
  * Parse AsyncStorage JSON.
  * Corrupt JSON → full defaults.
@@ -205,7 +239,10 @@ export function hydratePersisted(raw: string | null): Persisted {
     predictions: pickPredictions(parsed.predictions, base.predictions),
     motmVotes: pickMotmVotes(parsed.motmVotes, base.motmVotes),
     blocks: pickBlocks(parsed.blocks, base.blocks),
+    blockedBy: pickBlocks(parsed.blockedBy, base.blockedBy),
     reports: pickParsedRows(parsed.reports, base.reports, parseUserReport),
+    directMessages: pickParsedRows(parsed.directMessages, base.directMessages, parseDirectMessage),
+    dmReads: pickDmReads(parsed.dmReads, base.dmReads),
   };
 }
 
@@ -240,6 +277,7 @@ export function usersFromState(state: Persisted): User[] {
     ...Object.keys(state.profiles),
     ...Object.keys(state.favorites),
     ...(state.currentUserId ? [state.currentUserId] : []),
+    ...state.directMessages.flatMap((row) => [row.senderId, row.recipientId]),
   ]);
   for (const id of extraIds) {
     if (byId.has(id) || !isPersistedUserId(id) || isDemoUserId(id)) continue;
@@ -341,6 +379,21 @@ function isSelfActivity(n: AppNotification, userId: string): boolean {
 export function blockedIdsFor(state: Persisted, userId: string | null): string[] {
   if (!userId) return [];
   return uniqueBlockedIds(state.blocks[userId], userId);
+}
+
+/** Peers this identity cannot DM (outgoing block, incoming block, or inverted local map). */
+export function cannotDmPeerIds(state: Persisted, userId: string | null): string[] {
+  if (!userId) return [];
+  return cannotDmIds(userId, blockedIdsFor(state, userId), state.blocks, state.blockedBy[userId] ?? []);
+}
+
+export function canMessagePeer(state: Persisted, peerId: string | null | undefined): boolean {
+  return canDmPeer(state.currentUserId, peerId, cannotDmPeerIds(state, state.currentUserId));
+}
+
+export function dmReadsFor(state: Persisted, userId: string | null): Record<string, string> {
+  if (!userId) return {};
+  return state.dmReads[userId] ?? {};
 }
 
 export function notificationsFor(state: Persisted, userId: string | null): AppNotification[] {
@@ -808,9 +861,11 @@ export function mergeRemoteModeration(
   userId: string,
   remoteBlockedIds: string[],
   remoteReports: UserReport[],
+  remoteBlockedByIds: string[] = [],
 ): Persisted {
   if (!isPersistedUserId(userId)) return state;
   const blocks = uniqueBlockedIds([...(state.blocks[userId] ?? []), ...remoteBlockedIds], userId);
+  const blockedBy = uniqueBlockedIds([...(state.blockedBy[userId] ?? []), ...remoteBlockedByIds], userId);
   const byKey = new Map<string, UserReport>();
   for (const row of remoteReports) {
     if (row.reporterId !== userId) continue;
@@ -822,14 +877,101 @@ export function mergeRemoteModeration(
   const sameBlocks =
     blocks.length === (state.blocks[userId] ?? []).length &&
     blocks.every((id) => (state.blocks[userId] ?? []).includes(id));
+  const sameBlockedBy =
+    blockedBy.length === (state.blockedBy[userId] ?? []).length &&
+    blockedBy.every((id) => (state.blockedBy[userId] ?? []).includes(id));
   const nextReports = [...byKey.values()];
   const sameReports =
     nextReports.length === state.reports.length &&
     nextReports.every((row) => state.reports.some((local) => local.id === row.id));
-  if (sameBlocks && sameReports) return state;
+  if (sameBlocks && sameBlockedBy && sameReports) return state;
   return {
     ...state,
     blocks: { ...state.blocks, [userId]: blocks },
+    blockedBy: { ...state.blockedBy, [userId]: blockedBy },
     reports: nextReports,
   };
+}
+
+export function sendDirectMessage(
+  state: Persisted,
+  recipientId: string,
+  text: string,
+  now = Date.now(),
+): { state: Persisted; result: SendDmResult } {
+  const senderId = state.currentUserId;
+  if (!senderId) return { state, result: { ok: false, error: 'Sign in to send a message.' } };
+  if (!canMessagePeer(state, recipientId)) {
+    return { state, result: { ok: false, error: 'You can’t message this fan.' } };
+  }
+  const slow = dmSlowMode(state.directMessages, senderId, recipientId, now);
+  if (!slow.ok) {
+    return { state, result: { ok: false, error: 'Slow mode — wait before sending.', slow } };
+  }
+  const message = buildDirectMessage({ senderId, recipientId, text }, now);
+  if (!message) {
+    return { state, result: { ok: false, error: 'Write a short message (1–1000 characters).' } };
+  }
+  const senderName =
+    state.profiles[senderId]?.name ?? demoUsers.find((u) => u.id === senderId)?.name ?? 'A fan';
+  const notification = dmNotification(message, { name: senderName }, now);
+  return {
+    state: {
+      ...state,
+      directMessages: [...state.directMessages, message],
+      notifications: [notification, ...state.notifications],
+    },
+    result: { ok: true, message },
+  };
+}
+
+export function markDmThreadRead(state: Persisted, peerId: string, now = Date.now()): Persisted {
+  if (!state.currentUserId || !isPersistedUserId(peerId) || peerId === state.currentUserId) return state;
+  const userId = state.currentUserId;
+  const latestIncoming = state.directMessages.reduce((max, row) => {
+    if (row.senderId !== peerId || row.recipientId !== userId) return max;
+    const stamp = Date.parse(row.createdAt);
+    return Number.isFinite(stamp) && stamp > max ? stamp : max;
+  }, 0);
+  const mine = state.dmReads[userId] ?? {};
+  const already = Date.parse(mine[peerId] ?? '');
+  const targetMs = latestIncoming > 0 ? latestIncoming : Number.isFinite(already) ? already : now;
+  if (Number.isFinite(already) && already >= targetMs) return state;
+  const stamp = new Date(targetMs).toISOString();
+  return {
+    ...state,
+    dmReads: {
+      ...state.dmReads,
+      [userId]: { ...mine, [peerId]: stamp },
+    },
+    notifications: state.notifications.map((n) =>
+      n.type === 'dm' && n.recipientId === userId && n.userId === peerId ? { ...n, read: true } : n,
+    ),
+  };
+}
+
+/**
+ * Union remote DMs for this identity onto the local blob.
+ * Local rows win on duplicate ids. Other users’ demo threads stay put.
+ */
+export function mergeRemoteDirectMessages(
+  state: Persisted,
+  userId: string,
+  remote: DirectMessage[],
+): Persisted {
+  if (!isPersistedUserId(userId)) return state;
+  const byId = new Map<string, DirectMessage>();
+  for (const row of remote) {
+    if (!involvedInMessage(row, userId)) continue;
+    byId.set(row.id, row);
+  }
+  for (const row of state.directMessages) {
+    byId.set(row.id, row);
+  }
+  const next = [...byId.values()];
+  const same =
+    next.length === state.directMessages.length &&
+    next.every((row) => state.directMessages.some((local) => local.id === row.id));
+  if (same) return state;
+  return { ...state, directMessages: next };
 }

@@ -1,4 +1,4 @@
-import type { AppNotification, Comment, Post, User } from '../types';
+import type { AppNotification, Comment, DirectMessage, Post, User } from '../types';
 
 export const demoUsers: User[] = [
   {
@@ -235,5 +235,44 @@ export const seedNotifications: AppNotification[] = [
     recipientId: 'maya',
     matchId: 'fx-liv-ars',
     userId: 'omar',
+  },
+];
+
+/** Seeded Maya ↔ Omar thread so demo inbox is not empty. Same identity keys as social. */
+export const seedDirectMessages: DirectMessage[] = [
+  {
+    id: 'dm1',
+    senderId: 'maya',
+    recipientId: 'omar',
+    text: 'You watching Liverpool–Arsenal tonight?',
+    createdAt: ago(2.1),
+  },
+  {
+    id: 'dm2',
+    senderId: 'omar',
+    recipientId: 'maya',
+    text: 'Already on the sofa. Salah vs Saka is the whole plot.',
+    createdAt: ago(1.8),
+  },
+  {
+    id: 'dm3',
+    senderId: 'maya',
+    recipientId: 'omar',
+    text: 'North London is coming for that 2–1.',
+    createdAt: ago(1.4),
+  },
+  {
+    id: 'dm4',
+    senderId: 'omar',
+    recipientId: 'maya',
+    text: 'Dreamer. Bernabéu energy even from the couch.',
+    createdAt: ago(0.9),
+  },
+  {
+    id: 'dm5',
+    senderId: 'jordan',
+    recipientId: 'maya',
+    text: 'If Salah scores first I’m never letting you forget it.',
+    createdAt: ago(0.5),
   },
 ];
