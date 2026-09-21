@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PlayerRow } from '@/components/entity/PlayerRow';
 import { MatchRow } from '@/components/match/MatchRow';
-import { Crest } from '@/components/ui/Crest';
+import { Crest, LeagueMark } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
@@ -104,6 +104,7 @@ export default function TeamDetailScreen() {
           <View style={styles.chips}>
             {competitions.map((l) => (
               <Pressable key={l.id} onPress={() => router.push(entityHref('league', l.id))} style={styles.chip}>
+                <LeagueMark league={l} size={16} />
                 <Text style={styles.chipText}>{l.shortName}</Text>
               </Pressable>
             ))}
@@ -192,6 +193,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   chipText: { ...type.micro, color: colors.limeMuted },
   section: { ...type.micro, color: colors.textMuted, marginTop: spacing.lg, marginBottom: spacing.sm },

@@ -3,7 +3,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/Avatar';
-import { Crest } from '@/components/ui/Crest';
+import { Crest, LeagueMark } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
@@ -158,6 +158,7 @@ function LeagueHit({ league }: { league: League }) {
       onPress={() => router.push(entityHref('league', league.id))}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
+      <LeagueMark league={league} size={32} />
       <View style={styles.meta}>
         <Text style={styles.title}>{league.name}</Text>
         <Text style={styles.sub}>

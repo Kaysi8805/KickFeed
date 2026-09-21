@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CatalogStatus } from '@/components/football/CatalogStatus';
 import { Avatar } from '@/components/ui/Avatar';
-import { Crest } from '@/components/ui/Crest';
+import { Crest, LeagueMark } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PostCard } from '@/components/feed/PostCard';
 import { LiveFixtureTray } from '@/components/match/LiveFixtureTray';
@@ -160,7 +160,8 @@ export default function FavoritesScreen() {
           leagues.map((l) =>
             l ? (
               <Pressable key={l.id} onPress={() => router.push(entityHref('league', l.id))} style={styles.row}>
-                <Text style={styles.rowTitle}>{l.name}</Text>
+                <LeagueMark league={l} size={28} />
+                <Text style={[styles.rowTitle, { flex: 1 }]}>{l.name}</Text>
                 <Text style={styles.chev}>→</Text>
               </Pressable>
             ) : null,
@@ -332,6 +333,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
   },

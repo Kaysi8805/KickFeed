@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { Crest } from '@/components/ui/Crest';
+import { Crest, LeagueMark } from '@/components/ui/Crest';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { entityHref } from '@/lib/entityNav';
@@ -65,8 +65,12 @@ export default function PickFavoritesScreen() {
             const on = isFavoriteId(favoriteLeagueIds, l.id, 'league');
             return (
               <View key={l.id} style={[styles.row, on && styles.on]}>
-                <Pressable onPress={() => router.push(entityHref('league', l.id))} style={{ flex: 1 }}>
-                  <Text style={styles.name}>{l.name}</Text>
+                <Pressable
+                  onPress={() => router.push(entityHref('league', l.id))}
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                >
+                  <LeagueMark league={l} size={28} />
+                  <Text style={[styles.name, { flex: 1 }]}>{l.name}</Text>
                 </Pressable>
                 <Pressable onPress={() => toggleFavoriteLeague(l.id)} hitSlop={8}>
                   <Text style={styles.mark}>{on ? '★' : '☆'}</Text>

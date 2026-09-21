@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ChannelChips, CountryChips } from '@/components/tv/ChannelChips';
 import { TvDisclaimer } from '@/components/tv/TvDisclaimer';
+import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
@@ -79,9 +80,13 @@ export default function TvScheduleScreen() {
                 <Text style={styles.league}>
                   {league?.shortName ?? 'Match'} · {when}
                 </Text>
-                <Text style={styles.teams}>
-                  {home.shortName} vs {away.shortName}
-                </Text>
+                <View style={styles.teamsRow}>
+                  <Crest team={home} size={22} />
+                  <Text style={styles.teams}>
+                    {home.shortName} vs {away.shortName}
+                  </Text>
+                  <Crest team={away} size={22} />
+                </View>
                 <ChannelChips airings={airings} compact />
               </Pressable>
             );
@@ -109,6 +114,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   league: { ...type.micro, color: colors.limeMuted, textTransform: 'uppercase' },
-  teams: { ...type.subtitle, color: colors.text },
+  teamsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  teams: { ...type.subtitle, color: colors.text, flex: 1 },
   footerDisclaimer: { marginTop: spacing.md },
 });

@@ -15,6 +15,7 @@ import type {
   Team,
 } from '@/data/types';
 import { teams as mockTeams } from '@/data/mocks/catalog';
+import { apiSportsTeamLogo, leagueLogoUrl } from '@/data/mocks/teamLogos';
 import { foldName } from '@/data/mocks/players';
 import type {
   ApiEvent,
@@ -35,7 +36,7 @@ import {
   isLiveLeagueId,
 } from '@/lib/footballCoverage';
 
-export const LIVE_LEAGUES: League[] = [
+const liveLeagueSeed: League[] = [
   {
     id: PREMIER_LEAGUE_ID,
     name: 'Premier League',
@@ -69,6 +70,11 @@ export const LIVE_LEAGUES: League[] = [
     featured: true,
   },
 ];
+
+export const LIVE_LEAGUES: League[] = liveLeagueSeed.map((league) => {
+  const logoUrl = leagueLogoUrl(league.id);
+  return logoUrl ? { ...league, logoUrl } : league;
+});
 
 const LEAGUE_ALIASES: Record<string, string> = {
   epl: PREMIER_LEAGUE_ID,
@@ -193,8 +199,16 @@ export function mockClubStyle(name: string, code?: string | null): {
   return { ...hues, shortName: name.replace(/ Football Club$/i, '').replace(/ FC$/i, ''), code: tla.slice(0, 3) };
 }
 
+function teamLogoUrl(ref: ApiTeamRef): string | undefined {
+  const fromApi = ref.logo?.trim();
+  if (fromApi) return fromApi;
+  if (ref.id > 0) return apiSportsTeamLogo(ref.id);
+  return undefined;
+}
+
 export function mapTeam(ref: ApiTeamRef, countryId = 'eng'): Team {
   const style = mockClubStyle(ref.name, ref.code);
+  const logoUrl = teamLogoUrl(ref);
   return {
     id: String(ref.id),
     name: ref.name,
@@ -203,6 +217,7 @@ export function mapTeam(ref: ApiTeamRef, countryId = 'eng'): Team {
     color: style.color,
     accent: style.accent,
     countryId,
+    ...(logoUrl ? { logoUrl } : {}),
   };
 }
 
