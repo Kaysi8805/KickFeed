@@ -84,7 +84,7 @@ export const type = {
   badge: {
     fontSize: 11,
     fontWeight: '800' as const,
-    letterSpacing: 0.8,
+    letterSpacing: 0.4,
     textTransform: 'uppercase' as const,
   },
   // Compatibility aliases used by existing screens.
@@ -109,6 +109,7 @@ export const glow = {
     shadowOffset: { width: 0, height: 0 },
     elevation: 8,
   },
+  liveBox: '0 0 18px rgba(239, 68, 68, 0.55)',
 } as const;
 
 export const shadow = {

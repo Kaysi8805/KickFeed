@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Platform } from 'react-native';
 
 import { EntityText } from '@/components/feed/EntityText';
 import { LiveBadge } from '@/components/match/LiveBadge';
@@ -109,7 +109,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   liveCard: { borderColor: colors.live },
-  avatarLive: { ...glow.live, borderRadius: 24 },
+  avatarLive: {
+    borderRadius: 24,
+    ...(Platform.OS === 'web' ? { boxShadow: glow.liveBox } : glow.live),
+  },
   head: { flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: spacing.sm },
   name: { ...type.subtitle, color: colors.text, fontSize: 15 },
   handle: { ...type.meta, color: colors.textMuted, fontWeight: '500' },

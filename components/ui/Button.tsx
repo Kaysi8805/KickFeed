@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   pressed: { opacity: 0.88 },
-  label: { ...type.meta, fontWeight: '800' },
+  label: { ...type.meta, fontWeight: '800', letterSpacing: 0 },
   labelPrimary: { color: colors.onCta },
   labelSecondary: { color: colors.text },
 });

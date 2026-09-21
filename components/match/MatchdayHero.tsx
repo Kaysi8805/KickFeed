@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Crest } from '@/components/ui/Crest';
 import { Button } from '@/components/ui/Button';
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   },
   cardLive: {
     borderColor: colors.live,
-    ...glow.live,
+    ...(Platform.OS === 'web' ? { boxShadow: glow.liveBox } : glow.live),
   },
   meta: {
     flexDirection: 'row',
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
   },
   crestRingLive: {
     borderColor: colors.live,
-    ...glow.live,
+    ...(Platform.OS === 'web' ? { boxShadow: glow.liveBox } : glow.live),
   },
   team: { ...type.meta, color: colors.text, textAlign: 'center' },
   mid: { alignItems: 'center', minWidth: 96, gap: 6 },
