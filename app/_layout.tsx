@@ -13,7 +13,7 @@ import { colors } from '@/theme';
 function Boot() {
   return (
     <View style={styles.boot}>
-      <ActivityIndicator color={colors.lime} size="large" />
+      <ActivityIndicator color={colors.accent} size="large" />
     </View>
   );
 }
@@ -77,7 +77,7 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#040c08' },
+  root: { flex: 1, backgroundColor: colors.bg },
   shell: Platform.select({
     web: {
       flex: 1,

@@ -6,13 +6,28 @@ export function Avatar({
   initials,
   color,
   size = 44,
+  ringColor,
 }: {
   initials: string;
   color: string;
   size?: number;
+  ringColor?: string;
 }) {
+  const ring = ringColor ? 2 : 0;
   return (
-    <View style={[styles.wrap, { width: size, height: size, borderRadius: size / 2, backgroundColor: color }]}>
+    <View
+      style={[
+        styles.wrap,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: color,
+          borderWidth: ring,
+          borderColor: ringColor ?? 'transparent',
+        },
+      ]}
+    >
       <Text style={[styles.text, { fontSize: size * 0.34 }]}>{initials}</Text>
     </View>
   );

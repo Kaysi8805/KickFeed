@@ -6,6 +6,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PostCard } from '@/components/feed/PostCard';
+import { LiveFixtureTray } from '@/components/match/LiveFixtureTray';
 import { MatchRow } from '@/components/match/MatchRow';
 import { SearchButton } from '@/components/search/SearchEntry';
 import { Screen } from '@/components/ui/Screen';
@@ -166,19 +167,21 @@ export default function FavoritesScreen() {
           )
         )}
 
-        <Text style={styles.section}>Live for you</Text>
         {liveFav.length === 0 ? (
-          <EmptyState
-            compact
-            title="Nothing live for you"
-            body={
-              catalog.source === 'live'
-                ? 'Favorite a live club or player (England, Slovakia, or La Liga) to pin fixtures here.'
-                : 'Favorite a club or player to pin their live matches here.'
-            }
-          />
+          <>
+            <Text style={styles.section}>Live for you</Text>
+            <EmptyState
+              compact
+              title="Nothing live for you"
+              body={
+                catalog.source === 'live'
+                  ? 'Favorite a live club or player (England, Slovakia, or La Liga) to pin fixtures here.'
+                  : 'Favorite a club or player to pin their live matches here.'
+              }
+            />
+          </>
         ) : (
-          liveFav.map((f) => <MatchRow key={f.id} fixture={f} compact />)
+          <LiveFixtureTray title="Live for you" fixtures={liveFav} />
         )}
 
         <Text style={styles.section}>Coming up for you</Text>

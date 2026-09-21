@@ -24,7 +24,9 @@ export function Segmented<T extends string>({
             accessibilityLabel={opt.label}
             style={[styles.item, options.length > 4 && styles.itemTight, active && styles.active]}
           >
-            <Text style={[styles.label, options.length > 4 && styles.labelTight, active && styles.labelActive]}>{opt.label}</Text>
+            <Text style={[styles.label, options.length > 4 && styles.labelTight, active && styles.labelActive]}>
+              {opt.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -40,6 +42,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: 4,
     gap: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   item: {
     flexGrow: 1,
@@ -52,8 +56,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   itemTight: { minWidth: 44, minHeight: 44, paddingVertical: 8 },
-  active: { backgroundColor: colors.pitchBright },
-  label: { ...type.caption, color: colors.textMuted },
+  active: { backgroundColor: colors.surfaceElevated },
+  label: { ...type.meta, color: colors.textMuted },
   labelTight: { fontSize: 11 },
-  labelActive: { color: colors.bg, fontWeight: '800' },
+  labelActive: { color: colors.text, fontWeight: '800' },
 });
