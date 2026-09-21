@@ -19,7 +19,7 @@ export function MatchRow({ fixture, compact }: { fixture: Fixture; compact?: boo
   const matchLabel = `${home.shortName} versus ${away.shortName}. Open match hub.`;
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, live && styles.cardLive]}>
       {!compact && league ? (
         <Pressable
           onPress={() => router.push(entityHref('league', league.id))}
@@ -54,7 +54,7 @@ export function MatchRow({ fixture, compact }: { fixture: Fixture; compact?: boo
           ) : (
             <Text style={styles.ko}>{kickoffLabel(fixture.kickoff)}</Text>
           )}
-          {live ? <LiveBadge minute={fixture.minute} ht={fixture.status === 'ht'} /> : null}
+          {live ? <LiveBadge minute={fixture.minute} ht={fixture.status === 'ht'} compact={compact} /> : null}
           {done ? <Text style={styles.ft}>FT</Text> : null}
         </Pressable>
         <Pressable
@@ -82,15 +82,16 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: spacing.sm,
   },
-  league: { ...type.micro, color: colors.limeMuted, marginBottom: 8, textTransform: 'uppercase' },
+  cardLive: { borderColor: colors.live },
+  league: { ...type.badge, color: colors.textMuted, marginBottom: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   side: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   right: { justifyContent: 'flex-end' },
   pressed: { opacity: 0.86 },
-  team: { ...type.caption, color: colors.text, flexShrink: 1 },
+  team: { ...type.meta, color: colors.text, flexShrink: 1 },
   teamRight: { textAlign: 'right' },
   mid: { alignItems: 'center', minWidth: 78, gap: 4 },
-  score: { ...type.score, fontSize: 22, color: colors.text },
-  ko: { ...type.caption, color: colors.textMuted },
-  ft: { ...type.micro, color: colors.textDim },
+  score: { ...type.displayScore, fontSize: 22, color: colors.text },
+  ko: { ...type.meta, color: colors.textMuted },
+  ft: { ...type.badge, color: colors.textMuted },
 });

@@ -1,9 +1,10 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Platform } from 'react-native';
 
 import { EntityText } from '@/components/feed/EntityText';
+import { LiveBadge } from '@/components/match/LiveBadge';
 import { SafetyMenu } from '@/components/moderation/SafetyMenu';
 import { Avatar } from '@/components/ui/Avatar';
 import type { Post, User } from '@/data/types';
@@ -11,7 +12,7 @@ import { entityHref } from '@/lib/entityNav';
 import { timeAgo } from '@/lib/format';
 import { canonicalMatchId, fixtureScoreLabel, resolvePostFixture } from '@/lib/matchSocial';
 import { football } from '@/services/football';
-import { colors, radius, spacing, type } from '@/theme';
+import { colors, glow, radius, spacing, type } from '@/theme';
 
 export function PostCard({
   post,
@@ -35,14 +36,21 @@ export function PostCard({
   return (
     <View style={[styles.card, live && styles.liveCard]}>
       <Pressable style={styles.head} onPress={() => router.push(entityHref('user', author.id))}>
-        <Avatar initials={author.initials} color={author.avatarColor} size={compact ? 36 : 42} />
+        <View style={live ? styles.avatarLive : undefined}>
+          <Avatar
+            initials={author.initials}
+            color={author.avatarColor}
+            size={compact ? 36 : 42}
+            ringColor={live ? colors.live : colors.border}
+          />
+        </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{author.name}</Text>
           <Text style={styles.handle}>
             @{author.handle} · {timeAgo(post.createdAt)}
           </Text>
         </View>
-        {live ? <Text style={styles.liveTag}>LIVE MATCH</Text> : null}
+        {live ? <LiveBadge minute={match?.minute} ht={match?.status === 'ht'} /> : null}
         <SafetyMenu
           targetType="post"
           targetId={post.id}
@@ -60,7 +68,10 @@ export function PostCard({
         </View>
       ) : null}
       {match && home && away ? (
-        <Pressable onPress={() => router.push(entityHref('match', match.id))} style={styles.matchChip}>
+        <Pressable
+          onPress={() => router.push(entityHref('match', match.id))}
+          style={[styles.matchChip, live && styles.matchChipLive]}
+        >
           <Text style={styles.matchChipText}>{fixtureScoreLabel(football, match)}</Text>
         </Pressable>
       ) : matchHrefId ? (
@@ -76,7 +87,7 @@ export function PostCard({
           }}
           style={styles.action}
         >
-          <Text style={[styles.actionText, liked && { color: colors.live }]}>{liked ? '♥ Liked' : '♡ Like'}</Text>
+          <Text style={[styles.actionText, liked && styles.actionLiked]}>{liked ? '♥ Liked' : '♡ Like'}</Text>
         </Pressable>
         {matchHrefId ? (
           <Pressable onPress={() => router.push(entityHref('match', matchHrefId))} style={styles.action}>
@@ -97,11 +108,14 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: spacing.md,
   },
-  liveCard: { borderColor: colors.limeMuted },
-  liveTag: { ...type.micro, color: colors.live },
+  liveCard: { borderColor: colors.live },
+  avatarLive: {
+    borderRadius: 24,
+    ...(Platform.OS === 'web' ? { boxShadow: glow.liveBox } : glow.live),
+  },
   head: { flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: spacing.sm },
   name: { ...type.subtitle, color: colors.text, fontSize: 15 },
-  handle: { ...type.caption, color: colors.textDim, fontWeight: '500' },
+  handle: { ...type.meta, color: colors.textMuted, fontWeight: '500' },
   body: { ...type.body, color: colors.text, lineHeight: 22, marginBottom: spacing.sm },
   image: {
     height: 140,
@@ -116,19 +130,31 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     marginBottom: spacing.sm,
   },
-  imageHint: { ...type.caption, color: colors.white, opacity: 0.85 },
+  imageHint: { ...type.meta, color: colors.white, opacity: 0.85 },
   matchChip: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.bgElevated,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: radius.full,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     marginBottom: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  matchChipText: { ...type.micro, color: colors.lime },
-  actions: { flexDirection: 'row', gap: spacing.lg, marginTop: 4 },
-  action: { paddingVertical: 4 },
-  actionText: { ...type.caption, color: colors.textMuted },
+  matchChipLive: { borderColor: colors.live },
+  matchChipText: { ...type.badge, color: colors.text, letterSpacing: 0.2, fontVariant: ['tabular-nums'] as Array<'tabular-nums'> },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+    marginTop: 4,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  action: { paddingVertical: 4, minHeight: 32, justifyContent: 'center' },
+  actionText: { ...type.meta, color: colors.textMuted },
+  actionLiked: { color: colors.danger },
 });

@@ -6,8 +6,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CatalogStatus } from '@/components/football/CatalogStatus';
 import { InboxButton } from '@/components/dm/InboxButton';
 import { PostCard } from '@/components/feed/PostCard';
+import { LiveFixtureTray } from '@/components/match/LiveFixtureTray';
 import { MatchdayHero } from '@/components/match/MatchdayHero';
-import { MatchRow } from '@/components/match/MatchRow';
 import { SearchBarPrompt } from '@/components/search/SearchEntry';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
@@ -96,7 +96,7 @@ export default function HomeScreen() {
             ) : null}
           </Pressable>
           <Pressable onPress={() => router.push('/compose')} style={styles.compose} accessibilityLabel="New post">
-            <Ionicons name="create" size={18} color={colors.bg} />
+            <Ionicons name="create" size={18} color={colors.onCta} />
           </Pressable>
         </View>
       </View>
@@ -119,14 +119,7 @@ export default function HomeScreen() {
           ) : matchday.hero ? (
             <>
               <MatchdayHero fixture={matchday.hero.fixture} why={matchday.hero.why} />
-              {matchday.also.length > 0 ? (
-                <View style={styles.block}>
-                  <Text style={styles.section}>Also on</Text>
-                  {matchday.also.map((pick) => (
-                    <MatchRow key={pick.fixture.id} fixture={pick.fixture} compact />
-                  ))}
-                </View>
-              ) : null}
+              <LiveFixtureTray title="Also on" fixtures={matchday.also.map((pick) => pick.fixture)} />
             </>
           ) : (
             <EmptyState
@@ -203,16 +196,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  kicker: { ...type.micro, color: colors.lime },
+  kicker: { ...type.badge, color: colors.accent },
   hello: { ...type.title, color: colors.text },
   topRight: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   bell: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   badge: {
     position: 'absolute',
@@ -231,7 +226,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.lime,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -239,8 +234,8 @@ const styles = StyleSheet.create({
   statusPad: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm, gap: spacing.sm },
   block: { marginBottom: spacing.md },
   section: {
-    ...type.micro,
-    color: colors.limeMuted,
+    ...type.badge,
+    color: colors.textMuted,
     textTransform: 'uppercase',
     marginBottom: spacing.sm,
     marginTop: spacing.sm,
