@@ -2,13 +2,34 @@
  * When live free-tier cache misses for an aliased coverage club, Overview can densify
  * from the mock catalog — preferred live data still wins whenever it exists.
  *
- * Last XI is never densified: mock `getLineups` would invent a starting XI. Only a
- * finished live lineup already in cache may fill that block.
+ * Last XI is never densified. Live Overview only shows a lineup already stored from
+ * `/fixtures/lineups`. `getLineups` is not used there: it falls through to mock
+ * starting XIs when the live cache misses.
  */
-import type { FormResult, Scorer, StandingRow, Team, TeamSeasonStats } from '@/data/types';
-import type { TeamFormChip } from '@/lib/teamPhaseA';
-import { recentTeamForm, teamChart } from '@/lib/teamPhaseA';
-import type { FootballProvider } from '@/services/footballTypes';
+import type { Fixture, FormResult, Lineup, Scorer, StandingRow, Team, TeamSeasonStats } from '@/data/types';
+import type { CachedXi, TeamFormChip } from '@/lib/teamPhaseA';
+import { lastCachedXi, recentTeamForm, teamChart } from '@/lib/teamPhaseA';
+import type { FootballProvider, FootballSource } from '@/services/footballTypes';
+
+const EMPTY_LINEUP: Lineup = { formation: '—', players: [] };
+const EMPTY_LINEUP_PAIR = { home: EMPTY_LINEUP, away: EMPTY_LINEUP };
+
+/**
+ * Overview Last XI.
+ * Live: cached `/fixtures/lineups` only. Passing mock `getLineups` cannot fill this.
+ * Mock catalog: seeded lineups are the source of truth.
+ */
+export function overviewLastXi(
+  source: FootballSource,
+  fixtures: Fixture[],
+  teamId: string,
+  lineups: Pick<FootballProvider, 'getLineups' | 'getCachedLiveLineups'>,
+): CachedXi | undefined {
+  if (source === 'live') {
+    return lastCachedXi(fixtures, teamId, (fixture) => lineups.getCachedLiveLineups(fixture) ?? EMPTY_LINEUP_PAIR);
+  }
+  return lastCachedXi(fixtures, teamId, (fixture) => lineups.getLineups(fixture));
+}
 
 export interface TeamOverviewDensify {
   mockTeamId: string;
@@ -74,11 +95,6 @@ export function buildTeamOverviewDensify(
     ...(stats?.venue ? { venue: stats.venue } : {}),
     ...(stats?.coach ? { coach: stats.coach } : {}),
   };
-}
-
-/** Live Overview Last XI: cached live lineup only — never mock densify. */
-export function overviewLastXi<T>(liveXi: T | undefined): T | undefined {
-  return liveXi;
 }
 
 export function densifyIsActive(parts: {

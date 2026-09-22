@@ -53,6 +53,11 @@ export interface FootballProvider {
   getStandings(leagueId: string): StandingRow[];
   getTopScorers(leagueId: string): Scorer[];
   getLineups(fixture: Fixture): { home: Lineup; away: Lineup };
+  /**
+   * Lineup pair only when `/fixtures/lineups` already filled the live cache.
+   * Undefined on a miss — never a mock starting XI.
+   */
+  getCachedLiveLineups(fixture: Fixture): { home: Lineup; away: Lineup } | undefined;
   getStatus(): FootballStatus;
   hydrate(): Promise<void>;
   refresh(): Promise<void>;
