@@ -16,7 +16,7 @@ import { DEMO_DENSIFY_BANNER, FREE_TIER_CACHE_MISS } from '@/lib/honesty';
 import { safeBack } from '@/lib/navBack';
 import { routeId } from '@/lib/routeParams';
 import { isFavoriteId } from '@/lib/favoriteIds';
-import { lastCachedXi, recentTeamForm, seasonSummary, teamChart } from '@/lib/teamPhaseA';
+import { recentTeamForm, seasonSummary, teamChart } from '@/lib/teamPhaseA';
 import { cachedCoach, cachedHomeVenue, presentTeamSeason } from '@/lib/teamPhaseB';
 import {
   buildTeamOverviewDensify,
@@ -108,7 +108,8 @@ export default function TeamDetailScreen() {
     league ? football.getTopScorers(league.id) : [],
     football.relatedIds('team', team.id),
   );
-  const liveXi = liveReady ? lastCachedXi(fixtures, team.id, (fixture) => football.getLineups(fixture)) : undefined;
+  // Live: snap.lineups only. getLineups falls through to mock starting XIs on a cache miss.
+  const liveXi = liveReady ? overviewLastXi(catalog.source, fixtures, team.id, football) : undefined;
   const providerStats = football.getTeamStats(team.id);
   // Live payload uses the live team id; mock densify keeps the mock catalog id (`liv`).
   const liveStats =
@@ -133,8 +134,7 @@ export default function TeamDetailScreen() {
       : densify
         ? { scorers: densify.scorers, assists: densify.assists }
         : liveChart;
-  // Last XI: finished live lineup cache only — never mock densify / getLineups.
-  const xi = overviewLastXi(liveXi);
+  const xi = liveXi;
   const stats = liveStats ?? densify?.stats ?? providerStats;
   const seasonView = stats ? presentTeamSeason(stats) : undefined;
   const venue = stats?.venue ?? densify?.venue ?? cachedHomeVenue(fixtures, team.id);

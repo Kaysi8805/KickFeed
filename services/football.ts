@@ -267,6 +267,7 @@ export const mockFootballProvider: FootballProvider = {
     home: startingXi(fixture.homeTeamId),
     away: startingXi(fixture.awayTeamId),
   }),
+  getCachedLiveLineups: () => undefined,
   getStatus: () => MOCK_FOOTBALL_STATUS,
   hydrate: noopAsync,
   refresh: noopAsync,

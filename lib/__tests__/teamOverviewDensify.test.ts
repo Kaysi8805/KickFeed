@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import type { Fixture } from '@/data/types';
 import { DEMO_DENSIFY_BANNER } from '@/lib/honesty';
 import { lastCachedXi } from '@/lib/teamPhaseA';
 import {
@@ -9,6 +10,52 @@ import {
   resolveMockTeamAlias,
 } from '@/lib/teamOverviewDensify';
 import { mockFootballProvider } from '@/services/football';
+import { createLiveFootballProvider } from '@/services/footballLive';
+import type { FootballHttp } from '@/services/footballApi';
+
+/** Finished mock seed. `getLineups` builds a full XI from the mock squad. */
+const finishedMockLiv: Fixture = {
+  id: 'fx-densify-mock-liv',
+  leagueId: 'epl',
+  homeTeamId: 'liv',
+  awayTeamId: 'ars',
+  kickoff: '2026-08-01T15:00:00.000Z',
+  status: 'finished',
+  homeScore: 2,
+  awayScore: 0,
+  events: [],
+  venue: 'Anfield',
+};
+
+function liveHttp(): FootballHttp {
+  return vi.fn(async (path) => {
+    if (path === '/fixtures') {
+      return [{
+        fixture: {
+          id: 9001,
+          date: '2026-09-01T15:00:00+00:00',
+          venue: { name: 'Anfield', city: 'Liverpool' },
+          status: { short: 'FT', elapsed: 90 },
+        },
+        league: { id: 39, name: 'Premier League' },
+        teams: {
+          home: { id: 40, name: 'Liverpool' },
+          away: { id: 42, name: 'Arsenal' },
+        },
+        goals: { home: 2, away: 1 },
+      }];
+    }
+    if (path === '/standings') return [{ league: { id: 39, standings: [[{ rank: 1, team: { id: 40, name: 'Liverpool' }, points: 3, all: { played: 1, win: 1, draw: 0, lose: 0, goals: { for: 2, against: 1 } } }]] } }];
+    if (path === '/fixtures/lineups') {
+      return [{
+        team: { id: 40, name: 'Liverpool' },
+        formation: '4-3-3',
+        startXI: [{ player: { id: 306, name: 'Salah', number: 11, pos: 'F' } }],
+      }];
+    }
+    return [];
+  });
+}
 
 describe('teamOverviewDensify', () => {
   it('resolves an aliased mock id next to a live numeric id', () => {
@@ -20,8 +67,6 @@ describe('teamOverviewDensify', () => {
   it('builds mock densify for Liverpool with season, scorers, stats, and form letters', () => {
     const densify = buildTeamOverviewDensify('liv', '40', mockFootballProvider);
     expect(densify.mockTeamId).toBe('liv');
-    // Featured LIV–ARS sits in the live mock window, so fixture form may be empty —
-    // densify still fills season letters, table, scorers, and teamStatsFor.
     expect(densify.formLetters.length).toBeGreaterThan(0);
     expect(densify.standing).toMatchObject({ teamId: '40', played: 10 });
     expect(densify.scorers.some((row) => /Salah/i.test(row.playerName))).toBe(true);
@@ -30,25 +75,36 @@ describe('teamOverviewDensify', () => {
     expect(densify.stats?.formation).toBeTruthy();
   });
 
-  it('keeps Last XI empty without a cached live lineup even when mock densify is active', () => {
+  it('keeps Last XI empty when live lineup cache is empty even if getLineups would invent a mock XI', async () => {
+    const live = createLiveFootballProvider({
+      fallback: mockFootballProvider,
+      http: liveHttp(),
+      season: 2026,
+      now: () => Date.parse('2026-09-16T12:00:00.000Z'),
+    });
+    await live.hydrate();
+
+    const invented = lastCachedXi([finishedMockLiv], 'liv', (fixture) => live.getLineups(fixture));
+    expect(invented?.players.length).toBeGreaterThan(0);
+    expect(live.getCachedLiveLineups(finishedMockLiv)).toBeUndefined();
+
     const densify = buildTeamOverviewDensify('liv', '40', mockFootballProvider);
-    expect(densify.formLetters.length).toBeGreaterThan(0);
     expect(densify.scorers.length).toBeGreaterThan(0);
-    expect(densify.stats).toBeTruthy();
     expect('xi' in densify).toBe(false);
 
-    // Mock getLineups can invent a starting XI for finished seeds — Overview must not use it.
-    const mockInventedXi = lastCachedXi(
-      mockFootballProvider.getFixtures({ teamId: 'ars' }),
-      'ars',
-      (fixture) => mockFootballProvider.getLineups(fixture),
-    );
-    expect(overviewLastXi(undefined)).toBeUndefined();
-    expect(overviewLastXi(undefined) ?? (densify as { xi?: unknown }).xi).toBeUndefined();
-    // Sanity: mock path can still build an XI; live Overview simply never falls back to it.
-    if (mockInventedXi) {
-      expect(mockInventedXi.players.length).toBeGreaterThan(0);
-    }
+    expect(overviewLastXi('live', [finishedMockLiv], 'liv', live)).toBeUndefined();
+    const window = live.getFixtures({ teamId: '40' });
+    expect(window.some((fixture) => fixture.id === '9001' && fixture.status === 'finished')).toBe(true);
+    expect(overviewLastXi('live', [...window, finishedMockLiv], '40', live)).toBeUndefined();
+    expect(overviewLastXi('live', [...window, finishedMockLiv], 'liv', live)).toBeUndefined();
+
+    await live.ensureMatchDetail('9001');
+    const cached = live.getFixture('9001');
+    expect(cached).toBeTruthy();
+    const shown = overviewLastXi('live', [cached!, finishedMockLiv], '40', live);
+    expect(shown?.fixtureId).toBe('9001');
+    expect(shown?.players[0]?.playerId).toBe('306');
+    expect(overviewLastXi('live', [finishedMockLiv], 'liv', live)).toBeUndefined();
   });
 
   it('marks densify active only for blocks that actually fell back', () => {
