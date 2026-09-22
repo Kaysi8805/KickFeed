@@ -36,6 +36,8 @@ export interface League {
   countryId: string;
   type: LeagueType;
   featured?: boolean;
+  /** Competition badge. Omitted when unknown; UI falls back to a short-name chip. */
+  logoUrl?: string;
 }
 
 export interface Team {
@@ -46,6 +48,8 @@ export interface Team {
   color: string;
   accent: string;
   countryId: string;
+  /** Crest image. Omitted when unknown; UI falls back to the colored code chip. */
+  logoUrl?: string;
 }
 
 export type PlayerPosition = 'GK' | 'DF' | 'MF' | 'FW';

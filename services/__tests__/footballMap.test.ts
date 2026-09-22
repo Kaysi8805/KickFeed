@@ -24,6 +24,7 @@ import {
   footballApiKeyFromEnv,
   footballBffUrlFromEnv,
 } from '@/services/footballApi';
+import { teams } from '@/data/mocks/catalog';
 import { describe, expect, it, vi } from 'vitest';
 
 describe('football mappers', () => {
@@ -143,6 +144,20 @@ describe('football mappers', () => {
     expect(mapTeam({ id: 42, name: 'Arsenal' }).color).toBe('#EF0107');
     expect(mapTeam({ id: 541, name: 'Real Madrid' }, 'esp').countryId).toBe('esp');
     expect(emptyLineup().players).toEqual([]);
+  });
+
+  it('keeps API crest urls and seeds mock club badges', () => {
+    expect(
+      mapTeam({ id: 42, name: 'Arsenal', logo: 'https://media.api-sports.io/football/teams/42.png' }).logoUrl,
+    ).toBe('https://media.api-sports.io/football/teams/42.png');
+    expect(mapTeam({ id: 40, name: 'Liverpool', logo: '  ' }).logoUrl).toBe(
+      'https://media.api-sports.io/football/teams/40.png',
+    );
+    expect(mapTeam({ id: 40, name: 'Liverpool' }).logoUrl).toContain('/teams/40.png');
+    expect(teams.find((t) => t.id === 'ars')?.logoUrl).toBe('https://media.api-sports.io/football/teams/42.png');
+    expect(teams.find((t) => t.id === 'liv')?.logoUrl).toBe('https://media.api-sports.io/football/teams/40.png');
+    expect(teams.find((t) => t.id === 'slovan')?.logoUrl).toContain('/teams/656.png');
+    expect(teams.find((t) => t.id === 'rma')?.logoUrl).toContain('/teams/541.png');
   });
 });
 

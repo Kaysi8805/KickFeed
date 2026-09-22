@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Crest } from '@/components/ui/Crest';
+import { Crest, LeagueMark } from '@/components/ui/Crest';
 import { Button } from '@/components/ui/Button';
 import { LiveBadge } from '@/components/match/LiveBadge';
 import type { Fixture } from '@/data/types';
@@ -48,7 +48,10 @@ export function MatchdayHero({
             accessibilityRole="button"
             accessibilityLabel={`${league.shortName} league`}
           >
-            <Text style={styles.league}>{league.shortName}</Text>
+            <View style={styles.leagueRow}>
+              <LeagueMark league={league} size={18} />
+              <Text style={styles.league}>{league.shortName}</Text>
+            </View>
           </Pressable>
         ) : null}
       </View>
@@ -128,6 +131,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     flex: 1,
   },
+  leagueRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   league: { ...type.badge, color: colors.textMuted },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   side: { flex: 1, alignItems: 'center', gap: 8 },

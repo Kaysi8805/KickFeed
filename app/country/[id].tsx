@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { LeagueMark } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
@@ -46,7 +47,8 @@ export default function CountryScreen() {
         ) : (
           leagues.map((l) => (
             <Pressable key={l.id} onPress={() => router.push(`/league/${l.id}`)} style={styles.row}>
-              <View>
+              <LeagueMark league={l} size={32} />
+              <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{l.name}</Text>
                 <Text style={styles.meta}>
                   {l.type} · {football.getTeams(l.id).length} clubs
@@ -68,6 +70,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.md,
     backgroundColor: colors.surface,
     padding: spacing.md,
     borderRadius: radius.lg,

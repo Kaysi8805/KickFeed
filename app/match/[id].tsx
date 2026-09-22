@@ -268,6 +268,7 @@ export default function MatchDetailScreen() {
                 return (
                   <View key={e.id} style={styles.event}>
                     <Text style={styles.minute}>{e.minute}'</Text>
+                    {team ? <Crest team={team} size={18} /> : null}
                     <Text style={styles.eicon}>{eventIcon[e.type]}</Text>
                     <View style={{ flex: 1 }}>
                       <Pressable
@@ -300,7 +301,10 @@ export default function MatchDetailScreen() {
           ) : (
           <View style={styles.lineWrap}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.lineTitle}>{home.code} · {lineups.home.formation}</Text>
+              <View style={styles.lineHead}>
+                <Crest team={home} size={20} />
+                <Text style={styles.lineTitle}>{home.code} · {lineups.home.formation}</Text>
+              </View>
               {lineups.home.players.map((p) => (
                 <Pressable
                   key={`h-${p.number}`}
@@ -315,7 +319,10 @@ export default function MatchDetailScreen() {
               ))}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.lineTitle}>{away.code} · {lineups.away.formation}</Text>
+              <View style={styles.lineHead}>
+                <Crest team={away} size={20} />
+                <Text style={styles.lineTitle}>{away.code} · {lineups.away.formation}</Text>
+              </View>
               {lineups.away.players.map((p) => (
                 <Pressable
                   key={`a-${p.number}`}
@@ -595,7 +602,8 @@ const styles = StyleSheet.create({
   ename: { ...type.subtitle, fontSize: 14, color: colors.text },
   edetail: { ...type.caption, color: colors.textMuted, fontWeight: '500' },
   lineWrap: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
-  lineTitle: { ...type.micro, color: colors.limeMuted, marginBottom: spacing.sm },
+  lineHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm },
+  lineTitle: { ...type.micro, color: colors.limeMuted },
   player: { ...type.caption, color: colors.text, marginBottom: 6 },
   pos: { color: colors.textDim },
   statLabel: { ...type.caption, color: colors.textMuted, marginBottom: 8 },

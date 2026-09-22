@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CatalogStatus } from '@/components/football/CatalogStatus';
 import { MatchRow } from '@/components/match/MatchRow';
-import { Crest } from '@/components/ui/Crest';
+import { Crest, LeagueMark } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
@@ -67,10 +67,15 @@ export default function LeagueScreen() {
             </Pressable>
           }
         />
-        <Text style={styles.name}>{league.name}</Text>
-        <Text style={styles.meta}>
-          {country?.flag} {country?.name} · {league.type}
-        </Text>
+        <View style={styles.identity}>
+          <LeagueMark league={league} size={56} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name}>{league.name}</Text>
+            <Text style={styles.meta}>
+              {country?.flag} {country?.name} · {league.type}
+            </Text>
+          </View>
+        </View>
         <CatalogStatus />
         <Pressable
           onPress={() => router.push({ pathname: '/leaderboard', params: { leagueId: league.id } })}
@@ -138,6 +143,7 @@ export default function LeagueScreen() {
                       onPress={() => team && router.push(entityHref('team', team.id))}
                       style={styles.formRow}
                     >
+                      {team ? <Crest team={team} size={18} /> : null}
                       <Text style={styles.formName}>{team?.code}</Text>
                       <View style={styles.dots}>
                         {row.form.map((r, idx) => (
@@ -205,8 +211,9 @@ export default function LeagueScreen() {
 
 const styles = StyleSheet.create({
   pad: { paddingHorizontal: spacing.lg, gap: spacing.sm },
-  name: { ...type.subtitle, color: colors.text, marginTop: -4 },
-  meta: { ...type.caption, color: colors.textMuted, fontWeight: '500', marginBottom: spacing.sm },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  name: { ...type.subtitle, color: colors.text },
+  meta: { ...type.caption, color: colors.textMuted, fontWeight: '500' },
   star: { ...type.caption, color: colors.gold },
   rankRow: {
     flexDirection: 'row',

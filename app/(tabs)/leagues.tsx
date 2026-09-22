@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { useMemo, useState } from 'react';
 
 import { SearchButton } from '@/components/search/SearchEntry';
+import { LeagueMark } from '@/components/ui/Crest';
 import { CatalogStatus } from '@/components/football/CatalogStatus';
 import { Screen } from '@/components/ui/Screen';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
@@ -50,8 +51,13 @@ export default function LeaguesScreen() {
           ) : (
             results.map((l) => (
               <Pressable key={l.id} onPress={() => router.push(`/league/${l.id}`)} style={styles.row}>
-                <Text style={styles.rowTitle}>{l.name}</Text>
-                <Text style={styles.rowMeta}>{football.getCountry(l.countryId)?.name}</Text>
+                <View style={styles.rowBody}>
+                  <LeagueMark league={l} size={32} />
+                  <View>
+                    <Text style={styles.rowTitle}>{l.name}</Text>
+                    <Text style={styles.rowMeta}>{football.getCountry(l.countryId)?.name}</Text>
+                  </View>
+                </View>
               </Pressable>
             ))
           )
@@ -60,9 +66,12 @@ export default function LeaguesScreen() {
             <Text style={styles.section}>Featured</Text>
             {featured.map((l) => (
               <Pressable key={l.id} onPress={() => router.push(`/league/${l.id}`)} style={styles.featured}>
-                <View>
-                  <Text style={styles.featKicker}>{football.getCountry(l.countryId)?.flag} {l.shortName}</Text>
-                  <Text style={styles.featTitle}>{l.name}</Text>
+                <View style={styles.featBody}>
+                  <LeagueMark league={l} size={40} />
+                  <View>
+                    <Text style={styles.featKicker}>{football.getCountry(l.countryId)?.flag} {l.shortName}</Text>
+                    <Text style={styles.featTitle}>{l.name}</Text>
+                  </View>
                 </View>
                 <Text style={styles.chev}>Standings →</Text>
               </Pressable>
@@ -110,7 +119,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.pitch,
+    gap: spacing.md,
   },
+  featBody: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flex: 1 },
   featKicker: { ...type.micro, color: colors.lime },
   featTitle: { ...type.subtitle, color: colors.text, marginTop: 4 },
   row: {
@@ -123,7 +134,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
+    gap: spacing.md,
   },
+  rowBody: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flex: 1 },
   rowTitle: { ...type.subtitle, fontSize: 15, color: colors.text },
   rowMeta: { ...type.caption, color: colors.textMuted, fontWeight: '500', marginTop: 2 },
   chev: { ...type.caption, color: colors.limeMuted },

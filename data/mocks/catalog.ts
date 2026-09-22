@@ -1,4 +1,5 @@
 import type { Continent, Country, League, Team } from '../types';
+import { leagueLogoUrl, mockTeamLogoUrl } from './teamLogos';
 
 export const continents: Continent[] = [
   { id: 'europe', name: 'Europe', blurb: 'Premier competitions and domestic leagues' },
@@ -39,7 +40,7 @@ export const countries: Country[] = [
   { id: 'nzl', name: 'New Zealand', continentId: 'oceania', flag: '🇳🇿' },
 ];
 
-export const leagues: League[] = [
+const leagueSeed: League[] = [
   { id: 'epl', name: 'Premier League', shortName: 'EPL', countryId: 'eng', type: 'league', featured: true },
   { id: 'facup', name: 'FA Cup', shortName: 'FA Cup', countryId: 'eng', type: 'cup' },
   { id: 'nikeliga', name: 'Niké Liga', shortName: 'Niké Liga', countryId: 'svk', type: 'league', featured: true },
@@ -71,6 +72,11 @@ export const leagues: League[] = [
   { id: 'nzf', name: 'National League', shortName: 'NZNL', countryId: 'nzl', type: 'league' },
 ];
 
+export const leagues: League[] = leagueSeed.map((league) => {
+  const logoUrl = leagueLogoUrl(league.id);
+  return logoUrl ? { ...league, logoUrl } : league;
+});
+
 function team(
   id: string,
   name: string,
@@ -80,7 +86,8 @@ function team(
   accent: string,
   countryId: string,
 ): Team {
-  return { id, name, shortName, code, color, accent, countryId };
+  const logoUrl = mockTeamLogoUrl(id);
+  return { id, name, shortName, code, color, accent, countryId, ...(logoUrl ? { logoUrl } : {}) };
 }
 
 export const teams: Team[] = [

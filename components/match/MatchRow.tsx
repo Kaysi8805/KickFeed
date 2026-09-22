@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Crest } from '@/components/ui/Crest';
+import { Crest, LeagueMark } from '@/components/ui/Crest';
 import { LiveBadge } from '@/components/match/LiveBadge';
 import type { Fixture } from '@/data/types';
 import { entityHref } from '@/lib/entityNav';
@@ -26,7 +26,10 @@ export function MatchRow({ fixture, compact }: { fixture: Fixture; compact?: boo
           accessibilityRole="button"
           accessibilityLabel={`${league.shortName} league`}
         >
-          <Text style={styles.league}>{league.shortName}</Text>
+          <View style={styles.leagueRow}>
+            <LeagueMark league={league} size={16} />
+            <Text style={styles.league}>{league.shortName}</Text>
+          </View>
         </Pressable>
       ) : null}
       <View style={styles.row}>
@@ -83,7 +86,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   cardLive: { borderColor: colors.live },
-  league: { ...type.badge, color: colors.textMuted, marginBottom: 8 },
+  leagueRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  league: { ...type.badge, color: colors.textMuted },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   side: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   right: { justifyContent: 'flex-end' },

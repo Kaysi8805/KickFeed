@@ -7,6 +7,7 @@ import { EntityText } from '@/components/feed/EntityText';
 import { LiveBadge } from '@/components/match/LiveBadge';
 import { SafetyMenu } from '@/components/moderation/SafetyMenu';
 import { Avatar } from '@/components/ui/Avatar';
+import { Crest } from '@/components/ui/Crest';
 import type { Post, User } from '@/data/types';
 import { entityHref } from '@/lib/entityNav';
 import { timeAgo } from '@/lib/format';
@@ -72,7 +73,9 @@ export function PostCard({
           onPress={() => router.push(entityHref('match', match.id))}
           style={[styles.matchChip, live && styles.matchChipLive]}
         >
+          <Crest team={home} size={18} />
           <Text style={styles.matchChipText}>{fixtureScoreLabel(football, match)}</Text>
+          <Crest team={away} size={18} />
         </Pressable>
       ) : matchHrefId ? (
         <Pressable onPress={() => router.push(entityHref('match', matchHrefId))} style={styles.matchChip}>
@@ -133,14 +136,14 @@ const styles = StyleSheet.create({
   imageHint: { ...type.meta, color: colors.white, opacity: 0.85 },
   matchChip: {
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: colors.surfaceElevated,
     borderRadius: radius.full,
     paddingHorizontal: 10,
     paddingVertical: 6,
     marginBottom: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
     borderWidth: 1,
     borderColor: colors.border,
   },
