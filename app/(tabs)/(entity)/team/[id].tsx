@@ -124,6 +124,7 @@ export default function TeamDetailScreen() {
           <View style={styles.chips}>
             {competitions.map((l) => (
               <Pressable key={l.id} onPress={() => router.push(entityHref('league', l.id))} style={styles.chip}>
+                <LeagueMark league={l} size={16} />
                 <Text style={styles.chipText}>{l.shortName}</Text>
               </Pressable>
             ))}
@@ -353,6 +354,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   chipText: { ...type.micro, color: colors.lime },
   section: {
