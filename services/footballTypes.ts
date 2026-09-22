@@ -10,6 +10,7 @@ import type {
   Scorer,
   StandingRow,
   Team,
+  TeamSeasonStats,
 } from '@/data/types';
 
 export type FootballSource = 'mock' | 'live';
@@ -44,6 +45,8 @@ export interface FootballProvider {
   getSquad(teamId: string): Player[];
   getTeamCompetitions(teamId: string): League[];
   getPlayerStats(playerId: string): PlayerStats | undefined;
+  /** Season block for the club’s primary competition. Undefined when the free-tier cache missed. */
+  getTeamStats(teamId: string): TeamSeasonStats | undefined;
   getPlayerAppearances(playerId: string): PlayerAppearance[];
   getFixtures(opts?: { leagueId?: string; teamId?: string }): Fixture[];
   getFixture(id: string): Fixture | undefined;
@@ -59,6 +62,11 @@ export interface FootballProvider {
   ensureScorers(leagueId: string): Promise<void>;
   /** One `GET /players?id=&season=` per player. Never call this while listing a squad. */
   ensurePlayerSeason(playerId: string): Promise<void>;
+  /**
+   * One `GET /teams/statistics?league=&season=&team=` per club per day.
+   * Never fans out per player, and never runs during catalog hydrate.
+   */
+  ensureTeamStats(teamId: string): Promise<void>;
   relatedIds(kind: FootballEntityKind, id: string): string[];
 }
 

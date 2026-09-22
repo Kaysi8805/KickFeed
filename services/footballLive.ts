@@ -8,6 +8,7 @@ import type {
   Scorer,
   StandingRow,
   Team,
+  TeamSeasonStats,
 } from '@/data/types';
 import { foldName } from '@/data/mocks/players';
 import { FOOTBALL_TTL, TtlCache, fixturesTtlMs } from '@/lib/ttlCache';
@@ -43,6 +44,7 @@ import {
   mapSquadPlayer,
   mapStandingRow,
   mapTeam,
+  mapTeamStatistics,
   mockClubStyle,
 } from '@/services/footballMap';
 import type {
@@ -68,6 +70,7 @@ interface LiveSnapshot {
   standings: Map<string, StandingRow[]>;
   scorers: Map<string, Scorer[]>;
   stats: Map<string, PlayerStats>;
+  teamStats: Map<string, TeamSeasonStats>;
   lineups: Map<string, LineupPair>;
   teamLeagueIds: Map<string, Set<string>>;
   teamAliases: Map<string, string>;
@@ -84,6 +87,7 @@ function emptySnapshot(): LiveSnapshot {
     standings: new Map(),
     scorers: new Map(),
     stats: new Map(),
+    teamStats: new Map(),
     lineups: new Map(),
     teamLeagueIds: new Map(),
     teamAliases: new Map(),
@@ -494,6 +498,27 @@ export function createLiveFootballProvider(opts: {
         setStatus({ error: err instanceof Error ? err.message : String(err) });
       }
     },
+    ensureTeamStats: async (teamId) => {
+      const team = liveTeam(teamId);
+      const canonical = team && /^[1-9]\d*$/.test(team.id) ? team.id : undefined;
+      if (!canonical) return;
+      const leagueId = LIVE_LEAGUE_ID_LIST.find((id) => snap.teamLeagueIds.get(canonical)?.has(id));
+      if (!leagueId) return;
+      const season = opts.season ?? footballSeasonFromEnv();
+      const key = `team-stats:${canonical}:${leagueId}:${season}`;
+      if (cache.hasFresh(key, now()) && snap.teamStats.has(canonical)) return;
+      try {
+        const payload = await load(key, FOOTBALL_TTL.teamStatsMs, () =>
+          http('/teams/statistics', { league: leagueId, season, team: canonical }),
+        );
+        const mapped = mapTeamStatistics(payload, { teamId: canonical, leagueId, season });
+        if (!mapped) return;
+        snap.teamStats.set(canonical, mapped);
+        emit();
+      } catch (err) {
+        setStatus({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
     getContinents: () => fallback.getContinents(),
     getContinent: (id) => fallback.getContinent(id),
     getCountries: (continentId) => fallback.getCountries(continentId),
@@ -556,6 +581,17 @@ export function createLiveFootballProvider(opts: {
       }
       if (player && liveTeam(player.teamId)) return undefined;
       return fallback.getPlayerStats(playerId);
+    },
+    getTeamStats: (teamId) => {
+      const team = liveTeam(teamId);
+      if (team) return snap.teamStats.get(team.id);
+      const mockTeam = fallback.getTeam(teamId);
+      if (!mockTeam) return undefined;
+      // Coverage clubs wait for `/teams/statistics` so mock blues don't flash as live.
+      if (isLiveCountryId(mockTeam.countryId) && fallback.getTeamCompetitions(teamId).some((league) => isLiveLeague(league.id))) {
+        return undefined;
+      }
+      return fallback.getTeamStats(teamId);
     },
     getPlayerAppearances: (playerId) => {
       const player = livePlayer(playerId);

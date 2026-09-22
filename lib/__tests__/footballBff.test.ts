@@ -3,6 +3,7 @@ import {
   BFF_TTL_MS,
   bffAllowsLeagueParam,
   bffPlayerSeasonQueryError,
+  bffTeamStatisticsQueryError,
   bffTtlMsForPath,
   bffTtlMsForResponse,
   handleFootballBffRequest,
@@ -21,6 +22,10 @@ describe('football BFF allowlist and ttls', () => {
     expect(isAllowedBffPath('/standings/')).toBe(true);
     expect(isAllowedBffPath('/players/topscorers')).toBe(true);
     expect(isAllowedBffPath('/players')).toBe(true);
+    expect(isAllowedBffPath('/teams/statistics')).toBe(true);
+    expect(isAllowedBffPath('/teams/statistics/')).toBe(true);
+    expect(isAllowedBffPath('/coachs')).toBe(false);
+    expect(isAllowedBffPath('/fixtures/statistics')).toBe(false);
     expect(isAllowedBffPath('/players/topassists')).toBe(false);
     expect(isAllowedBffPath('/odds')).toBe(false);
     expect(isAllowedBffPath('/')).toBe(false);
@@ -28,6 +33,7 @@ describe('football BFF allowlist and ttls', () => {
 
   it('scopes fixtures/standings/scorers to live coverage leagues', () => {
     expect(isLeagueScopedBffPath('/fixtures')).toBe(true);
+    expect(isLeagueScopedBffPath('/teams/statistics')).toBe(true);
     expect(isLeagueScopedBffPath('/players/squads')).toBe(false);
     expect(bffAllowsLeagueParam('39')).toBe(true);
     expect(bffAllowsLeagueParam('332')).toBe(true);
@@ -41,8 +47,17 @@ describe('football BFF allowlist and ttls', () => {
     expect(bffTtlMsForPath('/standings')).toBe(BFF_TTL_MS.standings);
     expect(bffTtlMsForPath('/players/topscorers')).toBe(BFF_TTL_MS.scorers);
     expect(bffTtlMsForPath('/players')).toBe(BFF_TTL_MS.players);
+    expect(bffTtlMsForPath('/teams/statistics')).toBe(BFF_TTL_MS.teamStats);
+    expect(BFF_TTL_MS.teamStats).toBe(24 * 60 * 60_000);
     expect(BFF_TTL_MS.players).toBeGreaterThanOrEqual(6 * 60 * 60_000);
     expect(BFF_TTL_MS.players).toBeLessThanOrEqual(24 * 60 * 60_000);
+    expect(bffTeamStatisticsQueryError(new URLSearchParams('league=39&season=2026&team=40'))).toBeNull();
+    expect(bffTeamStatisticsQueryError(new URLSearchParams('league=39&season=2026'))).toMatch(/team/);
+    expect(bffTeamStatisticsQueryError(new URLSearchParams('league=39&team=40'))).toMatch(/season/);
+    expect(bffTeamStatisticsQueryError(new URLSearchParams('league=2&season=2026&team=40'))).toMatch(/league/);
+    expect(bffTeamStatisticsQueryError(new URLSearchParams('league=39&season=2026&team=40&date=2026-01-01'))).toMatch(
+      /league, season, and team/,
+    );
     expect(bffPlayerSeasonQueryError(new URLSearchParams('id=306&season=2026'))).toBeNull();
     expect(bffPlayerSeasonQueryError(new URLSearchParams('season=2026'))).toMatch(/id/);
     expect(bffPlayerSeasonQueryError(new URLSearchParams('id=306&season=2026&league=39'))).toMatch(/id and season/);
@@ -71,12 +86,29 @@ describe('handleFootballBffRequest', () => {
     const noLeague = await handleFootballBffRequest(req('/standings?season=2026'), { apiKey: 'secret', fetchImpl });
     const squadWide = await handleFootballBffRequest(req('/players?league=39&season=2026'), { apiKey: 'secret', fetchImpl });
     const noSeason = await handleFootballBffRequest(req('/players?id=306'), { apiKey: 'secret', fetchImpl });
+    const statsWide = await handleFootballBffRequest(req('/teams/statistics?league=39&season=2026'), {
+      apiKey: 'secret',
+      fetchImpl,
+    });
+    const statsUcl = await handleFootballBffRequest(req('/teams/statistics?league=2&season=2026&team=40'), {
+      apiKey: 'secret',
+      fetchImpl,
+    });
+    const statsDated = await handleFootballBffRequest(
+      req('/teams/statistics?league=39&season=2026&team=40&date=2026-01-01'),
+      { apiKey: 'secret', fetchImpl },
+    );
+    const coach = await handleFootballBffRequest(req('/coachs?team=40'), { apiKey: 'secret', fetchImpl });
     expect(missing.status).toBe(404);
     expect(post.status).toBe(405);
     expect(ucl.status).toBe(400);
     expect(noLeague.status).toBe(400);
     expect(squadWide.status).toBe(400);
     expect(noSeason.status).toBe(400);
+    expect(statsWide.status).toBe(400);
+    expect(statsUcl.status).toBe(400);
+    expect(statsDated.status).toBe(400);
+    expect(coach.status).toBe(404);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -185,6 +217,59 @@ describe('handleFootballBffRequest', () => {
     expect(hit.headers.get('X-KickFeed-Cache')).toBe('HIT');
     now += BFF_TTL_MS.players;
     const expired = await handleFootballBffRequest(req('/players?id=306&season=2026'), env);
+    expect(expired.headers.get('X-KickFeed-Cache')).toBe('MISS');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('caches one team statistics read for 24h and coalesces parallel misses', async () => {
+    const envelope = {
+      response: {
+        team: { id: 40 },
+        league: { id: 39, season: 2026 },
+        form: 'WWW',
+        fixtures: { played: { total: 3 } },
+      },
+    };
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetchImpl = vi.fn(async () => {
+      await gate;
+      return new Response(JSON.stringify(envelope), { status: 200 });
+    });
+    const cache = new TtlCache<string>();
+    const inflight = new Map();
+    let now = 1_000;
+    const env = {
+      apiKey: 'server-secret',
+      fetchImpl,
+      cache,
+      inflight,
+      now: () => now,
+      origin: 'https://upstream.test',
+    };
+    const path = '/teams/statistics?league=39&season=2026&team=40';
+    const first = handleFootballBffRequest(req(path), env);
+    const second = handleFootballBffRequest(req(path), env);
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    release();
+    const [a, b] = await Promise.all([first, second]);
+    expect(a.headers.get('X-KickFeed-Cache')).toBe('MISS');
+    expect(b.status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://upstream.test/teams/statistics?league=39&season=2026&team=40',
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'x-apisports-key': 'server-secret' }),
+      }),
+    );
+    now += 60_000;
+    const hit = await handleFootballBffRequest(req(path), env);
+    expect(hit.headers.get('X-KickFeed-Cache')).toBe('HIT');
+    expect(hit.headers.get('Cache-Control')).toContain(`max-age=${24 * 60 * 60}`);
+    now += BFF_TTL_MS.teamStats;
+    const expired = await handleFootballBffRequest(req(path), env);
     expect(expired.headers.get('X-KickFeed-Cache')).toBe('MISS');
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });

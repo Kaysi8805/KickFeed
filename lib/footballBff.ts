@@ -21,10 +21,11 @@ export const BFF_ALLOWED_PATHS = [
   '/players/squads',
   '/fixtures/events',
   '/fixtures/lineups',
+  '/teams/statistics',
 ] as const;
 
 /** Paths that must carry an allowlisted `league` query so random competitions cannot burn quota. */
-export const BFF_LEAGUE_SCOPED_PATHS = ['/fixtures', '/standings', '/players/topscorers'] as const;
+export const BFF_LEAGUE_SCOPED_PATHS = ['/fixtures', '/standings', '/players/topscorers', '/teams/statistics'] as const;
 
 export const BFF_ALLOWED_LEAGUE_IDS = LIVE_LEAGUE_IDS;
 
@@ -38,6 +39,8 @@ export const BFF_TTL_MS = {
   lineups: 60_000,
   /** `GET /players?id=&season=` — long TTL so a player open does not burn the daily quota. */
   players: 12 * 60 * 60_000,
+  /** `GET /teams/statistics?league=&season=&team=` — one origin read per club per day. */
+  teamStats: 24 * 60 * 60_000,
 } as const;
 
 const LIVE_FIXTURE_SHORT = new Set(['1H', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP', 'HT']);
@@ -92,6 +95,25 @@ export function bffPlayerSeasonQueryError(params: URLSearchParams): string | nul
   return null;
 }
 
+/**
+ * `/teams/statistics` is one club in one covered league.
+ * Extra keys (`date`, `page`, a second team) would multiply origin calls.
+ */
+export function bffTeamStatisticsQueryError(params: URLSearchParams): string | null {
+  const league = params.get('league')?.trim() ?? '';
+  const season = params.get('season')?.trim() ?? '';
+  const team = params.get('team')?.trim() ?? '';
+  if (!isLiveLeagueId(league)) return 'teams/statistics requires a covered league';
+  if (!/^\d{4}$/.test(season)) return 'teams/statistics requires a season year';
+  if (!/^[1-9]\d*$/.test(team)) return 'teams/statistics requires a numeric team';
+  for (const key of params.keys()) {
+    if (key !== 'league' && key !== 'season' && key !== 'team') {
+      return 'teams/statistics only allows league, season, and team';
+    }
+  }
+  return null;
+}
+
 export function bffTtlMsForPath(pathname: string): number {
   switch (normalizeBffPath(pathname)) {
     case '/fixtures':
@@ -108,6 +130,8 @@ export function bffTtlMsForPath(pathname: string): number {
       return BFF_TTL_MS.events;
     case '/fixtures/lineups':
       return BFF_TTL_MS.lineups;
+    case '/teams/statistics':
+      return BFF_TTL_MS.teamStats;
     default:
       return BFF_TTL_MS.fixturesIdle;
   }
@@ -177,7 +201,7 @@ function healthBody(cacheSize: number) {
     cacheEntries: cacheSize,
     quota: {
       dailyLimit: API_FOOTBALL_DAILY_LIMIT,
-      note: 'Allowlisted leagues only. Fixtures 45s if any row is live, else 5 min. Standings 15 min. Player season 12h (id + season only). 429/5xx reuse stale cache. Never put FOOTBALL_API_KEY in Expo or CI.',
+      note: 'Allowlisted leagues only. Fixtures 45s if any row is live, else 5 min. Standings 15 min. Player season 12h (id + season only). Team statistics 24h (league + season + team only, one club per day). 429/5xx reuse stale cache. Never put FOOTBALL_API_KEY in Expo or CI.',
     },
   };
 }
@@ -235,6 +259,11 @@ export async function handleFootballBffRequest(
   if (path === '/players') {
     const playerError = bffPlayerSeasonQueryError(url.searchParams);
     if (playerError) return jsonResponse(400, { errors: { bff: playerError } });
+  }
+
+  if (path === '/teams/statistics') {
+    const statsError = bffTeamStatisticsQueryError(url.searchParams);
+    if (statsError) return jsonResponse(400, { errors: { bff: statsError } });
   }
 
   const apiKey = env.apiKey.trim();

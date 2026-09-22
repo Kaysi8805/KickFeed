@@ -113,8 +113,50 @@ export interface ApiLineupPlayer {
 export interface ApiLineup {
   team: ApiTeamRef;
   formation?: string | null;
+  coach?: { id?: number | null; name?: string | null; photo?: string | null } | null;
   startXI?: ApiLineupPlayer[];
   substitutes?: ApiLineupPlayer[];
+}
+
+export interface ApiSideCount {
+  home?: number | null;
+  away?: number | null;
+  total?: number | null;
+}
+
+export interface ApiSideAverage {
+  home?: string | number | null;
+  away?: string | number | null;
+  total?: string | number | null;
+}
+
+/**
+ * `GET /teams/statistics?league=&season=&team=` body.
+ * The upstream `response` is one object, not an array.
+ * Shots and possession are not on this endpoint.
+ */
+export interface ApiTeamStatistics {
+  league?: { id?: number | null; season?: number | null; name?: string | null } | null;
+  team?: {
+    id?: number | null;
+    name?: string | null;
+    venue?: { name?: string | null; city?: string | null } | null;
+  } | null;
+  form?: string | null;
+  fixtures?: {
+    played?: ApiSideCount | null;
+    wins?: ApiSideCount | null;
+    draws?: ApiSideCount | null;
+    loses?: ApiSideCount | null;
+  } | null;
+  goals?: {
+    for?: { total?: ApiSideCount | null; average?: ApiSideAverage | null } | null;
+    against?: { total?: ApiSideCount | null; average?: ApiSideAverage | null } | null;
+  } | null;
+  clean_sheet?: ApiSideCount | null;
+  failed_to_score?: ApiSideCount | null;
+  lineups?: Array<{ formation?: string | null; played?: number | null }> | null;
+  coach?: { id?: number | null; name?: string | null } | null;
 }
 
 export interface ApiPlayerStatistic {

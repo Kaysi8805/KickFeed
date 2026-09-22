@@ -5,8 +5,11 @@ import {
   mapForm,
   mapMatchEvent,
   mapMatchStatus,
+  mapLineup,
   mapPlayerSeason,
   mapPlayerStats,
+  mapSeasonForm,
+  mapTeamStatistics,
   mapPosition,
   mapScorer,
   mapSquadPlayer,
@@ -151,6 +154,90 @@ describe('football mappers', () => {
         cards: { yellow: null, red: null },
       }],
     })).toMatchObject({ appearances: 0, goals: 0, assists: 0, rating: 0 });
+  });
+
+  it('maps team statistics and refuses an empty or mismatched payload', () => {
+    expect(mapTeamStatistics([], { teamId: '40', leagueId: '39', season: 2026 })).toBeUndefined();
+    expect(mapTeamStatistics(null, { teamId: '40', leagueId: '39', season: 2026 })).toBeUndefined();
+    expect(
+      mapTeamStatistics(
+        {
+          team: { id: 40 },
+          league: { id: 39 },
+          form: null,
+          fixtures: { played: { home: null, away: null, total: null } },
+          clean_sheet: { total: null },
+          goals: { for: { average: { total: null } } },
+        },
+        { teamId: '40', leagueId: '39', season: 2026 },
+      ),
+    ).toBeUndefined();
+    expect(
+      mapTeamStatistics(
+        { team: { id: 42 }, league: { id: 39 }, form: 'WWW' },
+        { teamId: '40', leagueId: '39', season: 2026 },
+      ),
+    ).toBeUndefined();
+
+    const mapped = mapTeamStatistics(
+      {
+        league: { id: 39, season: 2026 },
+        team: { id: 40, name: 'Liverpool', venue: { name: 'Anfield', city: 'Liverpool' } },
+        form: 'WDLWWDLWWD',
+        fixtures: {
+          played: { home: 10, away: 9, total: 19 },
+          wins: { home: 7, away: 4, total: 11 },
+          draws: { home: 2, away: 3, total: 5 },
+          loses: { home: 1, away: 2, total: 3 },
+        },
+        goals: {
+          for: {
+            total: { home: 22, away: 12, total: 34 },
+            average: { home: '2.2', away: '1.3', total: '1.8' },
+          },
+          against: {
+            total: { home: 8, away: 11, total: 19 },
+            average: { home: '0.8', away: '1.2', total: '1.0' },
+          },
+        },
+        clean_sheet: { home: 5, away: 2, total: 7 },
+        failed_to_score: { home: 1, away: 3, total: 4 },
+        lineups: [
+          { formation: '4-2-3-1', played: 4 },
+          { formation: '4-3-3', played: 15 },
+        ],
+        shots: { total: 99 },
+        possession: '61%',
+      },
+      { teamId: '40', leagueId: '39', season: 2026 },
+    );
+    expect(mapped).toEqual({
+      teamId: '40',
+      leagueId: '39',
+      season: 2026,
+      form: mapSeasonForm('WDLWWDLWWD'),
+      played: { home: 10, away: 9, total: 19 },
+      wins: { home: 7, away: 4, total: 11 },
+      draws: { home: 2, away: 3, total: 5 },
+      losses: { home: 1, away: 2, total: 3 },
+      goalsFor: { home: 22, away: 12, total: 34 },
+      goalsAgainst: { home: 8, away: 11, total: 19 },
+      goalsForAverage: { home: 2.2, away: 1.3, total: 1.8 },
+      goalsAgainstAverage: { home: 0.8, away: 1.2, total: 1 },
+      cleanSheets: { home: 5, away: 2, total: 7 },
+      failedToScore: { home: 1, away: 3, total: 4 },
+      formation: '4-3-3',
+      venue: 'Anfield, Liverpool',
+    });
+    expect(mapped).not.toHaveProperty('shots');
+    expect(mapped).not.toHaveProperty('possession');
+    expect(mapped?.coach).toBeUndefined();
+    expect(mapLineup({
+      team: { id: 40, name: 'Liverpool' },
+      formation: '4-3-3',
+      coach: { id: 1, name: ' Arne Slot ' },
+      startXI: [],
+    }).coach).toBe('Arne Slot');
   });
 
   it('maps goals, cards, and subs from events', () => {

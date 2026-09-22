@@ -151,6 +151,43 @@ export interface LineupPlayer {
 export interface Lineup {
   formation: string;
   players: LineupPlayer[];
+  /** Head coach when a lineup payload already included one. */
+  coach?: string;
+}
+
+/** Home / away / total counts. Missing sides stay absent — never filled with a guessed 0. */
+export interface SideTotals {
+  home?: number;
+  away?: number;
+  total?: number;
+}
+
+/**
+ * One competition season from `GET /teams/statistics` (or the mock catalog).
+ * Shots, possession, and xG are not part of this shape.
+ */
+export interface TeamSeasonStats {
+  teamId: string;
+  leagueId: string;
+  season: number;
+  /** Oldest → newest. Empty when the payload omitted a form string. */
+  form: FormResult[];
+  played?: SideTotals;
+  wins?: SideTotals;
+  draws?: SideTotals;
+  losses?: SideTotals;
+  goalsFor?: SideTotals;
+  goalsAgainst?: SideTotals;
+  goalsForAverage?: SideTotals;
+  goalsAgainstAverage?: SideTotals;
+  cleanSheets?: SideTotals;
+  failedToScore?: SideTotals;
+  /** Most-used shape when the payload listed lineups. */
+  formation?: string;
+  /** Stadium name only when a payload we already had included one. */
+  venue?: string;
+  /** Coach only when a payload we already had named one. */
+  coach?: string;
 }
 
 export interface User {

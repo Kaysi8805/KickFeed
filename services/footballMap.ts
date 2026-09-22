@@ -11,8 +11,10 @@ import type {
   PlayerPosition,
   PlayerStats,
   Scorer,
+  SideTotals,
   StandingRow,
   Team,
+  TeamSeasonStats,
 } from '@/data/types';
 import { teams as mockTeams } from '@/data/mocks/catalog';
 import { apiSportsTeamLogo, leagueLogoUrl } from '@/data/mocks/teamLogos';
@@ -22,9 +24,12 @@ import type {
   ApiFixture,
   ApiLineup,
   ApiScorer,
+  ApiSideAverage,
+  ApiSideCount,
   ApiSquadPlayer,
   ApiStandingRow,
   ApiTeamRef,
+  ApiTeamStatistics,
 } from '@/services/footballApi';
 import {
   CHAMPIONSHIP_ID,
@@ -308,7 +313,120 @@ export function mapLineup(row: ApiLineup): Lineup {
     pos: mapPosition(slot.player.pos),
     playerId: String(slot.player.id),
   }));
-  return { formation: row.formation || '4-3-3', players };
+  const coach = row.coach?.name?.trim();
+  return { formation: row.formation || '4-3-3', players, ...(coach ? { coach } : {}) };
+}
+
+/** Full season form (oldest → newest). Standings chips still use `mapForm`, which keeps five. */
+export function mapSeasonForm(form: string | null | undefined, limit = 40): FormResult[] {
+  if (!form) return [];
+  const out: FormResult[] = [];
+  for (const ch of form.toUpperCase()) {
+    if (ch === 'W' || ch === 'D' || ch === 'L') out.push(ch);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
+function sideTotals(raw: ApiSideCount | ApiSideAverage | null | undefined): SideTotals | undefined {
+  if (!raw) return undefined;
+  const home = finiteNumber(raw.home);
+  const away = finiteNumber(raw.away);
+  const total = finiteNumber(raw.total);
+  if (home == null && away == null && total == null) return undefined;
+  return {
+    ...(home != null ? { home } : {}),
+    ...(away != null ? { away } : {}),
+    ...(total != null ? { total } : {}),
+  };
+}
+
+function sideAverages(raw: ApiSideAverage | null | undefined): SideTotals | undefined {
+  return sideTotals(raw);
+}
+
+function mostUsedFormation(lineups: ApiTeamStatistics['lineups']): string | undefined {
+  const ranked = [...(lineups ?? [])]
+    .filter((row) => row.formation?.trim())
+    .sort((a, b) => (finiteNumber(b.played) ?? 0) - (finiteNumber(a.played) ?? 0));
+  return ranked[0]?.formation?.trim() || undefined;
+}
+
+function stadiumName(row: ApiTeamStatistics): string | undefined {
+  const venue = row.team?.venue;
+  const name = [venue?.name, venue?.city].map((part) => part?.trim()).filter(Boolean).join(', ');
+  return name || undefined;
+}
+
+/**
+ * Map `GET /teams/statistics`.
+ * An empty array, a null body, or a shell of null totals is a cache miss — not a 0–0 grid.
+ * Shots and possession are ignored even if a future payload grows them; those belong on
+ * per-fixture `/fixtures/statistics`, which this screen does not call.
+ */
+export function mapTeamStatistics(
+  payload: unknown,
+  request: { teamId: string; leagueId: string; season: number },
+): TeamSeasonStats | undefined {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return undefined;
+  const row = payload as ApiTeamStatistics;
+  const payloadTeam = row.team?.id != null ? String(row.team.id) : undefined;
+  if (payloadTeam && payloadTeam !== request.teamId) return undefined;
+  const payloadLeague = row.league?.id != null ? String(row.league.id) : undefined;
+  if (payloadLeague && payloadLeague !== request.leagueId) return undefined;
+
+  const played = sideTotals(row.fixtures?.played);
+  const wins = sideTotals(row.fixtures?.wins);
+  const draws = sideTotals(row.fixtures?.draws);
+  const losses = sideTotals(row.fixtures?.loses);
+  const goalsFor = sideTotals(row.goals?.for?.total);
+  const goalsAgainst = sideTotals(row.goals?.against?.total);
+  const goalsForAverage = sideAverages(row.goals?.for?.average);
+  const goalsAgainstAverage = sideAverages(row.goals?.against?.average);
+  const cleanSheets = sideTotals(row.clean_sheet);
+  const failedToScore = sideTotals(row.failed_to_score);
+  const form = mapSeasonForm(row.form);
+  const formation = mostUsedFormation(row.lineups);
+  const venue = stadiumName(row);
+  const coach = row.coach?.name?.trim() || undefined;
+
+  const hasSignal =
+    form.length > 0 ||
+    played?.total != null ||
+    wins?.total != null ||
+    cleanSheets?.total != null ||
+    goalsFor?.total != null ||
+    goalsForAverage?.total != null;
+  if (!hasSignal) return undefined;
+
+  return {
+    teamId: request.teamId,
+    leagueId: request.leagueId,
+    season: request.season,
+    form,
+    ...(played ? { played } : {}),
+    ...(wins ? { wins } : {}),
+    ...(draws ? { draws } : {}),
+    ...(losses ? { losses } : {}),
+    ...(goalsFor ? { goalsFor } : {}),
+    ...(goalsAgainst ? { goalsAgainst } : {}),
+    ...(goalsForAverage ? { goalsForAverage } : {}),
+    ...(goalsAgainstAverage ? { goalsAgainstAverage } : {}),
+    ...(cleanSheets ? { cleanSheets } : {}),
+    ...(failedToScore ? { failedToScore } : {}),
+    ...(formation ? { formation } : {}),
+    ...(venue ? { venue } : {}),
+    ...(coach ? { coach } : {}),
+  };
 }
 
 export function mapScorer(row: ApiScorer, index: number): Scorer | undefined {

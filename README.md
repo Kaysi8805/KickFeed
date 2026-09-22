@@ -167,7 +167,7 @@ Solo local without the BFF: copy `.env.example` to `.env` (gitignored) and set `
 
 Optional: `EXPO_PUBLIC_FOOTBALL_SEASON=2026` to pin the season start year (defaults to the current European season).
 
-Docs: [API-Football v3](https://www.api-football.com/documentation-v3). Direct client header: `x-apisports-key`. Client cache: fixtures ~45s if anything in that league window is live, else 5 min; standings 5 min; scorers 15 min; squads / match detail lazy. The BFF is stricter on origin: allowlisted leagues only, fixtures 45s if any row is live else 5 min, standings 15 min, scorers 30 min, and **429/5xx reuse stale cache**. Cold hydrate is 9 origin calls (4 leagues × fixtures+standings + PL scorers); extra devices HIT the BFF. If the free tier omits a squad or lineup, the team/match page still shows scores and degrades that section.
+Docs: [API-Football v3](https://www.api-football.com/documentation-v3). Direct client header: `x-apisports-key`. Client cache: fixtures ~45s if anything in that league window is live, else 5 min; standings 5 min; scorers 15 min; squads / match detail lazy; team statistics 24 h (one club, fetched when Overview opens). The BFF is stricter on origin: allowlisted leagues only, fixtures 45s if any row is live else 5 min, standings 15 min, scorers 30 min, player season 12 h, team statistics 24 h, and **429/5xx reuse stale cache**. Cold hydrate is 9 origin calls (4 leagues × fixtures+standings + PL scorers); team statistics are not in that burst. Extra devices HIT the BFF. If the free tier omits a squad, lineup, or season block, the team/match page still shows scores and says “Not in free-tier cache yet” instead of inventing shots, possession, or xG.
 
 Mock club ids (`ars`, `liv`, `epl`, `slovan`, `laliga`) still resolve after hydrate so demo favorites and feed mentions keep working. Search prefers live coverage entities when the BFF/key is set.
 
@@ -184,7 +184,7 @@ Use **Profile → Switch demo user** / **Switch account** / **Sign out** to retu
 ```
 landing/             Public static marketing site (Batch 0; GitHub Pages / Cloudflare)
 app/                 Expo Router screens (tabs + stack)
-  team/[id]          Club detail (squad, fixtures, favorite)
+  team/[id]          Club detail (form, season stats, fixtures, squad, favorite)
   player/[id]        Player detail (stats, appearances, follow)
   match/[id]         Match hub (events, Predict, MOTM, discussion, TV)
   leaderboard        Global / per-league prediction ranking

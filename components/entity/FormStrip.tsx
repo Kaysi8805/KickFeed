@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import type { FormResult } from '@/data/types';
 import type { TeamFormChip } from '@/lib/teamPhaseA';
 import { entityHref } from '@/lib/entityNav';
 import { colors, radius, type } from '@/theme';
@@ -43,6 +44,37 @@ export function FormStrip({ chips }: { chips: TeamFormChip[] }) {
         </Pressable>
       ))}
     </ScrollView>
+  );
+}
+
+/** Season-form letters from a statistics string. No scores, so these are not match links. */
+export function ResultLetters({ results }: { results: FormResult[] }) {
+  if (results.length === 0) return null;
+  return (
+    <View style={styles.row}>
+      {results.map((result, index) => (
+        <View
+          key={`${result}-${index}`}
+          style={[
+            styles.pill,
+            result === 'W' && styles.win,
+            result === 'D' && styles.draw,
+            result === 'L' && styles.loss,
+          ]}
+        >
+          <Text
+            style={[
+              styles.letter,
+              result === 'W' && styles.letterWin,
+              result === 'D' && styles.letterDraw,
+              result === 'L' && styles.letterLoss,
+            ]}
+          >
+            {result}
+          </Text>
+        </View>
+      ))}
+    </View>
   );
 }
 

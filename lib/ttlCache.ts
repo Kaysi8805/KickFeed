@@ -44,6 +44,8 @@ export const FOOTBALL_TTL = {
   matchDoneMs: 30 * 60_000,
   /** Player season block. Kept inside the 6–24h window so one open does not refetch all day. */
   playerSeasonMs: 12 * 60 * 60_000,
+  /** Team season block. One origin read per club per day when Overview opens. */
+  teamStatsMs: 24 * 60 * 60_000,
 } as const;
 
 export function fixturesTtlMs(hasLive: boolean): number {
