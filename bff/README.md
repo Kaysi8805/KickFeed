@@ -39,7 +39,7 @@ Anything else is `404`. `POST` is `405`. CORS is `*` for Expo web. Responses are
 
 ### Quota math (~100 req/day)
 
-Cold hydrate from the app is **9 origin calls** when the BFF cache is empty: 4 leagues × (fixtures + standings) + Premier League scorers. Squads, events, lineups, player seasons, and team statistics stay lazy. Opening a club Overview adds **at most one** `/teams/statistics` origin call for that club’s primary covered league, then the BFF and the app cache it for 24 hours and coalesce in-flight misses. Another device the same day is a HIT. Shots, possession, and coach are not on that payload; KickFeed does not fan out `/fixtures/statistics` or `/coachs` to fill them.
+Cold hydrate from the app is **9 origin calls** when the BFF cache is empty: 4 leagues × (fixtures + standings) + Premier League scorers. Squads, events, lineups, player seasons, and team statistics stay lazy. Opening a club Overview adds **at most one** `/teams/statistics` origin call for that club’s primary covered league, then the BFF and the app cache it for 24 hours and coalesce in-flight misses. Another device the same day is a HIT. Shots and possession are not on that payload; KickFeed does not fan out `/fixtures/statistics` to fill them. A coach name is mapped when the statistics body includes one, and Overview can also show a coach already stored on a cached lineup. `/coachs` stays off the allowlist.
 
 If a league window has a live match, that fixtures key refreshes every 45s **per BFF process**, not per device. Idle leagues stay at 5 minutes. Do not poll extra competitions — the allowlist is the budget.
 

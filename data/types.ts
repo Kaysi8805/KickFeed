@@ -186,7 +186,7 @@ export interface TeamSeasonStats {
   formation?: string;
   /** Stadium name only when a payload we already had included one. */
   venue?: string;
-  /** Coach only when a payload we already had named one. */
+  /** Coach when `/teams/statistics` named one. A cached lineup is a separate fallback — `/coachs` is not called. */
   coach?: string;
 }
 

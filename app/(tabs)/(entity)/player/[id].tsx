@@ -8,6 +8,7 @@ import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
 import { entityBackHref, entityHref } from '@/lib/entityNav';
+import { defaultEntitySegment } from '@/lib/entityTabs';
 import { FREE_TIER_CACHE_MISS } from '@/lib/honesty';
 import { safeBack } from '@/lib/navBack';
 import { routeId } from '@/lib/routeParams';
@@ -15,6 +16,7 @@ import { isFavoriteId } from '@/lib/favoriteIds';
 import { kickoffLabel } from '@/lib/format';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
+import { playerStatsHasSignal } from '@/services/footballMap';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
@@ -25,12 +27,12 @@ export default function PlayerDetailScreen() {
   const id = routeId(rawId);
   const catalog = useFootballCatalog();
   const { favoritePlayerIds, toggleFavoritePlayer } = useApp();
-  const [tab, setTab] = useState<PlayerTab>('overview');
+  const [tab, setTab] = useState<PlayerTab>(defaultEntitySegment('player'));
   const [checkedId, setCheckedId] = useState<string | null>(null);
   const player = id ? football.getPlayer(id) : undefined;
 
   useEffect(() => {
-    setTab('overview');
+    setTab(defaultEntitySegment('player'));
     setCheckedId(null);
   }, [id]);
 
@@ -115,7 +117,7 @@ export default function PlayerDetailScreen() {
         {tab === 'overview' ? (
           <>
             <Text style={styles.section}>Season</Text>
-            {stats ? (
+            {stats && playerStatsHasSignal(stats) ? (
               <View style={styles.stats}>
                 <Stat n={stats.appearances} label="Apps" />
                 <Stat n={stats.goals} label="Goals" />

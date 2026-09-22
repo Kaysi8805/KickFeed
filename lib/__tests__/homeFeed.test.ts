@@ -1,5 +1,6 @@
 import type { Post } from '@/data/types';
 import {
+  friendPostRecipientIds,
   homeColdCopy,
   homeFeedBucket,
   homeFeedRank,
@@ -83,6 +84,29 @@ describe('home feed ranking (Option 2)', () => {
     );
   });
 
+  it('keeps a quiet friend ahead of a live favorite-entity post', () => {
+    const friend = post({
+      id: 'friend-quiet',
+      authorId: 'jordan',
+      createdAt: '2026-09-01T10:00:00.000Z',
+      text: 'quiet',
+    });
+    const liveEntity = post({
+      id: 'live-entity',
+      authorId: 'aisha',
+      matchId: 'fx-liv-ars',
+      audience: 'public',
+      createdAt: '2026-09-16T20:00:00.000Z',
+    });
+    const ranked = rankHomeFeed([liveEntity, friend], mockFootballProvider, maya);
+    expect(ranked.map((row) => row.post.id)).toEqual(['friend-quiet', 'live-entity']);
+    expect(ranked[0]?.bucket).toBe('friend');
+    expect(ranked[1]?.bucket).toBe('favorite_entity');
+    expect(homeFeedRank(mockFootballProvider, friend, maya)).toBeLessThan(
+      homeFeedRank(mockFootballProvider, liveEntity, maya),
+    );
+  });
+
   it('boosts live favorite matches within the same bucket without beating friends', () => {
     const friendPlain = post({
       id: 'friend-plain',
@@ -117,6 +141,23 @@ describe('home feed ranking (Option 2)', () => {
     expect(ranked).toEqual([]);
     expect(isHomeFeedCold(ranked)).toBe(true);
     expect(homeColdCopy(lonely).title).toBe('Your pitch is quiet');
+  });
+});
+
+describe('friend_post recipients', () => {
+  const following = {
+    maya: ['omar', 'luca', 'jordan', 'sophie'],
+    omar: ['maya'],
+    aisha: ['maya'],
+    jordan: ['maya'],
+  };
+
+  it('notifies mutual friends of a friends-only post, not one-way followers', () => {
+    expect(friendPostRecipientIds('maya', 'friends', following).sort()).toEqual(['jordan', 'omar']);
+  });
+
+  it('notifies followers of a public post, including one-way follows', () => {
+    expect(friendPostRecipientIds('maya', 'public', following).sort()).toEqual(['aisha', 'jordan', 'omar']);
   });
 });
 

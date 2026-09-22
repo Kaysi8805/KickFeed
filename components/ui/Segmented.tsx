@@ -12,14 +12,14 @@ export function Segmented<T extends string>({
   options: { key: T; label: string }[];
 }) {
   return (
-    <View style={styles.row}>
+    <View accessibilityRole="tablist" style={styles.row}>
       {options.map((opt) => {
         const active = opt.key === value;
         return (
           <Pressable
             key={opt.key}
             onPress={() => onChange(opt.key)}
-            accessibilityRole="button"
+            accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={opt.label}
             style={[styles.item, options.length > 4 && styles.itemTight, active && styles.active]}

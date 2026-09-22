@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { Fixture, MotmVote, Team } from '@/data/types';
 import { entityHref } from '@/lib/entityNav';
@@ -104,11 +105,11 @@ export function MotmSection({
                     {player.name}
                   </Text>
                 </Pressable>
-                <Text style={styles.meta}>
-                  {player.pos}
-                  {team ? ` · ${team.code}` : ''}
-                  {selected ? ' · your vote' : voteLocked ? ' · locked' : ''}
-                </Text>
+                <View style={styles.metaRow}>
+                  <Text style={styles.meta}>{player.pos}</Text>
+                  {team ? <Crest team={team} size={16} /> : null}
+                  {selected ? <Text style={styles.meta}>your vote</Text> : voteLocked ? <Text style={styles.meta}>locked</Text> : null}
+                </View>
                 <View style={styles.barTrack}>
                   <View style={[styles.barFill, { flex: votes }, votes === 0 && styles.barEmpty]} />
                   <View style={{ flex: maxVotes - votes }} />
@@ -160,7 +161,8 @@ const styles = StyleSheet.create({
   num: { ...type.caption, color: colors.lime },
   name: { ...type.subtitle, fontSize: 14, color: colors.text },
   link: { color: colors.lime },
-  meta: { ...type.caption, color: colors.textMuted, fontWeight: '500', marginTop: 1, marginBottom: 6 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1, marginBottom: 6 },
+  meta: { ...type.caption, color: colors.textMuted, fontWeight: '500' },
   barTrack: { flexDirection: 'row', height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: colors.bgElevated },
   barFill: { backgroundColor: colors.pitchBright, borderRadius: 3 },
   barEmpty: { flex: 0, width: 0 },

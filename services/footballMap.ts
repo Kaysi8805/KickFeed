@@ -447,7 +447,7 @@ export function mapPlayerStats(row: ApiScorer): PlayerStats | undefined {
   if (!stats) return undefined;
   const appearances = stats.games?.appearences ?? stats.games?.appearances ?? 0;
   const rating = Number.parseFloat(stats.games?.rating ?? '');
-  return {
+  const mapped: PlayerStats = {
     appearances,
     goals: stats.goals?.total ?? 0,
     assists: stats.goals?.assists ?? 0,
@@ -456,11 +456,26 @@ export function mapPlayerStats(row: ApiScorer): PlayerStats | undefined {
     reds: stats.cards?.red ?? 0,
     rating: Number.isFinite(rating) ? Number(rating.toFixed(1)) : 0,
   };
+  if (!playerStatsHasSignal(mapped)) return undefined;
+  return mapped;
+}
+
+/** True when a season block has a real number. All-zero / all-null shells are not a grid. */
+export function playerStatsHasSignal(stats: PlayerStats): boolean {
+  return (
+    stats.appearances > 0 ||
+    stats.goals > 0 ||
+    stats.assists > 0 ||
+    stats.minutes > 0 ||
+    stats.yellows > 0 ||
+    stats.reds > 0 ||
+    stats.rating > 0
+  );
 }
 
 /**
  * Sum a player's season rows from `GET /players?id=&season=`.
- * Empty statistics means "no payload" — callers must not render that as a zero line.
+ * Empty statistics, or a shell of nulls and zeros, is not a season — callers show an honest empty.
  * Rating is a minutes-weighted average when the API sent one; otherwise 0 (unknown).
  */
 export function mapPlayerSeason(row: { statistics?: ApiScorer['statistics'] } | undefined): PlayerStats | undefined {
@@ -490,7 +505,7 @@ export function mapPlayerSeason(row: { statistics?: ApiScorer['statistics'] } | 
       ratingWeight += weight;
     }
   }
-  return {
+  const mapped: PlayerStats = {
     appearances,
     goals,
     assists,
@@ -499,6 +514,8 @@ export function mapPlayerSeason(row: { statistics?: ApiScorer['statistics'] } | 
     reds,
     rating: ratingWeight > 0 ? Number((ratingSum / ratingWeight).toFixed(1)) : 0,
   };
+  if (!playerStatsHasSignal(mapped)) return undefined;
+  return mapped;
 }
 
 export function emptyLineup(): Lineup {

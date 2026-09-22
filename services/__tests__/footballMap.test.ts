@@ -153,7 +153,15 @@ describe('football mappers', () => {
         goals: { total: null, assists: null },
         cards: { yellow: null, red: null },
       }],
-    })).toMatchObject({ appearances: 0, goals: 0, assists: 0, rating: 0 });
+    })).toBeUndefined();
+    expect(mapPlayerSeason({
+      statistics: [{
+        team: { id: 40, name: 'Liverpool' },
+        games: { appearences: null, minutes: null, rating: null },
+        goals: { total: null, assists: null },
+        cards: { yellow: null, red: null },
+      }],
+    })).toBeUndefined();
   });
 
   it('maps team statistics and refuses an empty or mismatched payload', () => {
@@ -232,6 +240,17 @@ describe('football mappers', () => {
     expect(mapped).not.toHaveProperty('shots');
     expect(mapped).not.toHaveProperty('possession');
     expect(mapped?.coach).toBeUndefined();
+    expect(
+      mapTeamStatistics(
+        {
+          team: { id: 40 },
+          league: { id: 39 },
+          form: 'W',
+          coach: { id: 1, name: ' Arne Slot ' },
+        },
+        { teamId: '40', leagueId: '39', season: 2026 },
+      )?.coach,
+    ).toBe('Arne Slot');
     expect(mapLineup({
       team: { id: 40, name: 'Liverpool' },
       formation: '4-3-3',

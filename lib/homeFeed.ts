@@ -50,6 +50,24 @@ const BUCKET_BASE: Record<HomeFeedBucket, number> = {
   buried: 1000,
 };
 
+/**
+ * Who should get a `friend_post` alert.
+ * Public posts can reach followers (they can see the post).
+ * Friends-only posts stay with mutual follows — a one-way follower cannot see them.
+ */
+export function friendPostRecipientIds(
+  authorId: string,
+  audience: PostAudience,
+  following: Readonly<Record<string, readonly string[]>>,
+): string[] {
+  const followers = Object.entries(following)
+    .filter(([id, ids]) => id !== authorId && ids.includes(authorId))
+    .map(([id]) => id);
+  if (audience === 'public') return followers;
+  const followsBack = new Set(following[authorId] ?? []);
+  return followers.filter((id) => followsBack.has(id));
+}
+
 /** Effective audience. Seeds without a field stay public so the demo graph still reads. */
 export function postAudience(post: Post): PostAudience {
   return post.audience ?? 'public';

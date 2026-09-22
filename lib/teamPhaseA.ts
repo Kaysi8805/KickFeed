@@ -37,7 +37,7 @@ export function recentTeamForm(fixtures: Fixture[], teamId: string, limit = 5): 
 
 export function seasonSummary(row: StandingRow | undefined): SeasonChip[] | undefined {
   if (!row) return undefined;
-  return [
+  const chips: SeasonChip[] = [
     { label: 'P', value: row.played },
     { label: 'W', value: row.won },
     { label: 'D', value: row.drawn },
@@ -46,6 +46,9 @@ export function seasonSummary(row: StandingRow | undefined): SeasonChip[] | unde
     { label: 'GA', value: row.ga },
     { label: 'Pts', value: row.points },
   ];
+  // An empty or all-zero table row is not a season. Callers show an honest empty.
+  if (chips.every((chip) => chip.value === 0)) return undefined;
+  return chips;
 }
 
 /** This club's rows on the cached league top-scorer list. Assists only when that list actually has them. */

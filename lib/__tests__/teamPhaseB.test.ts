@@ -2,7 +2,7 @@ import type { Fixture, Lineup, TeamSeasonStats } from '@/data/types';
 import { teams } from '@/data/mocks/catalog';
 import { leagueRosters } from '@/data/mocks/catalog';
 import { teamStatsFor } from '@/data/mocks/teamStats';
-import { cachedCoach, cachedHomeVenue, presentTeamSeason } from '@/lib/teamPhaseB';
+import { cachedCoach, cachedHomeVenue, displayedCoach, presentTeamSeason, seasonStatsHasSignal } from '@/lib/teamPhaseB';
 import { describe, expect, it } from 'vitest';
 
 function fx(partial: Partial<Fixture> & Pick<Fixture, 'id' | 'kickoff'>): Fixture {
@@ -70,6 +70,25 @@ describe('presentTeamSeason', () => {
     expect(view.form).toEqual([]);
     expect(view.formation).toBeUndefined();
   });
+
+  it('treats an all-zero presentation as empty', () => {
+    const blank = presentTeamSeason({
+      teamId: '40',
+      leagueId: '39',
+      season: 2026,
+      form: [],
+      played: { home: 0, away: 0, total: 0 },
+      wins: { home: 0, away: 0, total: 0 },
+      draws: { home: 0, away: 0, total: 0 },
+      losses: { home: 0, away: 0, total: 0 },
+      goalsForAverage: { total: 0 },
+      goalsAgainstAverage: { total: 0 },
+      cleanSheets: { total: 0 },
+      failedToScore: { total: 0 },
+    });
+    expect(seasonStatsHasSignal(blank)).toBe(false);
+    expect(seasonStatsHasSignal(presentTeamSeason(stats))).toBe(true);
+  });
 });
 
 describe('cached venue and coach', () => {
@@ -96,6 +115,13 @@ describe('cached venue and coach', () => {
     });
     expect(coach).toBe('Arne Slot');
     expect(cachedCoach([older], '40', () => ({ home: empty(), away: empty() }))).toBeUndefined();
+  });
+
+  it('prefers a statistics-payload coach over a cached lineup', () => {
+    expect(displayedCoach('Arne Slot', 'Earlier')).toBe('Arne Slot');
+    expect(displayedCoach('  ', 'Cached')).toBe('Cached');
+    expect(displayedCoach(undefined, ' Cached ')).toBe('Cached');
+    expect(displayedCoach(undefined, '  ')).toBeUndefined();
   });
 });
 

@@ -69,6 +69,21 @@ describe('seasonSummary', () => {
     ]);
     expect(seasonSummary(undefined)).toBeUndefined();
   });
+
+  it('skips an all-zero standings row instead of a zero grid', () => {
+    const empty: StandingRow = {
+      teamId: 'liv',
+      played: 0,
+      won: 0,
+      drawn: 0,
+      lost: 0,
+      gf: 0,
+      ga: 0,
+      points: 0,
+      form: [],
+    };
+    expect(seasonSummary(empty)).toBeUndefined();
+  });
 });
 
 describe('teamChart', () => {

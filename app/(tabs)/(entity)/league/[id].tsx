@@ -10,6 +10,7 @@ import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
 import { entityBackHref, entityHref } from '@/lib/entityNav';
+import { defaultEntitySegment } from '@/lib/entityTabs';
 import { safeBack } from '@/lib/navBack';
 import { routeId } from '@/lib/routeParams';
 import { isFavoriteId } from '@/lib/favoriteIds';
@@ -26,8 +27,12 @@ export default function LeagueScreen() {
   const id = routeId(rawId);
   const catalog = useFootballCatalog();
   const { favoriteLeagueIds, toggleFavoriteLeague } = useApp();
-  const [tab, setTab] = useState<Tab>('table');
+  const [tab, setTab] = useState<Tab>(defaultEntitySegment('league'));
   const league = id ? football.getLeague(id) : undefined;
+
+  useEffect(() => {
+    setTab(defaultEntitySegment('league'));
+  }, [id]);
 
   useEffect(() => {
     if (league && tab === 'scorers') void football.ensureScorers(league.id);
@@ -153,7 +158,7 @@ export default function LeagueScreen() {
                               styles.dot,
                               r === 'W' && { backgroundColor: colors.pitchBright },
                               r === 'D' && { backgroundColor: colors.gold },
-                              r === 'L' && { backgroundColor: colors.live },
+                              r === 'L' && styles.dotLoss,
                             ]}
                           />
                         ))}
@@ -250,7 +255,16 @@ const styles = StyleSheet.create({
   formRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
   formName: { ...type.caption, color: colors.text, width: 40 },
   dots: { flexDirection: 'row', gap: 4 },
-  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.border },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  /** Loss matches FormStrip: coral outline, not a solid LIVE fill. */
+  dotLoss: { backgroundColor: 'transparent', borderColor: colors.live },
   scorer: {
     flexDirection: 'row',
     alignItems: 'center',

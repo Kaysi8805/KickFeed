@@ -47,7 +47,7 @@ export function PostCard({
             initials={author.initials}
             color={author.avatarColor}
             size={compact ? 36 : 42}
-            ringColor={live ? colors.live : colors.border}
+            ringColor={live ? colors.live : undefined}
           />
         </View>
         <View style={{ flex: 1 }}>
