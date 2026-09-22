@@ -15,7 +15,9 @@ The Expo app does **not** need this running for CI or mock-catalog demos. Point 
 | `332` | Niké Liga (Super Liga) | Slovakia |
 | `140` | La Liga | Spain |
 
-`GET /fixtures`, `/standings`, and `/players/topscorers` **require** `?league=` in that set. UCL (`2`), Bundesliga (`78`), and anything else is `400` and never hits origin. FA Cup is skipped on purpose.
+`GET /fixtures`, `/standings`, `/players/topscorers`, and `/teams/statistics` **require** `?league=` in that set. UCL (`2`), Bundesliga (`78`), and anything else is `400` and never hits origin. FA Cup is skipped on purpose.
+
+`GET /teams/statistics` also requires `season` (four-digit year) and a numeric `team`. A `date` override, a second team, or any other query key is `400` — those would multiply the one-club-per-day budget. `/coachs`, `/teams`, and `/fixtures/statistics` are not allowlisted.
 
 **La Liga vs Bundesliga:** La Liga is the extra top-5 EU league because KickFeed already has a featured Spanish mock tree (aliases for Real Madrid / Barcelona) and its kickoff spread complements England. Bundesliga would stack another Saturday 15:30 CET block for the same quota cost.
 
@@ -27,7 +29,9 @@ The Expo app does **not** need this running for CI or mock-catalog demos. Point 
 | `GET /fixtures?league=` | `/fixtures` | **45s if any row is live, else 5 min** |
 | `GET /standings?league=` | `/standings` | 15 min |
 | `GET /players/topscorers?league=` | `/players/topscorers` | 30 min |
+| `GET /players?id=&season=` | `/players` | 12 h |
 | `GET /players/squads` | `/players/squads` | 30 min |
+| `GET /teams/statistics?league=&season=&team=` | `/teams/statistics` | **24 h** |
 | `GET /fixtures/events` | `/fixtures/events` | 60s |
 | `GET /fixtures/lineups` | `/fixtures/lineups` | 60s |
 
@@ -35,7 +39,7 @@ Anything else is `404`. `POST` is `405`. CORS is `*` for Expo web. Responses are
 
 ### Quota math (~100 req/day)
 
-Cold hydrate from the app is **9 origin calls** when the BFF cache is empty: 4 leagues × (fixtures + standings) + Premier League scorers. Squads, events, and lineups stay lazy (match/team open). Extra phones HIT the in-memory cache.
+Cold hydrate from the app is **9 origin calls** when the BFF cache is empty: 4 leagues × (fixtures + standings) + Premier League scorers. Squads, events, lineups, player seasons, and team statistics stay lazy. Opening a club Overview adds **at most one** `/teams/statistics` origin call for that club’s primary covered league, then the BFF and the app cache it for 24 hours and coalesce in-flight misses. Another device the same day is a HIT. Shots, possession, and coach are not on that payload; KickFeed does not fan out `/fixtures/statistics` or `/coachs` to fill them.
 
 If a league window has a live match, that fixtures key refreshes every 45s **per BFF process**, not per device. Idle leagues stay at 5 minutes. Do not poll extra competitions — the allowlist is the budget.
 

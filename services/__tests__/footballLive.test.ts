@@ -255,4 +255,76 @@ describe('live football provider', () => {
     expect(live.getPlayerAppearances('306').length).toBeGreaterThan(0);
     expect(live.getPlayerAppearances('999')).toEqual([]);
   });
+
+  it('loads team statistics once per club per day and skips uncovered clubs', async () => {
+    const base = fakeHttp();
+    let t = Date.parse('2026-09-16T12:00:00.000Z');
+    const http = vi.fn(async (path: string, params?: Record<string, string | number | undefined>) => {
+      if (path === '/teams/statistics') {
+        if (String(params?.team) === '999') return [];
+        return {
+          league: { id: 39, season: 2026 },
+          team: { id: 40, name: 'Liverpool' },
+          form: 'WWDLW',
+          fixtures: {
+            played: { home: 3, away: 2, total: 5 },
+            wins: { home: 2, away: 1, total: 3 },
+            draws: { home: 1, away: 0, total: 1 },
+            loses: { home: 0, away: 1, total: 1 },
+          },
+          goals: {
+            for: { total: { total: 9 }, average: { total: '1.8' } },
+            against: { total: { total: 4 }, average: { total: '0.8' } },
+          },
+          clean_sheet: { home: 2, away: 0, total: 2 },
+          failed_to_score: { total: 1 },
+          lineups: [{ formation: '4-3-3', played: 5 }],
+        };
+      }
+      return base(path, params);
+    });
+    const live = createLiveFootballProvider({
+      fallback: mockFootballProvider,
+      http,
+      season: 2026,
+      now: () => t,
+    });
+    const statCalls = () => http.mock.calls.filter((call) => call[0] === '/teams/statistics');
+    await live.hydrate();
+    await live.ensureSquad('liv');
+    expect(statCalls()).toHaveLength(0);
+    expect(http.mock.calls.some((call) => call[0] === '/coachs' || call[0] === '/fixtures/statistics' || call[0] === '/teams')).toBe(
+      false,
+    );
+    expect(live.getTeamStats('liv')).toBeUndefined();
+    expect(live.getTeamStats('bay')?.venue).toBe('Allianz Arena');
+
+    await Promise.all([live.ensureTeamStats('liv'), live.ensureTeamStats('40')]);
+    expect(statCalls()).toHaveLength(1);
+    expect(statCalls()[0]?.[1]).toMatchObject({ league: '39', season: 2026, team: '40' });
+    expect(live.getTeamStats('liv')).toMatchObject({
+      teamId: '40',
+      leagueId: '39',
+      season: 2026,
+      form: ['W', 'W', 'D', 'L', 'W'],
+      cleanSheets: { total: 2 },
+      goalsForAverage: { total: 1.8 },
+      goalsAgainstAverage: { total: 0.8 },
+      failedToScore: { total: 1 },
+      formation: '4-3-3',
+      wins: { home: 2, away: 1, total: 3 },
+    });
+    expect(live.getTeamStats('40')?.venue).toBeUndefined();
+
+    t += 60_000;
+    await live.ensureTeamStats('40');
+    expect(statCalls()).toHaveLength(1);
+
+    t += 24 * 60 * 60_000;
+    await live.ensureTeamStats('40');
+    expect(statCalls()).toHaveLength(2);
+
+    await live.ensureTeamStats('bay');
+    expect(statCalls()).toHaveLength(2);
+  });
 });

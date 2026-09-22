@@ -14,6 +14,7 @@ import { continents, countries, leagues, leagueRosters, teams } from '@/data/moc
 import { seedFixtures } from '@/data/mocks/fixtures';
 import { allPlayers, findPlayerById, findPlayerByName, foldName, squadFor } from '@/data/mocks/players';
 import { scorersFor, standingsFor } from '@/data/mocks/stats';
+import { teamStatsFor } from '@/data/mocks/teamStats';
 import { createApiFootballHttp, footballApiKeyFromEnv, footballBffUrlFromEnv } from '@/services/footballApi';
 import { createLiveFootballProvider } from '@/services/footballLive';
 import type { FootballProvider } from '@/services/footballTypes';
@@ -240,6 +241,7 @@ export const mockFootballProvider: FootballProvider = {
     const player = findPlayerById(playerId);
     return player ? statsFor(player) : undefined;
   },
+  getTeamStats: (teamId) => teamStatsFor(teamId),
   getPlayerAppearances: (playerId) => {
     const player = findPlayerById(playerId);
     return player ? appearancesFor(player) : [];
@@ -273,6 +275,7 @@ export const mockFootballProvider: FootballProvider = {
   ensureMatchDetail: noopAsync,
   ensureScorers: noopAsync,
   ensurePlayerSeason: noopAsync,
+  ensureTeamStats: noopAsync,
   relatedIds: (_kind, id) => [id],
 };
 

@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { FormStrip } from '@/components/entity/FormStrip';
+import { FormStrip, ResultLetters } from '@/components/entity/FormStrip';
 import { PlayerRow } from '@/components/entity/PlayerRow';
 import { MatchRow } from '@/components/match/MatchRow';
 import { Crest, LeagueMark } from '@/components/ui/Crest';
@@ -17,6 +17,7 @@ import { safeBack } from '@/lib/navBack';
 import { routeId } from '@/lib/routeParams';
 import { isFavoriteId } from '@/lib/favoriteIds';
 import { lastCachedXi, recentTeamForm, seasonSummary, teamChart } from '@/lib/teamPhaseA';
+import { cachedCoach, cachedHomeVenue, presentTeamSeason } from '@/lib/teamPhaseB';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
 import { football, primaryLeague } from '@/services/football';
@@ -38,18 +39,31 @@ export default function TeamDetailScreen() {
   const catalog = useFootballCatalog();
   const { favoriteTeamIds, toggleFavoriteTeam } = useApp();
   const [tab, setTab] = useState<TeamTab>('overview');
+  const [statsCheckedId, setStatsCheckedId] = useState<string | null>(null);
   const team = id ? football.getTeam(id) : undefined;
 
   useEffect(() => {
     setTab('overview');
+    setStatsCheckedId(null);
   }, [id]);
 
   useEffect(() => {
-    if (!id) return;
-    void football.ensureSquad(id);
-    const league = primaryLeague(id);
-    if (league) void football.ensureScorers(league.id);
-  }, [id, catalog.lastSyncedAt]);
+    let cancel = false;
+    setStatsCheckedId(null);
+    (async () => {
+      if (!id) return;
+      const league = primaryLeague(id);
+      await Promise.all([
+        football.ensureSquad(id),
+        league ? football.ensureScorers(league.id) : Promise.resolve(),
+        football.ensureTeamStats(id),
+      ]);
+      if (!cancel) setStatsCheckedId(id);
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [id, catalog.lastSyncedAt, catalog.source]);
 
   if (!team) {
     return (
@@ -89,6 +103,13 @@ export default function TeamDetailScreen() {
     football.relatedIds('team', team.id),
   );
   const xi = liveReady ? lastCachedXi(fixtures, team.id, (fixture) => football.getLineups(fixture)) : undefined;
+  const stats = football.getTeamStats(team.id);
+  const seasonView = stats ? presentTeamSeason(stats) : undefined;
+  const venue = stats?.venue ?? cachedHomeVenue(fixtures, team.id);
+  const coach =
+    stats?.coach ??
+    (liveReady ? cachedCoach(fixtures, team.id, (fixture) => football.getLineups(fixture)) : undefined);
+  const waitingForStats = catalog.source === 'live' && !stats && (statsCheckedId !== id || !catalog.ready);
 
   const grouped = POS_ORDER.map((pos) => ({
     pos,
@@ -113,6 +134,8 @@ export default function TeamDetailScreen() {
           <Text style={styles.meta}>
             {country?.flag} {country?.name}
           </Text>
+          {venue ? <Text style={styles.meta}>{venue}</Text> : null}
+          {coach ? <Text style={styles.meta}>Coach · {coach}</Text> : null}
           {row && league ? (
             <Pressable onPress={() => router.push(entityHref('league', league.id))} style={styles.standing}>
               <Text style={styles.standingText}>
@@ -171,6 +194,41 @@ export default function TeamDetailScreen() {
                   : catalog.source === 'live'
                     ? FREE_TIER_CACHE_MISS
                     : 'No mock standings row for this club.'}
+              </Text>
+            )}
+
+            <Text style={styles.section}>Season stats</Text>
+            {stats && seasonView ? (
+              <View style={styles.statsCard}>
+                {seasonView.formation ? <Text style={styles.statsFormation}>{seasonView.formation}</Text> : null}
+                {seasonView.chips.length > 0 ? (
+                  <View style={styles.seasonRow}>
+                    {seasonView.chips.map((chip) => (
+                      <View key={chip.label} style={styles.seasonChip}>
+                        <Text style={styles.seasonVal}>{chip.value}</Text>
+                        <Text style={styles.seasonLbl}>{chip.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+                {seasonView.homeRecord || seasonView.awayRecord ? (
+                  <View style={styles.recordRow}>
+                    {seasonView.homeRecord ? <Text style={styles.record}>Home {seasonView.homeRecord}</Text> : null}
+                    {seasonView.awayRecord ? <Text style={styles.record}>Away {seasonView.awayRecord}</Text> : null}
+                  </View>
+                ) : null}
+                {seasonView.form.length > 0 ? (
+                  <View style={styles.formBlock}>
+                    <Text style={styles.groupTitle}>Season form</Text>
+                    <ResultLetters results={seasonView.form} />
+                  </View>
+                ) : null}
+              </View>
+            ) : waitingForStats ? (
+              <Text style={styles.muted}>Loading season stats…</Text>
+            ) : (
+              <Text style={styles.muted}>
+                {catalog.source === 'live' ? FREE_TIER_CACHE_MISS : 'No mock season stats for this club.'}
               </Text>
             )}
 
@@ -380,6 +438,18 @@ const styles = StyleSheet.create({
   },
   seasonVal: { ...type.subtitle, fontSize: 15, color: colors.text, fontVariant: ['tabular-nums'] },
   seasonLbl: { ...type.micro, color: colors.lime, marginTop: 2 },
+  statsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: 10,
+  },
+  statsFormation: { ...type.caption, color: colors.textMuted, fontWeight: '700' },
+  recordRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  record: { ...type.caption, color: colors.text, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  formBlock: { gap: 6 },
   scorer: {
     flexDirection: 'row',
     alignItems: 'center',

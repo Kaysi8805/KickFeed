@@ -35,6 +35,16 @@ describe('entity catalog', () => {
     expect(lineups.away.players.every((p) => p.playerId && football.getPlayer(p.playerId))).toBe(true);
   });
 
+  it('returns a rich mock season block for catalog clubs', () => {
+    const liv = football.getTeamStats('liv');
+    expect(liv?.venue).toBe('Anfield');
+    expect(liv?.goalsForAverage?.total).toBeGreaterThan(0);
+    expect(liv?.cleanSheets?.total).toBeGreaterThanOrEqual(0);
+    expect(liv?.wins?.home).toEqual(expect.any(Number));
+    expect(football.getTeamStats('mia')?.formation).toBeTruthy();
+    expect(football.getTeamStats('missing')).toBeUndefined();
+  });
+
   it('returns mock stats and appearances for a featured forward', () => {
     const stats = football.getPlayerStats('p-liv-11');
     expect(stats?.appearances).toBeGreaterThan(0);
