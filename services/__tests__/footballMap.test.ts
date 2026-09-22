@@ -5,6 +5,7 @@ import {
   mapForm,
   mapMatchEvent,
   mapMatchStatus,
+  mapPlayerSeason,
   mapPlayerStats,
   mapPosition,
   mapScorer,
@@ -113,6 +114,43 @@ describe('football mappers', () => {
         cards: { yellow: 1, red: 0 },
       }],
     })?.rating).toBe(7.5);
+  });
+
+  it('sums a player season across competitions and refuses an empty payload', () => {
+    expect(mapPlayerSeason(undefined)).toBeUndefined();
+    expect(mapPlayerSeason({ statistics: [] })).toBeUndefined();
+    expect(mapPlayerSeason({
+      statistics: [
+        {
+          team: { id: 40, name: 'Liverpool' },
+          games: { appearences: 10, minutes: 800, rating: '7.50' },
+          goals: { total: 8, assists: 3 },
+          cards: { yellow: 2, red: 0 },
+        },
+        {
+          team: { id: 40, name: 'Liverpool' },
+          games: { appearences: 2, minutes: 120, rating: '8.00' },
+          goals: { total: 1, assists: null },
+          cards: { yellow: 0, red: 1 },
+        },
+      ],
+    })).toEqual({
+      appearances: 12,
+      goals: 9,
+      assists: 3,
+      minutes: 920,
+      yellows: 2,
+      reds: 1,
+      rating: 7.6,
+    });
+    expect(mapPlayerSeason({
+      statistics: [{
+        team: { id: 40, name: 'Liverpool' },
+        games: { appearences: 0, minutes: 0, rating: null },
+        goals: { total: null, assists: null },
+        cards: { yellow: null, red: null },
+      }],
+    })).toMatchObject({ appearances: 0, goals: 0, assists: 0, rating: 0 });
   });
 
   it('maps goals, cards, and subs from events', () => {

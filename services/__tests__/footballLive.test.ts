@@ -192,4 +192,67 @@ describe('live football provider', () => {
     expect(live.getFixture('9001')?.events[0]?.type).toBe('goal');
     expect(live.getLineups(live.getFixture('9001')!).home.players[0]?.playerId).toBe('306');
   });
+
+  it('hydrates one player season and does not fan out /players for a squad', async () => {
+    const base = fakeHttp();
+    const http = vi.fn(async (path: string, params?: Record<string, string | number | undefined>) => {
+      if (path === '/players') {
+        return [{
+          player: { id: 306, name: 'Mohamed Salah' },
+          statistics: [
+            {
+              team: { id: 40, name: 'Liverpool' },
+              games: { appearences: 10, minutes: 800, rating: '7.50' },
+              goals: { total: 8, assists: 3 },
+              cards: { yellow: 2, red: 0 },
+            },
+            {
+              team: { id: 40, name: 'Liverpool' },
+              games: { appearences: 2, minutes: 120, rating: '8.00' },
+              goals: { total: 1, assists: 0 },
+              cards: { yellow: 0, red: 1 },
+            },
+          ],
+        }];
+      }
+      if (path === '/players/squads') {
+        return [{
+          team: { id: 40, name: 'Liverpool' },
+          players: [
+            { id: 306, name: 'Mohamed Salah', number: 11, position: 'Attacker', age: 33 },
+            { id: 999, name: 'Bench Player', number: 99, position: 'Midfielder', age: 20 },
+          ],
+        }];
+      }
+      return base(path, params);
+    });
+    const live = createLiveFootballProvider({
+      fallback: mockFootballProvider,
+      http,
+      season: 2026,
+      now: () => Date.parse('2026-09-16T12:00:00.000Z'),
+    });
+    await live.hydrate();
+    await live.ensureSquad('liv');
+    await live.ensureScorers('epl');
+    const playerCalls = () => http.mock.calls.filter((call) => call[0] === '/players');
+    expect(playerCalls()).toHaveLength(0);
+    await Promise.all([live.ensurePlayerSeason('p-liv-11'), live.ensurePlayerSeason('306')]);
+    expect(playerCalls()).toHaveLength(1);
+    expect(playerCalls()[0]?.[1]).toMatchObject({ id: '306', season: 2026 });
+    expect(live.getPlayerStats('p-liv-11')).toEqual({
+      appearances: 12,
+      goals: 9,
+      assists: 3,
+      minutes: 920,
+      yellows: 2,
+      reds: 1,
+      rating: 7.6,
+    });
+    await live.ensurePlayerSeason('306');
+    expect(playerCalls()).toHaveLength(1);
+    await live.ensureMatchDetail('9001');
+    expect(live.getPlayerAppearances('306').length).toBeGreaterThan(0);
+    expect(live.getPlayerAppearances('999')).toEqual([]);
+  });
 });

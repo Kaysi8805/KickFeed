@@ -272,6 +272,7 @@ export const mockFootballProvider: FootballProvider = {
   ensureSquad: noopAsync,
   ensureMatchDetail: noopAsync,
   ensureScorers: noopAsync,
+  ensurePlayerSeason: noopAsync,
   relatedIds: (_kind, id) => [id],
 };
 
