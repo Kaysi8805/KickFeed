@@ -21,6 +21,7 @@ import { cachedCoach, cachedHomeVenue, presentTeamSeason } from '@/lib/teamPhase
 import {
   buildTeamOverviewDensify,
   densifyIsActive,
+  overviewLastXi,
   resolveMockTeamAlias,
 } from '@/lib/teamOverviewDensify';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
@@ -118,11 +119,7 @@ export default function TeamDetailScreen() {
     : undefined;
   const densify =
     mockAlias &&
-    (liveForm.length === 0 ||
-      !liveSummary ||
-      !liveStats ||
-      liveChart.scorers.length === 0 ||
-      !liveXi)
+    (liveForm.length === 0 || !liveSummary || !liveStats || liveChart.scorers.length === 0)
       ? buildTeamOverviewDensify(mockAlias, team.id, mockFootballProvider)
       : undefined;
 
@@ -136,7 +133,8 @@ export default function TeamDetailScreen() {
       : densify
         ? { scorers: densify.scorers, assists: densify.assists }
         : liveChart;
-  const xi = liveXi ?? densify?.xi;
+  // Last XI: finished live lineup cache only — never mock densify / getLineups.
+  const xi = overviewLastXi(liveXi);
   const stats = liveStats ?? densify?.stats ?? providerStats;
   const seasonView = stats ? presentTeamSeason(stats) : undefined;
   const venue = stats?.venue ?? densify?.venue ?? cachedHomeVenue(fixtures, team.id);
@@ -154,8 +152,6 @@ export default function TeamDetailScreen() {
     densifyStats: !!stats && !liveStats,
     liveScorersEmpty: liveChart.scorers.length === 0,
     densifyScorers: chart.scorers.length > 0 && liveChart.scorers.length === 0,
-    liveXiMissing: !liveXi,
-    densifyXi: !!xi && !liveXi,
   });
 
   const grouped = POS_ORDER.map((pos) => ({

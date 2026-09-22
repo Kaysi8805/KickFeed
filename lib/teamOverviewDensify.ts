@@ -1,10 +1,13 @@
 /**
  * When live free-tier cache misses for an aliased coverage club, Overview can densify
  * from the mock catalog — preferred live data still wins whenever it exists.
+ *
+ * Last XI is never densified: mock `getLineups` would invent a starting XI. Only a
+ * finished live lineup already in cache may fill that block.
  */
 import type { FormResult, Scorer, StandingRow, Team, TeamSeasonStats } from '@/data/types';
-import type { CachedXi, TeamFormChip } from '@/lib/teamPhaseA';
-import { lastCachedXi, recentTeamForm, teamChart } from '@/lib/teamPhaseA';
+import type { TeamFormChip } from '@/lib/teamPhaseA';
+import { recentTeamForm, teamChart } from '@/lib/teamPhaseA';
 import type { FootballProvider } from '@/services/footballTypes';
 
 export interface TeamOverviewDensify {
@@ -15,7 +18,6 @@ export interface TeamOverviewDensify {
   standing?: StandingRow;
   scorers: Scorer[];
   assists: Scorer[];
-  xi?: CachedXi;
   stats?: TeamSeasonStats;
   venue?: string;
   coach?: string;
@@ -34,15 +36,15 @@ export function resolveMockTeamAlias(
 }
 
 /**
- * Build densify patches for Overview empty blocks.
- * Callers must prefer live form / standings / scorers / XI / stats when those exist.
+ * Build densify patches for Overview empty blocks (form / season / scorers / stats).
+ * Callers must prefer live data when it exists. Never includes Last XI.
  */
 export function buildTeamOverviewDensify(
   mockTeamId: string,
   liveTeamId: string,
   mock: Pick<
     FootballProvider,
-    'getFixtures' | 'getStandings' | 'getTopScorers' | 'getLineups' | 'getTeamStats' | 'getTeamCompetitions'
+    'getFixtures' | 'getStandings' | 'getTopScorers' | 'getTeamStats' | 'getTeamCompetitions'
   >,
 ): TeamOverviewDensify {
   const fixtures = mock.getFixtures({ teamId: mockTeamId });
@@ -54,7 +56,6 @@ export function buildTeamOverviewDensify(
   const standing = mockStanding ? { ...mockStanding, teamId: liveTeamId } : undefined;
   const scorersList = league ? mock.getTopScorers(league.id) : [];
   const chart = teamChart(scorersList, [mockTeamId]);
-  const xi = lastCachedXi(fixtures, mockTeamId, (fixture) => mock.getLineups(fixture));
   const stats = mock.getTeamStats(mockTeamId);
   const formLetters =
     form.length > 0
@@ -69,11 +70,15 @@ export function buildTeamOverviewDensify(
     ...(standing ? { standing } : {}),
     scorers: chart.scorers,
     assists: chart.assists,
-    ...(xi ? { xi } : {}),
     ...(stats ? { stats } : {}),
     ...(stats?.venue ? { venue: stats.venue } : {}),
     ...(stats?.coach ? { coach: stats.coach } : {}),
   };
+}
+
+/** Live Overview Last XI: cached live lineup only — never mock densify. */
+export function overviewLastXi<T>(liveXi: T | undefined): T | undefined {
+  return liveXi;
 }
 
 export function densifyIsActive(parts: {
@@ -85,14 +90,11 @@ export function densifyIsActive(parts: {
   densifyStats: boolean;
   liveScorersEmpty: boolean;
   densifyScorers: boolean;
-  liveXiMissing: boolean;
-  densifyXi: boolean;
 }): boolean {
   return (
     (parts.liveFormEmpty && parts.densifyForm) ||
     (parts.liveSeasonMissing && parts.densifySeason) ||
     (parts.liveStatsMissing && parts.densifyStats) ||
-    (parts.liveScorersEmpty && parts.densifyScorers) ||
-    (parts.liveXiMissing && parts.densifyXi)
+    (parts.liveScorersEmpty && parts.densifyScorers)
   );
 }
