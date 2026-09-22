@@ -20,6 +20,9 @@ export const LIVE_COUNTRY_EMPTY =
 export const LIVE_LEAGUE_UNKNOWN =
   'Live scores cover Premier League, Championship, Niké Liga, and La Liga. Other competitions stay mock.';
 
+/** Shown when a free-tier response is missing. Never pair this with a grid of invented zeros. */
+export const FREE_TIER_CACHE_MISS = 'Not in free-tier cache yet';
+
 export const LIVE_RANKING_ERROR_TITLE = 'Couldn’t load KickFeed ranking';
 
 export const LIVE_RANKING_ERROR_BODY =

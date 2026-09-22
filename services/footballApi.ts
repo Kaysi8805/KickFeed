@@ -117,14 +117,23 @@ export interface ApiLineup {
   substitutes?: ApiLineupPlayer[];
 }
 
+export interface ApiPlayerStatistic {
+  team: ApiTeamRef;
+  league?: { id?: number; name?: string | null; season?: number | null };
+  games?: { appearences?: number | null; appearances?: number | null; minutes?: number | null; rating?: string | null };
+  goals?: { total?: number | null; assists?: number | null };
+  cards?: { yellow?: number | null; red?: number | null };
+}
+
 export interface ApiScorer {
   player: { id: number; name: string; nationality?: string | null; photo?: string | null };
-  statistics: Array<{
-    team: ApiTeamRef;
-    games?: { appearences?: number | null; appearances?: number | null; minutes?: number | null; rating?: string | null };
-    goals?: { total?: number | null; assists?: number | null };
-    cards?: { yellow?: number | null; red?: number | null };
-  }>;
+  statistics: ApiPlayerStatistic[];
+}
+
+/** `GET /players?id=&season=` row. Statistics may span several competitions in that season. */
+export interface ApiPlayerSeason {
+  player: { id: number; name: string; nationality?: string | null; age?: number | null };
+  statistics: ApiPlayerStatistic[];
 }
 
 export type FootballQuery = Record<string, string | number | undefined>;

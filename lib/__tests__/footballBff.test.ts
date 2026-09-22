@@ -2,6 +2,7 @@ import { TtlCache } from '@/lib/ttlCache';
 import {
   BFF_TTL_MS,
   bffAllowsLeagueParam,
+  bffPlayerSeasonQueryError,
   bffTtlMsForPath,
   bffTtlMsForResponse,
   handleFootballBffRequest,
@@ -19,6 +20,8 @@ describe('football BFF allowlist and ttls', () => {
     expect(isAllowedBffPath('/fixtures')).toBe(true);
     expect(isAllowedBffPath('/standings/')).toBe(true);
     expect(isAllowedBffPath('/players/topscorers')).toBe(true);
+    expect(isAllowedBffPath('/players')).toBe(true);
+    expect(isAllowedBffPath('/players/topassists')).toBe(false);
     expect(isAllowedBffPath('/odds')).toBe(false);
     expect(isAllowedBffPath('/')).toBe(false);
   });
@@ -37,6 +40,12 @@ describe('football BFF allowlist and ttls', () => {
     expect(bffTtlMsForPath('/fixtures')).toBe(BFF_TTL_MS.fixturesIdle);
     expect(bffTtlMsForPath('/standings')).toBe(BFF_TTL_MS.standings);
     expect(bffTtlMsForPath('/players/topscorers')).toBe(BFF_TTL_MS.scorers);
+    expect(bffTtlMsForPath('/players')).toBe(BFF_TTL_MS.players);
+    expect(BFF_TTL_MS.players).toBeGreaterThanOrEqual(6 * 60 * 60_000);
+    expect(BFF_TTL_MS.players).toBeLessThanOrEqual(24 * 60 * 60_000);
+    expect(bffPlayerSeasonQueryError(new URLSearchParams('id=306&season=2026'))).toBeNull();
+    expect(bffPlayerSeasonQueryError(new URLSearchParams('season=2026'))).toMatch(/id/);
+    expect(bffPlayerSeasonQueryError(new URLSearchParams('id=306&season=2026&league=39'))).toMatch(/id and season/);
     expect(BFF_TTL_MS.fixturesLive).toBeLessThan(BFF_TTL_MS.fixturesIdle);
     expect(BFF_TTL_MS.fixturesIdle).toBeLessThan(BFF_TTL_MS.standings);
   });
@@ -60,10 +69,14 @@ describe('handleFootballBffRequest', () => {
     const post = await handleFootballBffRequest(req('/fixtures', 'POST'), { apiKey: 'secret', fetchImpl });
     const ucl = await handleFootballBffRequest(req('/fixtures?league=2&season=2026'), { apiKey: 'secret', fetchImpl });
     const noLeague = await handleFootballBffRequest(req('/standings?season=2026'), { apiKey: 'secret', fetchImpl });
+    const squadWide = await handleFootballBffRequest(req('/players?league=39&season=2026'), { apiKey: 'secret', fetchImpl });
+    const noSeason = await handleFootballBffRequest(req('/players?id=306'), { apiKey: 'secret', fetchImpl });
     expect(missing.status).toBe(404);
     expect(post.status).toBe(405);
     expect(ucl.status).toBe(400);
     expect(noLeague.status).toBe(400);
+    expect(squadWide.status).toBe(400);
+    expect(noSeason.status).toBe(400);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -130,6 +143,50 @@ describe('handleFootballBffRequest', () => {
     expect(stale.status).toBe(200);
     expect(stale.headers.get('X-KickFeed-Cache')).toBe('STALE');
     expect(await stale.json()).toEqual({ response: [{ league: { id: 140 } }] });
+  });
+
+  it('caches a single-player season read for 12h and coalesces parallel misses', async () => {
+    const envelope = { response: [{ player: { id: 306 }, statistics: [] }] };
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetchImpl = vi.fn(async () => {
+      await gate;
+      return new Response(JSON.stringify(envelope), { status: 200 });
+    });
+    const cache = new TtlCache<string>();
+    const inflight = new Map();
+    let now = 1_000;
+    const env = {
+      apiKey: 'server-secret',
+      fetchImpl,
+      cache,
+      inflight,
+      now: () => now,
+      origin: 'https://upstream.test',
+    };
+    const first = handleFootballBffRequest(req('/players?id=306&season=2026'), env);
+    const second = handleFootballBffRequest(req('/players?id=306&season=2026'), env);
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    release();
+    const [a, b] = await Promise.all([first, second]);
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://upstream.test/players?id=306&season=2026',
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'x-apisports-key': 'server-secret' }),
+      }),
+    );
+    now += 1_000;
+    const hit = await handleFootballBffRequest(req('/players?id=306&season=2026'), env);
+    expect(hit.headers.get('X-KickFeed-Cache')).toBe('HIT');
+    now += BFF_TTL_MS.players;
+    const expired = await handleFootballBffRequest(req('/players?id=306&season=2026'), env);
+    expect(expired.headers.get('X-KickFeed-Cache')).toBe('MISS');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it('does not cache upstream errors and does not echo the key', async () => {

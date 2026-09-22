@@ -16,6 +16,7 @@ export const API_FOOTBALL_ORIGIN = 'https://v3.football.api-sports.io';
 export const BFF_ALLOWED_PATHS = [
   '/fixtures',
   '/standings',
+  '/players',
   '/players/topscorers',
   '/players/squads',
   '/fixtures/events',
@@ -35,6 +36,8 @@ export const BFF_TTL_MS = {
   squads: 30 * 60_000,
   events: 60_000,
   lineups: 60_000,
+  /** `GET /players?id=&season=` — long TTL so a player open does not burn the daily quota. */
+  players: 12 * 60 * 60_000,
 } as const;
 
 const LIVE_FIXTURE_SHORT = new Set(['1H', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP', 'HT']);
@@ -74,12 +77,29 @@ export function bffAllowsLeagueParam(league: string | null | undefined): boolean
   return id.length > 0 && isLiveLeagueId(id);
 }
 
+/**
+ * `/players` is allowlisted only as a single-player season read.
+ * League-wide, team, search, or page queries would fan out and burn the free tier.
+ */
+export function bffPlayerSeasonQueryError(params: URLSearchParams): string | null {
+  const id = params.get('id')?.trim() ?? '';
+  const season = params.get('season')?.trim() ?? '';
+  if (!/^[1-9]\d*$/.test(id)) return 'players requires a numeric id';
+  if (!/^\d{4}$/.test(season)) return 'players requires a season year';
+  for (const key of params.keys()) {
+    if (key !== 'id' && key !== 'season') return 'players only allows id and season';
+  }
+  return null;
+}
+
 export function bffTtlMsForPath(pathname: string): number {
   switch (normalizeBffPath(pathname)) {
     case '/fixtures':
       return BFF_TTL_MS.fixturesIdle;
     case '/standings':
       return BFF_TTL_MS.standings;
+    case '/players':
+      return BFF_TTL_MS.players;
     case '/players/topscorers':
       return BFF_TTL_MS.scorers;
     case '/players/squads':
@@ -157,7 +177,7 @@ function healthBody(cacheSize: number) {
     cacheEntries: cacheSize,
     quota: {
       dailyLimit: API_FOOTBALL_DAILY_LIMIT,
-      note: 'Allowlisted leagues only. Fixtures 45s if any row is live, else 5 min. Standings 15 min. 429/5xx reuse stale cache. Never put FOOTBALL_API_KEY in Expo or CI.',
+      note: 'Allowlisted leagues only. Fixtures 45s if any row is live, else 5 min. Standings 15 min. Player season 12h (id + season only). 429/5xx reuse stale cache. Never put FOOTBALL_API_KEY in Expo or CI.',
     },
   };
 }
@@ -210,6 +230,11 @@ export async function handleFootballBffRequest(
         errors: { bff: 'League is not in KickFeed live coverage (England, Slovakia Niké Liga, La Liga)' },
       });
     }
+  }
+
+  if (path === '/players') {
+    const playerError = bffPlayerSeasonQueryError(url.searchParams);
+    if (playerError) return jsonResponse(400, { errors: { bff: playerError } });
   }
 
   const apiKey = env.apiKey.trim();
