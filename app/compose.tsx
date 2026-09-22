@@ -79,7 +79,7 @@ export default function ComposeScreen() {
           />
           <Text style={styles.hint}>
             {audience === 'friends'
-              ? 'Friends only — people you follow on KickFeed can see this on Home.'
+              ? 'Friends only — mutual friends (people who follow you back) can see this on Home.'
               : 'Public — can surface for fans who follow the clubs or leagues in this post.'}
           </Text>
         </View>

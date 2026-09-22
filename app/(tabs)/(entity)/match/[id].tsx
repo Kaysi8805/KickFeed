@@ -16,6 +16,7 @@ import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
 import { entityBackHref, entityHref } from '@/lib/entityNav';
+import { defaultEntitySegment } from '@/lib/entityTabs';
 import { isPostVisibleToViewer } from '@/lib/homeFeed';
 import { safeBack } from '@/lib/navBack';
 import { timeAgo } from '@/lib/format';
@@ -60,7 +61,7 @@ function tabFromParam(value: string | string[] | undefined): Tab {
   if (raw === 'chat' || raw === 'lineups' || raw === 'stats' || raw === 'events' || raw === 'predict' || raw === 'motm') {
     return raw;
   }
-  return 'events';
+  return defaultEntitySegment('match');
 }
 
 export default function MatchDetailScreen() {
@@ -90,7 +91,7 @@ export default function MatchDetailScreen() {
 
   useEffect(() => {
     setTab(tabFromParam(tabParam));
-  }, [tabParam]);
+  }, [id, tabParam]);
 
   useEffect(() => {
     if (tab !== 'chat') return;

@@ -17,7 +17,8 @@ import { safeBack } from '@/lib/navBack';
 import { routeId } from '@/lib/routeParams';
 import { isFavoriteId } from '@/lib/favoriteIds';
 import { recentTeamForm, seasonSummary, teamChart } from '@/lib/teamPhaseA';
-import { cachedCoach, cachedHomeVenue, presentTeamSeason } from '@/lib/teamPhaseB';
+import { cachedCoach, cachedHomeVenue, displayedCoach, presentTeamSeason, seasonStatsHasSignal } from '@/lib/teamPhaseB';
+import { defaultEntitySegment } from '@/lib/entityTabs';
 import {
   buildTeamOverviewDensify,
   densifyIsActive,
@@ -44,12 +45,12 @@ export default function TeamDetailScreen() {
   const id = routeId(rawId);
   const catalog = useFootballCatalog();
   const { favoriteTeamIds, toggleFavoriteTeam } = useApp();
-  const [tab, setTab] = useState<TeamTab>('overview');
+  const [tab, setTab] = useState<TeamTab>(defaultEntitySegment('team'));
   const [statsCheckedId, setStatsCheckedId] = useState<string | null>(null);
   const team = id ? football.getTeam(id) : undefined;
 
   useEffect(() => {
-    setTab('overview');
+    setTab(defaultEntitySegment('team'));
     setStatsCheckedId(null);
   }, [id]);
 
@@ -138,10 +139,10 @@ export default function TeamDetailScreen() {
   const stats = liveStats ?? densify?.stats ?? providerStats;
   const seasonView = stats ? presentTeamSeason(stats) : undefined;
   const venue = stats?.venue ?? densify?.venue ?? cachedHomeVenue(fixtures, team.id);
-  const coach =
-    stats?.coach ??
-    densify?.coach ??
-    (liveReady ? cachedCoach(fixtures, team.id, (fixture) => football.getLineups(fixture)) : undefined);
+  const coach = displayedCoach(
+    stats?.coach ?? densify?.coach,
+    liveReady ? cachedCoach(fixtures, team.id, (fixture) => football.getLineups(fixture)) : undefined,
+  );
   const waitingForStats = catalog.source === 'live' && !stats && (statsCheckedId !== id || !catalog.ready);
   const showDensifyBanner = densifyIsActive({
     liveFormEmpty: liveForm.length === 0,
@@ -249,7 +250,7 @@ export default function TeamDetailScreen() {
             )}
 
             <Text style={styles.section}>Season stats</Text>
-            {stats && seasonView ? (
+            {stats && seasonView && seasonStatsHasSignal(seasonView) ? (
               <View style={styles.statsCard}>
                 {seasonView.formation ? <Text style={styles.statsFormation}>{seasonView.formation}</Text> : null}
                 {seasonView.chips.length > 0 ? (

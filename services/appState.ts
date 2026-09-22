@@ -23,6 +23,7 @@ import {
   type ReportInput,
   type ReportResult,
 } from '@/lib/moderation';
+import { friendPostRecipientIds } from '@/lib/homeFeed';
 import {
   inferAuthMode,
   isDemoUserId,
@@ -548,9 +549,7 @@ export function addPost(
     matchId: attached,
     audience,
   };
-  const followerIds = Object.entries(state.following)
-    .filter(([id, ids]) => id !== authorId && ids.includes(authorId))
-    .map(([id]) => id);
+  const followerIds = friendPostRecipientIds(authorId, audience, state.following);
   const notifications: AppNotification[] = followerIds.map((recipientId) => ({
     id: `n-post-${now}-${recipientId}`,
     type: 'friend_post',

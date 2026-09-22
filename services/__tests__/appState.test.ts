@@ -152,6 +152,27 @@ describe('AppProvider mutations', () => {
     expect(liked.likes.luca).not.toContain('p1');
   });
 
+  it('does not notify a one-way follower of a friends-only post', () => {
+    let state = signInDemo(defaults(), 'maya');
+    state = addPost(state, 'North London', undefined, 9_000);
+    const recipients = state.notifications
+      .filter((note) => note.id.startsWith('n-post-9000-'))
+      .map((note) => note.recipientId);
+    expect(state.posts[0]?.audience).toBe('friends');
+    expect(recipients).toContain('jordan');
+    expect(recipients).not.toContain('aisha');
+    expect(recipients).not.toContain('maya');
+  });
+
+  it('notifies a one-way follower when the post is public', () => {
+    let state = signInDemo(defaults(), 'maya');
+    state = addPost(state, 'Open take', undefined, 9_100, undefined, 'public');
+    const recipients = state.notifications
+      .filter((note) => note.id.startsWith('n-post-9100-'))
+      .map((note) => note.recipientId);
+    expect(recipients).toContain('aisha');
+  });
+
   it('stores public audience when compose opts in', () => {
     let state = signInDemo(defaults(), 'luca');
     state = addPost(state, 'Open take', undefined, 2_100, undefined, 'public');
