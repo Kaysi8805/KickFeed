@@ -7,6 +7,8 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { MatchPickRow } from '@/components/match/MatchPickRow';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
+import { Segmented } from '@/components/ui/Segmented';
+import type { PostAudience } from '@/data/types';
 import { entityHref } from '@/lib/entityNav';
 import { attachableFixtures, attachMatchId, fixtureScoreLabel, resolveMatchDeepLink } from '@/lib/matchSocial';
 import { routeId } from '@/lib/routeParams';
@@ -25,6 +27,7 @@ export default function ComposeScreen() {
   const [imageUri, setImageUri] = useState<string | undefined>();
   const [matchId, setMatchId] = useState<string | undefined>(preset);
   const [pickerOpen, setPickerOpen] = useState(!preset);
+  const [audience, setAudience] = useState<PostAudience>('friends');
 
   const options = useMemo(
     () => attachableFixtures(football),
@@ -63,6 +66,23 @@ export default function ComposeScreen() {
           onChangeText={setText}
         />
         {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} contentFit="cover" /> : null}
+
+        <View style={styles.audience}>
+          <Text style={styles.section}>Audience</Text>
+          <Segmented
+            value={audience}
+            onChange={setAudience}
+            options={[
+              { key: 'friends', label: 'Friends' },
+              { key: 'public', label: 'Public' },
+            ]}
+          />
+          <Text style={styles.hint}>
+            {audience === 'friends'
+              ? 'Friends only — people you follow on KickFeed can see this on Home.'
+              : 'Public — can surface for fans who follow the clubs or leagues in this post.'}
+          </Text>
+        </View>
 
         <View style={styles.attach}>
           <View style={styles.attachHead}>
@@ -116,7 +136,7 @@ export default function ComposeScreen() {
             onPress={() => {
               if (!text.trim()) return;
               const attached = matchId ? attachMatchId(football, matchId) : undefined;
-              addPost(text.trim(), imageUri, attached);
+              addPost(text.trim(), imageUri, attached, audience);
               scheduleDemoNotification(
                 'KickFeed',
                 attached && selected
@@ -156,6 +176,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     marginTop: spacing.sm,
   },
+  audience: { marginTop: spacing.lg, gap: spacing.sm },
   attach: { marginTop: spacing.lg },
   attachHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   section: { ...type.micro, color: colors.textMuted },

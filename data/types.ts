@@ -240,6 +240,9 @@ export interface TvScheduleEntry {
   airings: TvAiring[];
 }
 
+/** Compose audience. Missing on seed posts → treat as `public` for back-compat. New posts default to `friends`. */
+export type PostAudience = 'friends' | 'public';
+
 export interface Post {
   id: string;
   authorId: string;
@@ -248,6 +251,12 @@ export interface Post {
   imageTone?: string;
   createdAt: string;
   matchId?: string;
+  /** Who can see this post on Home. Omitted on older seeds → public. */
+  audience?: PostAudience;
+  /** Optional explicit entity tags from compose (beyond match attachment). */
+  taggedTeamIds?: string[];
+  taggedPlayerIds?: string[];
+  taggedLeagueIds?: string[];
 }
 
 export interface Comment {

@@ -142,6 +142,7 @@ describe('AppProvider mutations', () => {
     state = addPost(state, 'Forza Inter', undefined, 2_000);
     expect(state.posts[0]?.authorId).toBe('luca');
     expect(state.posts[0]?.text).toBe('Forza Inter');
+    expect(state.posts[0]?.audience).toBe('friends');
     expect(unreadCountFor(state, 'luca')).toBe(0);
     expect(unreadCountFor(state, 'maya')).toBe(mayaUnread + 1);
 
@@ -149,6 +150,12 @@ describe('AppProvider mutations', () => {
     expect(state.likes.luca).toContain('p1');
     const liked = toggleLike(state, 'p1');
     expect(liked.likes.luca).not.toContain('p1');
+  });
+
+  it('stores public audience when compose opts in', () => {
+    let state = signInDemo(defaults(), 'luca');
+    state = addPost(state, 'Open take', undefined, 2_100, undefined, 'public');
+    expect(state.posts[0]?.audience).toBe('public');
   });
 
   it('toggles favorite players without dropping clubs or leagues', () => {

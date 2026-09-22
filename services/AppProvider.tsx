@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import type { AppNotification, Comment, DirectMessage, Fixture, MotmVote, Post, ReportTargetType, ScorePrediction, User } from '@/data/types';
+import type { AppNotification, Comment, DirectMessage, Fixture, MotmVote, Post, PostAudience, ReportTargetType, ScorePrediction, User } from '@/data/types';
 import { motmVoteForUser, predictionForUser, type MotmCandidate } from '@/lib/engagement';
 import { shouldPersistLeaderboard } from '@/lib/leaderboard';
 import { defaultPushPrefs, emptyPushSnapshot, planFavoriteDeviceAlerts, type PushPrefs, type PushSnapshot } from '@/lib/favoritePush';
@@ -97,6 +97,8 @@ interface AppContextValue {
   supabaseConfigured: boolean;
   users: User[];
   followingIds: string[];
+  /** Mutual follows: you follow them and they follow you. Demo graph only — not a server friend list. */
+  friendIds: string[];
   favoriteTeamIds: string[];
   favoriteLeagueIds: string[];
   favoritePlayerIds: string[];
@@ -137,7 +139,7 @@ interface AppContextValue {
   toggleFavoriteLeague: (leagueId: string) => void;
   toggleFavoritePlayer: (playerId: string) => void;
   updateProfile: (patch: Partial<Pick<User, 'name' | 'bio' | 'tvCountryId'>>) => void;
-  addPost: (text: string, imageUri?: string, matchId?: string) => void;
+  addPost: (text: string, imageUri?: string, matchId?: string, audience?: PostAudience) => void;
   toggleLike: (postId: string) => void;
   addComment: (matchId: string, text: string, parentId?: string) => void;
   setPrediction: (fixture: Fixture, homeScore: number, awayScore: number) => void;
@@ -340,6 +342,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const followingIds = currentUser
     ? (state.following[currentUser.id] ?? []).filter((id) => !blockedUserIds.includes(id))
     : [];
+  const friendIds = currentUser
+    ? followingIds.filter((id) => (state.following[id] ?? []).includes(currentUser.id))
+    : [];
   const favoriteTeamIds = currentUser?.favoriteTeamIds ?? [];
   const favoriteLeagueIds = currentUser?.favoriteLeagueIds ?? [];
   const favoritePlayerIds = currentUser ? (state.favorites[currentUser.id]?.players ?? []) : [];
@@ -398,6 +403,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       supabaseConfigured,
       users,
       followingIds,
+      friendIds,
       favoriteTeamIds,
       favoriteLeagueIds,
       favoritePlayerIds,
@@ -519,9 +525,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       toggleFavoritePlayer: (playerId) =>
         patch((p) => toggleFavoritePlayerState(p, playerId, football.relatedIds('player', playerId))),
       updateProfile: (next) => patch((p) => updateProfileState(p, next)),
-      addPost: (text, imageUri, matchId) =>
+      addPost: (text, imageUri, matchId, audience = 'friends') =>
         patch((p) =>
-          addPostState(p, text, imageUri, Date.now(), matchId ? attachMatchId(football, matchId) : undefined),
+          addPostState(
+            p,
+            text,
+            imageUri,
+            Date.now(),
+            matchId ? attachMatchId(football, matchId) : undefined,
+            audience,
+          ),
         ),
       toggleLike: (postId) => patch((p) => toggleLikeState(p, postId)),
       addComment: (matchId, text, parentId) =>
@@ -606,6 +619,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       favoritePlayerIds,
       favoriteTeamIds,
       followingIds,
+      friendIds,
       likedPostIds,
       notifications,
       patch,

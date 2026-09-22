@@ -14,6 +14,7 @@ import { football } from '@/services/football';
 import { fetchRemoteProfileById } from '@/services/leaderboard';
 import { colors, radius, spacing, type } from '@/theme';
 import { entityBackHref, entityHref } from '@/lib/entityNav';
+import { isPostVisibleToViewer } from '@/lib/homeFeed';
 import { BLOCKED_PROFILE_BODY, BLOCKED_PROFILE_TITLE, moderationDisclaimer } from '@/lib/honesty';
 import { shouldPersistModeration } from '@/lib/moderation';
 import { safeBack } from '@/lib/navBack';
@@ -24,7 +25,7 @@ import type { User } from '@/data/types';
 export default function UserScreen() {
   const { id: rawId } = useLocalSearchParams<{ id: string | string[] }>();
   const id = routeId(rawId);
-  const { users, currentUser, followingIds, follow, unfollow, posts, likedPostIds, toggleLike, followerCount, rememberProfiles, isBlocked, blockUser, unblockUser, authMode, supabaseConfigured, canMessage } =
+  const { users, currentUser, followingIds, friendIds, follow, unfollow, posts, likedPostIds, toggleLike, followerCount, rememberProfiles, isBlocked, blockUser, unblockUser, authMode, supabaseConfigured, canMessage } =
     useApp();
   const fromState = id ? users.find((u) => u.id === id) : undefined;
   const [fetched, setFetched] = useState<User | undefined>();
@@ -59,7 +60,12 @@ export default function UserScreen() {
   const following = followingIds.includes(user.id);
   const blocked = isBlocked(user.id);
   const messageable = !mine && canMessage(user.id);
-  const userPosts = posts.filter((p) => p.authorId === user.id);
+  const userPosts = posts.filter(
+    (p) =>
+      p.authorId === user.id &&
+      !!currentUser &&
+      isPostVisibleToViewer(p, currentUser.id, friendIds),
+  );
   const teams = user.favoriteTeamIds.map((tid) => football.getTeam(tid)).filter(Boolean);
   const honesty = moderationDisclaimer(shouldPersistModeration(supabaseConfigured, authMode));
 

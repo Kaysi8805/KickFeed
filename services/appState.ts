@@ -1,4 +1,4 @@
-import type { AppNotification, Comment, DirectMessage, Fixture, MatchStatus, MotmVote, Post, ScorePrediction, User, UserReport } from '@/data/types';
+import type { AppNotification, Comment, DirectMessage, Fixture, MatchStatus, MotmVote, Post, PostAudience, ScorePrediction, User, UserReport } from '@/data/types';
 import { seedMotmVotes, seedPredictions } from '@/data/mocks/engagement';
 import { demoUsers, seedComments, seedDirectMessages, seedFollowing, seedNotifications, seedPosts } from '@/data/mocks/social';
 import {
@@ -532,6 +532,7 @@ export function addPost(
   imageUri?: string,
   now = Date.now(),
   matchId?: string,
+  audience: PostAudience = 'friends',
 ): Persisted {
   if (!state.currentUserId) return state;
   const authorId = state.currentUserId;
@@ -545,6 +546,7 @@ export function addPost(
     imageUri,
     createdAt: new Date(now).toISOString(),
     matchId: attached,
+    audience,
   };
   const followerIds = Object.entries(state.following)
     .filter(([id, ids]) => id !== authorId && ids.includes(authorId))

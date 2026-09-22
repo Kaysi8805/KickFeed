@@ -16,6 +16,7 @@ import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
 import { entityBackHref, entityHref } from '@/lib/entityNav';
+import { isPostVisibleToViewer } from '@/lib/homeFeed';
 import { safeBack } from '@/lib/navBack';
 import { timeAgo } from '@/lib/format';
 import {
@@ -73,6 +74,7 @@ export default function MatchDetailScreen() {
     posts,
     addComment,
     currentUser,
+    friendIds,
     likedPostIds,
     toggleLike,
     predictions,
@@ -141,7 +143,9 @@ export default function MatchDetailScreen() {
   const roots = thread.filter((c) => !c.parentId);
   const replyTarget = thread.find((c) => c.id === replyTo);
   const replyAuthor = replyTarget ? users.find((u) => u.id === replyTarget.authorId) : undefined;
-  const matchPosts = postsForMatch(posts, fixture.id, football);
+  const matchPosts = postsForMatch(posts, fixture.id, football).filter((p) =>
+    currentUser ? isPostVisibleToViewer(p, currentUser.id, friendIds) : false,
+  );
   const participants = participantsFromUsers(
     discussionParticipantIds(comments, posts, fixture.id, football),
     users,
