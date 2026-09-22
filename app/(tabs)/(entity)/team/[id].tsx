@@ -12,15 +12,20 @@ import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
 import type { Player, PlayerPosition, Scorer } from '@/data/types';
 import { entityBackHref, entityHref } from '@/lib/entityNav';
-import { FREE_TIER_CACHE_MISS } from '@/lib/honesty';
+import { DEMO_DENSIFY_BANNER, FREE_TIER_CACHE_MISS } from '@/lib/honesty';
 import { safeBack } from '@/lib/navBack';
 import { routeId } from '@/lib/routeParams';
 import { isFavoriteId } from '@/lib/favoriteIds';
 import { lastCachedXi, recentTeamForm, seasonSummary, teamChart } from '@/lib/teamPhaseA';
 import { cachedCoach, cachedHomeVenue, presentTeamSeason } from '@/lib/teamPhaseB';
+import {
+  buildTeamOverviewDensify,
+  densifyIsActive,
+  resolveMockTeamAlias,
+} from '@/lib/teamOverviewDensify';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useApp } from '@/services/AppProvider';
-import { football, primaryLeague } from '@/services/football';
+import { football, mockFootballProvider, primaryLeague } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
 
 const POS_ORDER: PlayerPosition[] = ['GK', 'DF', 'MF', 'FW'];
@@ -96,20 +101,62 @@ export default function TeamDetailScreen() {
     .reverse();
   const fav = isFavoriteId(favoriteTeamIds, team.id, 'team');
   const liveReady = catalog.source !== 'live' || catalog.ready;
-  const form = liveReady ? recentTeamForm(fixtures, team.id) : [];
-  const summary = seasonSummary(row);
-  const chart = teamChart(
+  const liveForm = liveReady ? recentTeamForm(fixtures, team.id) : [];
+  const liveSummary = seasonSummary(row);
+  const liveChart = teamChart(
     league ? football.getTopScorers(league.id) : [],
     football.relatedIds('team', team.id),
   );
-  const xi = liveReady ? lastCachedXi(fixtures, team.id, (fixture) => football.getLineups(fixture)) : undefined;
-  const stats = football.getTeamStats(team.id);
+  const liveXi = liveReady ? lastCachedXi(fixtures, team.id, (fixture) => football.getLineups(fixture)) : undefined;
+  const providerStats = football.getTeamStats(team.id);
+  // Live payload uses the live team id; mock densify keeps the mock catalog id (`liv`).
+  const liveStats =
+    providerStats && providerStats.teamId === team.id ? providerStats : undefined;
+  const densifyReady = catalog.source === 'live' && liveReady && statsCheckedId === id;
+  const mockAlias = densifyReady
+    ? resolveMockTeamAlias(football.relatedIds('team', team.id), (alias) => mockFootballProvider.getTeam(alias))
+    : undefined;
+  const densify =
+    mockAlias &&
+    (liveForm.length === 0 ||
+      !liveSummary ||
+      !liveStats ||
+      liveChart.scorers.length === 0 ||
+      !liveXi)
+      ? buildTeamOverviewDensify(mockAlias, team.id, mockFootballProvider)
+      : undefined;
+
+  const form = liveForm.length > 0 ? liveForm : (densify?.form ?? []);
+  const formLetters =
+    liveForm.length === 0 && form.length === 0 ? (densify?.formLetters ?? []) : [];
+  const summary = liveSummary ?? (densify?.standing ? seasonSummary(densify.standing) : undefined);
+  const chart =
+    liveChart.scorers.length > 0
+      ? liveChart
+      : densify
+        ? { scorers: densify.scorers, assists: densify.assists }
+        : liveChart;
+  const xi = liveXi ?? densify?.xi;
+  const stats = liveStats ?? densify?.stats ?? providerStats;
   const seasonView = stats ? presentTeamSeason(stats) : undefined;
-  const venue = stats?.venue ?? cachedHomeVenue(fixtures, team.id);
+  const venue = stats?.venue ?? densify?.venue ?? cachedHomeVenue(fixtures, team.id);
   const coach =
     stats?.coach ??
+    densify?.coach ??
     (liveReady ? cachedCoach(fixtures, team.id, (fixture) => football.getLineups(fixture)) : undefined);
   const waitingForStats = catalog.source === 'live' && !stats && (statsCheckedId !== id || !catalog.ready);
+  const showDensifyBanner = densifyIsActive({
+    liveFormEmpty: liveForm.length === 0,
+    densifyForm: form.length > 0 || formLetters.length > 0,
+    liveSeasonMissing: !liveSummary,
+    densifySeason: !!summary && !liveSummary,
+    liveStatsMissing: !liveStats,
+    densifyStats: !!stats && !liveStats,
+    liveScorersEmpty: liveChart.scorers.length === 0,
+    densifyScorers: chart.scorers.length > 0 && liveChart.scorers.length === 0,
+    liveXiMissing: !liveXi,
+    densifyXi: !!xi && !liveXi,
+  });
 
   const grouped = POS_ORDER.map((pos) => ({
     pos,
@@ -166,15 +213,23 @@ export default function TeamDetailScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         {tab === 'overview' ? (
           <>
+            {showDensifyBanner ? (
+              <View style={styles.densifyBanner} accessibilityRole="text">
+                <Text style={styles.densifyBannerText}>{DEMO_DENSIFY_BANNER}</Text>
+              </View>
+            ) : null}
+
             <Text style={styles.section}>Form</Text>
             {!liveReady ? (
               <Text style={styles.muted}>Loading results…</Text>
-            ) : form.length === 0 ? (
+            ) : form.length > 0 ? (
+              <FormStrip chips={form} />
+            ) : formLetters.length > 0 ? (
+              <ResultLetters results={formLetters} />
+            ) : (
               <Text style={styles.muted}>
                 {catalog.source === 'live' ? 'No finished matches in the cached window.' : 'No finished mock matches for this club.'}
               </Text>
-            ) : (
-              <FormStrip chips={form} />
             )}
 
             <Text style={styles.section}>Season</Text>
@@ -239,7 +294,9 @@ export default function TeamDetailScreen() {
               empty={
                 catalog.source === 'live' && (catalog.loading || !catalog.ready)
                   ? 'Loading scorers…'
-                  : league && football.getTopScorers(league.id).length === 0
+                  : league &&
+                      football.getTopScorers(league.id).length === 0 &&
+                      chart.scorers.length === 0
                     ? catalog.source === 'live'
                       ? FREE_TIER_CACHE_MISS
                       : 'No mock scorers for this league.'
@@ -425,6 +482,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   muted: { ...type.caption, color: colors.textMuted, fontWeight: '500', marginBottom: spacing.sm },
+  densifyBanner: {
+    marginTop: spacing.md,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+  },
+  densifyBannerText: { ...type.caption, color: colors.gold, fontWeight: '700' },
   seasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   seasonChip: {
     minWidth: 44,

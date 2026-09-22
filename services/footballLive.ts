@@ -173,6 +173,8 @@ export function createLiveFootballProvider(opts: {
   const now = opts.now ?? Date.now;
   const cache = new TtlCache<unknown>();
   const snap = emptySnapshot();
+  /** Clubs whose `/teams/statistics` ensure finished (hit or miss). Avoids flashing mock as live. */
+  const teamStatsAttempted = new Set<string>();
   const listeners = new Set<() => void>();
   const inflight = new Map<string, Promise<unknown>>();
   let hydratePromise: Promise<void> | null = null;
@@ -334,6 +336,16 @@ export function createLiveFootballProvider(opts: {
       if (liveId === canonical) out.add(alias);
     }
     return [...out];
+  };
+
+  /** Mock catalog id for a live coverage club (e.g. `liv` for API id `40`). */
+  const mockAliasForTeam = (team: Team): string | undefined => {
+    for (const [alias, liveId] of snap.teamAliases) {
+      if (liveId === team.id && alias !== liveId && fallback.getTeam(alias)) return alias;
+    }
+    const style = mockClubStyle(team.name, team.code);
+    if (style.mockId && fallback.getTeam(style.mockId)) return style.mockId;
+    return undefined;
   };
 
   const relatedPlayerIds = (id: string): string[] => {
@@ -503,20 +515,32 @@ export function createLiveFootballProvider(opts: {
       const canonical = team && /^[1-9]\d*$/.test(team.id) ? team.id : undefined;
       if (!canonical) return;
       const leagueId = LIVE_LEAGUE_ID_LIST.find((id) => snap.teamLeagueIds.get(canonical)?.has(id));
-      if (!leagueId) return;
+      if (!leagueId) {
+        teamStatsAttempted.add(canonical);
+        return;
+      }
       const season = opts.season ?? footballSeasonFromEnv();
       const key = `team-stats:${canonical}:${leagueId}:${season}`;
-      if (cache.hasFresh(key, now()) && snap.teamStats.has(canonical)) return;
+      if (cache.hasFresh(key, now()) && snap.teamStats.has(canonical)) {
+        teamStatsAttempted.add(canonical);
+        return;
+      }
       try {
         const payload = await load(key, FOOTBALL_TTL.teamStatsMs, () =>
           http('/teams/statistics', { league: leagueId, season, team: canonical }),
         );
         const mapped = mapTeamStatistics(payload, { teamId: canonical, leagueId, season });
-        if (!mapped) return;
+        teamStatsAttempted.add(canonical);
+        if (!mapped) {
+          emit();
+          return;
+        }
         snap.teamStats.set(canonical, mapped);
         emit();
       } catch (err) {
+        teamStatsAttempted.add(canonical);
         setStatus({ error: err instanceof Error ? err.message : String(err) });
+        emit();
       }
     },
     getContinents: () => fallback.getContinents(),
@@ -584,7 +608,14 @@ export function createLiveFootballProvider(opts: {
     },
     getTeamStats: (teamId) => {
       const team = liveTeam(teamId);
-      if (team) return snap.teamStats.get(team.id);
+      if (team) {
+        const live = snap.teamStats.get(team.id);
+        if (live) return live;
+        // Prefer live; only densify after ensure finished with a miss for an aliased mock club.
+        if (!teamStatsAttempted.has(team.id)) return undefined;
+        const mockId = mockAliasForTeam(team);
+        return mockId ? fallback.getTeamStats(mockId) : undefined;
+      }
       const mockTeam = fallback.getTeam(teamId);
       if (!mockTeam) return undefined;
       // Coverage clubs wait for `/teams/statistics` so mock blues don't flash as live.

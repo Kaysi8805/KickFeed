@@ -23,6 +23,13 @@ export const LIVE_LEAGUE_UNKNOWN =
 /** Shown when a free-tier response is missing. Never pair this with a grid of invented zeros. */
 export const FREE_TIER_CACHE_MISS = 'Not in free-tier cache yet';
 
+/**
+ * Overview densify for aliased coverage clubs after a live miss.
+ * Prefer live `/teams/statistics`, standings, scorers, and fixtures whenever they exist.
+ */
+export const DEMO_DENSIFY_BANNER =
+  'Demo densify — not live free-tier. Live stats replace this when the cache fills.';
+
 export const LIVE_RANKING_ERROR_TITLE = 'Couldn’t load KickFeed ranking';
 
 export const LIVE_RANKING_ERROR_BODY =

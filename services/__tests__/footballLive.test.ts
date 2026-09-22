@@ -327,4 +327,68 @@ describe('live football provider', () => {
     await live.ensureTeamStats('bay');
     expect(statCalls()).toHaveLength(2);
   });
+
+  it('falls back to mock densify after a live statistics miss for an aliased EPL club', async () => {
+    const base = fakeHttp();
+    const http = vi.fn(async (path: string, params?: Record<string, string | number | undefined>) => {
+      if (path === '/teams/statistics') return [];
+      return base(path, params);
+    });
+    const live = createLiveFootballProvider({
+      fallback: mockFootballProvider,
+      http,
+      season: 2026,
+      now: () => Date.parse('2026-09-16T12:00:00.000Z'),
+    });
+    await live.hydrate();
+    expect(live.getTeamStats('liv')).toBeUndefined();
+    expect(live.getTeamStats('40')).toBeUndefined();
+
+    await live.ensureTeamStats('liv');
+    const densified = live.getTeamStats('liv');
+    expect(densified?.venue).toBe('Anfield');
+    expect(densified?.teamId).toBe('liv');
+    expect(densified?.formation).toBeTruthy();
+    expect(live.getTeamStats('40')?.venue).toBe('Anfield');
+  });
+
+  it('prefers a live statistics hit over mock densify for an aliased club', async () => {
+    const base = fakeHttp();
+    const http = vi.fn(async (path: string, params?: Record<string, string | number | undefined>) => {
+      if (path === '/teams/statistics') {
+        return {
+          league: { id: 39, season: 2026 },
+          team: { id: 40, name: 'Liverpool' },
+          form: 'WLW',
+          fixtures: {
+            played: { total: 3 },
+            wins: { home: 1, away: 1, total: 2 },
+            draws: { total: 0 },
+            loses: { total: 1 },
+          },
+          goals: {
+            for: { average: { total: '2.1' } },
+            against: { average: { total: '0.7' } },
+          },
+          clean_sheet: { total: 1 },
+          lineups: [{ formation: '4-2-3-1', played: 3 }],
+        };
+      }
+      return base(path, params);
+    });
+    const live = createLiveFootballProvider({
+      fallback: mockFootballProvider,
+      http,
+      season: 2026,
+      now: () => Date.parse('2026-09-16T12:00:00.000Z'),
+    });
+    await live.hydrate();
+    await live.ensureTeamStats('40');
+    expect(live.getTeamStats('liv')).toMatchObject({
+      teamId: '40',
+      formation: '4-2-3-1',
+      goalsForAverage: { total: 2.1 },
+    });
+    expect(live.getTeamStats('liv')?.venue).toBeUndefined();
+  });
 });
