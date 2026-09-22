@@ -14,6 +14,7 @@ import type { HomeReason } from '@/lib/homeFeed';
 import { entityHref } from '@/lib/entityNav';
 import { timeAgo } from '@/lib/format';
 import { canonicalMatchId, fixtureScoreLabel, resolvePostFixture } from '@/lib/matchSocial';
+import { isShareAvailable, sharePost } from '@/lib/sharePostNative';
 import { football } from '@/services/football';
 import { colors, glow, radius, spacing, type } from '@/theme';
 
@@ -38,6 +39,8 @@ export function PostCard({
   const away = match ? football.getTeam(match.awayTeamId) : undefined;
   const matchHrefId = post.matchId ? canonicalMatchId(football, post.matchId) : undefined;
   const live = match?.status === 'live' || match?.status === 'ht';
+  const matchLabel = match && home && away ? fixtureScoreLabel(football, match) : undefined;
+  const canShare = isShareAvailable();
 
   return (
     <View style={[styles.card, live && styles.liveCard]}>
@@ -103,6 +106,24 @@ export function PostCard({
             <Text style={styles.actionText}>Chat</Text>
           </Pressable>
         ) : null}
+        {canShare ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Share post"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+              void sharePost({
+                authorName: author.name,
+                authorHandle: author.handle,
+                text: post.text,
+                matchLabel,
+              });
+            }}
+            style={styles.action}
+          >
+            <Text style={[styles.actionText, styles.actionShare]}>Share</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -166,4 +187,5 @@ const styles = StyleSheet.create({
   action: { paddingVertical: 4, minHeight: 32, justifyContent: 'center' },
   actionText: { ...type.meta, color: colors.textMuted },
   actionLiked: { color: colors.danger },
+  actionShare: { color: colors.accent },
 });
