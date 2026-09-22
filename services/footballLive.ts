@@ -37,6 +37,7 @@ import {
   mapFixture,
   mapLineup,
   mapMatchEvent,
+  mapPlayerSeason,
   mapPlayerStats,
   mapScorer,
   mapSquadPlayer,
@@ -44,7 +45,15 @@ import {
   mapTeam,
   mockClubStyle,
 } from '@/services/footballMap';
-import type { ApiEvent, ApiFixture, ApiLineup, ApiScorer, ApiSquadResponse, ApiStandingRow } from '@/services/footballApi';
+import type {
+  ApiEvent,
+  ApiFixture,
+  ApiLineup,
+  ApiPlayerSeason,
+  ApiScorer,
+  ApiSquadResponse,
+  ApiStandingRow,
+} from '@/services/footballApi';
 
 const LIVE_LEAGUE_IDS = new Set<string>(LIVE_LEAGUE_ID_LIST);
 const MOCK_LEAGUE_IDS = new Set<string>(MOCK_IDS_HIDDEN_WHEN_LIVE);
@@ -85,6 +94,11 @@ function emptySnapshot(): LiveSnapshot {
 
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function numericPlayerId(id: string | undefined): string | undefined {
+  if (id && /^[1-9]\d*$/.test(id)) return id;
+  return undefined;
 }
 
 function rememberTeam(snap: LiveSnapshot, team: Team, leagueId?: string) {
@@ -461,6 +475,25 @@ export function createLiveFootballProvider(opts: {
         setStatus({ error: err instanceof Error ? err.message : String(err) });
       }
     },
+    ensurePlayerSeason: async (playerId) => {
+      const player = livePlayer(playerId);
+      const canonical = numericPlayerId(player?.id) ?? numericPlayerId(resolvePlayerId(playerId)) ?? numericPlayerId(playerId);
+      if (!canonical) return;
+      const season = opts.season ?? footballSeasonFromEnv();
+      const key = `player:${canonical}:${season}`;
+      if (cache.hasFresh(key, now()) && snap.stats.has(canonical)) return;
+      try {
+        const rows = await load(key, FOOTBALL_TTL.playerSeasonMs, () =>
+          http('/players', { id: canonical, season }).then((r) => asArray<ApiPlayerSeason>(r)),
+        );
+        const stats = mapPlayerSeason(rows[0]);
+        if (!stats) return;
+        snap.stats.set(canonical, stats);
+        emit();
+      } catch (err) {
+        setStatus({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
     getContinents: () => fallback.getContinents(),
     getContinent: (id) => fallback.getContinent(id),
     getCountries: (continentId) => fallback.getCountries(continentId),
@@ -517,8 +550,11 @@ export function createLiveFootballProvider(opts: {
     },
     getPlayerStats: (playerId) => {
       const player = livePlayer(playerId);
-      if (player && snap.stats.has(player.id)) return snap.stats.get(player.id);
-      if (player && liveTeam(player.teamId)) return snap.stats.get(player.id);
+      const keys = [player?.id, resolvePlayerId(playerId), playerId];
+      for (const key of keys) {
+        if (key && snap.stats.has(key)) return snap.stats.get(key);
+      }
+      if (player && liveTeam(player.teamId)) return undefined;
       return fallback.getPlayerStats(playerId);
     },
     getPlayerAppearances: (playerId) => {
@@ -534,7 +570,7 @@ export function createLiveFootballProvider(opts: {
           ? [...lineup.home.players, ...lineup.away.players].some((p) => p.playerId === player.id)
           : false;
         const events = f.events.filter((e) => e.playerId === player.id);
-        if (!starter && events.length === 0 && !lineup) continue;
+        if (!starter && events.length === 0) continue;
         out.push({
           fixtureId: f.id,
           starter,

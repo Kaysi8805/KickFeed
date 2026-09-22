@@ -41,10 +41,6 @@ function RootNav() {
         }}
       >
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="match/[id]" />
-        <Stack.Screen name="league/[id]" />
-        <Stack.Screen name="team/[id]" />
-        <Stack.Screen name="player/[id]" />
         <Stack.Screen name="user/[id]" />
         <Stack.Screen name="continent/[id]" />
         <Stack.Screen name="country/[id]" />

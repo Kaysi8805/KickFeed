@@ -325,6 +325,49 @@ export function mapPlayerStats(row: ApiScorer): PlayerStats | undefined {
   };
 }
 
+/**
+ * Sum a player's season rows from `GET /players?id=&season=`.
+ * Empty statistics means "no payload" — callers must not render that as a zero line.
+ * Rating is a minutes-weighted average when the API sent one; otherwise 0 (unknown).
+ */
+export function mapPlayerSeason(row: { statistics?: ApiScorer['statistics'] } | undefined): PlayerStats | undefined {
+  const stats = row?.statistics ?? [];
+  if (!stats.length) return undefined;
+  let appearances = 0;
+  let goals = 0;
+  let assists = 0;
+  let minutes = 0;
+  let yellows = 0;
+  let reds = 0;
+  let ratingWeight = 0;
+  let ratingSum = 0;
+  for (const entry of stats) {
+    const apps = entry.games?.appearences ?? entry.games?.appearances ?? 0;
+    const mins = entry.games?.minutes ?? 0;
+    appearances += apps;
+    goals += entry.goals?.total ?? 0;
+    assists += entry.goals?.assists ?? 0;
+    minutes += mins;
+    yellows += entry.cards?.yellow ?? 0;
+    reds += entry.cards?.red ?? 0;
+    const rating = Number.parseFloat(entry.games?.rating ?? '');
+    const weight = mins > 0 ? mins : apps;
+    if (Number.isFinite(rating) && weight > 0) {
+      ratingSum += rating * weight;
+      ratingWeight += weight;
+    }
+  }
+  return {
+    appearances,
+    goals,
+    assists,
+    minutes,
+    yellows,
+    reds,
+    rating: ratingWeight > 0 ? Number((ratingSum / ratingWeight).toFixed(1)) : 0,
+  };
+}
+
 export function emptyLineup(): Lineup {
   return { formation: '—', players: [] };
 }

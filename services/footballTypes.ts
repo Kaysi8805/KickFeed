@@ -57,6 +57,8 @@ export interface FootballProvider {
   ensureSquad(teamId: string): Promise<void>;
   ensureMatchDetail(fixtureId: string): Promise<void>;
   ensureScorers(leagueId: string): Promise<void>;
+  /** One `GET /players?id=&season=` per player. Never call this while listing a squad. */
+  ensurePlayerSeason(playerId: string): Promise<void>;
   relatedIds(kind: FootballEntityKind, id: string): string[];
 }
 
