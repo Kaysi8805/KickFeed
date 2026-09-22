@@ -682,6 +682,10 @@ export function createLiveFootballProvider(opts: {
       if (LIVE_LEAGUE_IDS.has(canonical)) return snap.scorers.get(canonical) ?? [];
       return fallback.getTopScorers(leagueId);
     },
+    getCachedLiveLineups: (fixture) => {
+      const canonical = snap.fixtureAliases.get(fixture.id) ?? fixture.id;
+      return snap.lineups.get(canonical) ?? snap.lineups.get(fixture.id);
+    },
     getLineups: (fixture) => {
       const cached = snap.lineups.get(fixture.id);
       if (cached) return cached;
