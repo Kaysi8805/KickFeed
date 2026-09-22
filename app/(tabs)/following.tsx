@@ -11,6 +11,7 @@ import { MatchRow } from '@/components/match/MatchRow';
 import { SearchButton } from '@/components/search/SearchEntry';
 import { Screen } from '@/components/ui/Screen';
 import { entityHref } from '@/lib/entityNav';
+import { isPostVisibleToViewer } from '@/lib/homeFeed';
 import { expandFavoriteIds } from '@/lib/favoriteIds';
 import { favoriteLiveFixtures, sortFeedPosts } from '@/lib/matchSocial';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
@@ -24,6 +25,7 @@ export default function FavoritesScreen() {
     users,
     currentUser,
     followingIds,
+    friendIds,
     follow,
     unfollow,
     favoriteTeamIds,
@@ -65,7 +67,10 @@ export default function FavoritesScreen() {
   const matchPosts = sortFeedPosts(
     posts.filter(
       (p) =>
-        !!p.matchId && (p.authorId === currentUser?.id || followingIds.includes(p.authorId)),
+        !!p.matchId &&
+        !!currentUser &&
+        (p.authorId === currentUser.id || followingIds.includes(p.authorId)) &&
+        isPostVisibleToViewer(p, currentUser.id, friendIds),
     ),
     football,
     favoriteTeamIds,

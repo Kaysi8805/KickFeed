@@ -9,6 +9,7 @@ import { PostCard } from '@/components/feed/PostCard';
 import { LiveFixtureTray } from '@/components/match/LiveFixtureTray';
 import { MatchdayHero } from '@/components/match/MatchdayHero';
 import { SearchBarPrompt } from '@/components/search/SearchEntry';
+import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
@@ -17,8 +18,13 @@ import {
   MATCHDAY_EMPTY_TITLE,
   matchdayEmptyBody,
 } from '@/lib/honesty';
+import {
+  homeColdCopy,
+  isHomeFeedCold,
+  rankHomeFeed,
+  viewerFromApp,
+} from '@/lib/homeFeed';
 import { pickMatchdayHome } from '@/lib/matchdayHome';
-import { isSameMatch, sortFeedPosts } from '@/lib/matchSocial';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useLiveTick } from '@/lib/useLiveTick';
 import { useApp } from '@/services/AppProvider';
@@ -35,6 +41,7 @@ export default function HomeScreen() {
     posts,
     users,
     followingIds,
+    friendIds,
     likedPostIds,
     toggleLike,
     unreadCount,
@@ -55,28 +62,28 @@ export default function HomeScreen() {
 
   const [pane, setPane] = useState<HomePane>('matchday');
 
-  const matchdayFixtures = [matchday.hero, ...matchday.also].filter(
-    (pick): pick is NonNullable<typeof pick> => !!pick,
+  const viewer = useMemo(
+    () =>
+      currentUser
+        ? viewerFromApp({
+            currentUser,
+            friendIds,
+            followedIds: followingIds,
+            favoriteTeamIds,
+            favoriteLeagueIds,
+            favoritePlayerIds,
+          })
+        : null,
+    [currentUser, friendIds, followingIds, favoriteTeamIds, favoriteLeagueIds, favoritePlayerIds],
   );
-  const aroundMatch = sortFeedPosts(
-    posts.filter(
-      (p) =>
-        !!p.matchId && matchdayFixtures.some((pick) => isSameMatch(football, p.matchId!, pick.fixture.id)),
-    ),
-    football,
-    favoriteTeamIds,
-    favoritePlayerIds,
-  );
-  const aroundIds = new Set(aroundMatch.map((p) => p.id));
-  const feed = sortFeedPosts(
-    posts.filter(
-      (p) =>
-        !aroundIds.has(p.id) && (p.authorId === currentUser?.id || followingIds.includes(p.authorId)),
-    ),
-    football,
-    favoriteTeamIds,
-    favoritePlayerIds,
-  );
+
+  const homeFeed = useMemo(() => {
+    if (!viewer) return [];
+    return rankHomeFeed(posts, football, viewer);
+  }, [posts, viewer, tick, catalog.lastSyncedAt]);
+
+  const cold = viewer ? isHomeFeedCold(homeFeed) : false;
+  const coldCopy = viewer ? homeColdCopy(viewer) : null;
 
   return (
     <Screen padded={false}>
@@ -133,40 +140,17 @@ export default function HomeScreen() {
           )
         ) : (
           <>
-            {aroundMatch.length > 0 ? (
-              <View style={styles.block}>
-                <Text style={styles.section}>Around your match</Text>
-                {aroundMatch.map((post) => {
-                  const author = users.find((u) => u.id === post.authorId);
-                  if (!author) return null;
-                  return (
-                    <PostCard
-                      key={post.id}
-                      post={post}
-                      author={author}
-                      liked={likedPostIds.includes(post.id)}
-                      onLike={() => toggleLike(post.id)}
-                    />
-                  );
-                })}
+            <Text style={styles.section}>Your pitch</Text>
+            {cold && coldCopy ? (
+              <View style={styles.cold}>
+                <EmptyState title={coldCopy.title} body={coldCopy.body} />
+                <View style={styles.coldActions}>
+                  <Button label="Follow clubs" onPress={() => router.push('/pick-favorites')} />
+                  <Button label="Find friends" variant="secondary" onPress={() => router.push('/following')} />
+                </View>
               </View>
-            ) : null}
-            <Text style={styles.section}>Friends & you</Text>
-            {feed.length === 0 && aroundMatch.length === 0 ? (
-              <EmptyState
-                title="Your feed is a quiet stadium"
-                body="Follow fans from Following, then come back for posts about tonight’s matches."
-                actionLabel="Find fans to follow"
-                onAction={() => router.push('/following')}
-              />
-            ) : feed.length === 0 ? (
-              <EmptyState
-                compact
-                title="No friend posts yet"
-                body="More friend posts will land here. Match chatter is up top."
-              />
             ) : (
-              feed.map((post) => {
+              homeFeed.map(({ post, reason }) => {
                 const author = users.find((u) => u.id === post.authorId);
                 if (!author) return null;
                 return (
@@ -176,6 +160,7 @@ export default function HomeScreen() {
                     author={author}
                     liked={likedPostIds.includes(post.id)}
                     onLike={() => toggleLike(post.id)}
+                    reason={reason}
                   />
                 );
               })
@@ -232,7 +217,6 @@ const styles = StyleSheet.create({
   },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: 72 },
   statusPad: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm, gap: spacing.sm },
-  block: { marginBottom: spacing.md },
   section: {
     ...type.badge,
     color: colors.textMuted,
@@ -240,4 +224,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     marginTop: spacing.sm,
   },
+  cold: { gap: spacing.md },
+  coldActions: { gap: spacing.sm, alignItems: 'stretch', paddingHorizontal: spacing.md },
 });

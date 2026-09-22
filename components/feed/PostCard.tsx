@@ -4,11 +4,13 @@ import * as Haptics from 'expo-haptics';
 import { Pressable, StyleSheet, Text, View, Platform } from 'react-native';
 
 import { EntityText } from '@/components/feed/EntityText';
+import { HomeReasonLabel } from '@/components/feed/HomeReasonLabel';
 import { LiveBadge } from '@/components/match/LiveBadge';
 import { SafetyMenu } from '@/components/moderation/SafetyMenu';
 import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
 import type { Post, User } from '@/data/types';
+import type { HomeReason } from '@/lib/homeFeed';
 import { entityHref } from '@/lib/entityNav';
 import { timeAgo } from '@/lib/format';
 import { canonicalMatchId, fixtureScoreLabel, resolvePostFixture } from '@/lib/matchSocial';
@@ -21,12 +23,15 @@ export function PostCard({
   liked,
   onLike,
   compact,
+  reason,
 }: {
   post: Post;
   author: User;
   liked: boolean;
   onLike: () => void;
   compact?: boolean;
+  /** Home Option 2 “why am I seeing this?” — omit on profile / match hub. */
+  reason?: HomeReason;
 }) {
   const match = resolvePostFixture(post, football);
   const home = match ? football.getTeam(match.homeTeamId) : undefined;
@@ -50,6 +55,7 @@ export function PostCard({
           <Text style={styles.handle}>
             @{author.handle} · {timeAgo(post.createdAt)}
           </Text>
+          {reason ? <HomeReasonLabel reason={reason} /> : null}
         </View>
         {live ? <LiveBadge minute={match?.minute} ht={match?.status === 'ht'} /> : null}
         <SafetyMenu

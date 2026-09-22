@@ -169,6 +169,15 @@ export const seedPosts: Post[] = [
     createdAt: ago(26),
     matchId: 'fx-ucl-mci-rma',
   },
+  {
+    // Non-friend of Maya (seed following). Public + favorite clubs → Home “Because you follow” lane.
+    id: 'p11',
+    authorId: 'aisha',
+    text: 'Watching Arsenal from afar — that Saka finish travels.',
+    createdAt: ago(2.2),
+    matchId: 'fx-liv-ars',
+    audience: 'public',
+  },
 ];
 
 export const seedComments: Comment[] = [
