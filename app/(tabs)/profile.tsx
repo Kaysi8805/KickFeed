@@ -38,14 +38,18 @@ export default function ProfileScreen() {
     signOut,
     favoritePlayerIds,
     pushPrefs,
+    pushToken,
+    pushRemote,
     easProjectId,
     enableDeviceAlerts,
     setPushPref,
+    sendRemotePushTest,
     blockedUserIds,
     unblockUser,
   } = useApp();
   const [pushBusy, setPushBusy] = useState(false);
   const [pushNote, setPushNote] = useState<string | null>(null);
+  const [remoteBusy, setRemoteBusy] = useState(false);
   if (!currentUser) return null;
   const mine = posts.filter((p) => p.authorId === currentUser.id);
   const teams = currentUser.favoriteTeamIds.map((id) => football.getTeam(id)).filter(Boolean);
@@ -59,15 +63,23 @@ export default function ProfileScreen() {
       optedIn: pushPrefs.enabled,
       projectId: easProjectId ?? undefined,
       permission: pushPrefs.enabled ? 'granted' : 'undetermined',
-      token: null,
+      token: pushToken,
       platform: Platform.OS === 'web' ? 'web' : 'native',
+      remote:
+        pushRemote === 'synced' ||
+        pushRemote === 'error' ||
+        pushRemote === 'demo' ||
+        pushRemote === 'unconfigured' ||
+        pushRemote === 'pending'
+          ? pushRemote
+          : undefined,
     });
 
   async function onEnableAlerts() {
     setPushBusy(true);
     try {
       const result = await enableDeviceAlerts();
-      setPushNote(result.message);
+      setPushNote(result.permission === 'granted' ? null : result.message);
     } catch {
       setPushNote('Couldn’t enable device alerts. In-app notifications still work.');
     } finally {
@@ -199,8 +211,9 @@ export default function ProfileScreen() {
           <Text style={styles.alertsKicker}>MATCH ALERTS</Text>
           <Text style={styles.alertsTitle}>Kickoff soon and goals</Text>
           <Text style={styles.alertsBody}>
-            Favorite clubs only. Kickoff is one reminder per match; goals fire when the live score ticks up — same
-            45s / 5 min cache as Matches, no extra polling.
+            Favorite clubs only. Kickoff is one reminder per match; goals fire when the score ticks up. With email
+            sign-in, the same alerts can arrive after you close the app. Expo Go on Android often needs a dev build
+            for a remote token.
           </Text>
           {pushPrefs.enabled ? (
             <>
@@ -234,6 +247,23 @@ export default function ProfileScreen() {
               >
                 <Text style={styles.switcherText}>Send a test alert</Text>
               </Pressable>
+              {authMode === 'supabase' && pushToken ? (
+                <Pressable
+                  style={styles.alertsAction}
+                  disabled={remoteBusy}
+                  onPress={() => {
+                    setRemoteBusy(true);
+                    void sendRemotePushTest()
+                      .then((message) => setPushNote(message))
+                      .catch(() => setPushNote('Remote test didn’t send. In-app notifications still work.'))
+                      .finally(() => setRemoteBusy(false));
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send a remote test"
+                >
+                  <Text style={styles.switcherText}>{remoteBusy ? 'Sending…' : 'Send a remote test'}</Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 style={styles.alertsAction}
                 onPress={() => setPushPref({ enabled: false })}
@@ -258,7 +288,7 @@ export default function ProfileScreen() {
         </View>
         <Text style={styles.demoNote}>
           {authMode === 'supabase'
-            ? 'Favorites, predictions, MOTM votes, reports, blocks, and DMs on this device are stored under your Supabase user id. Live ranking, safety lists, and 1:1 DMs sync to KickFeed Postgres.'
+            ? 'Favorites, predictions, MOTM votes, reports, blocks, DMs, and match-alert tokens on this device are stored under your Supabase user id. Live ranking, safety lists, DMs, and device push tokens sync to KickFeed Postgres.'
             : supabaseConfigured
               ? 'Demo profile — local ranking, safety lists, and DMs only. Sign out and use email to join the live KickFeed table.'
               : 'Demo mode — ranking, safety lists, and DMs are this device + seeded fans. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for live ranking, reports, blocks, and DMs.'}

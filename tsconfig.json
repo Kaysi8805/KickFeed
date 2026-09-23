@@ -12,5 +12,5 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ],
-  "exclude": ["landing", "bff", "node_modules"]
+  "exclude": ["landing", "bff", "node_modules", "supabase/functions/**/index.ts"]
 }

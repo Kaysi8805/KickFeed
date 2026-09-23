@@ -94,6 +94,26 @@ describe('deviceAlertsCopy', () => {
         platform: 'native',
       }),
     ).toMatch(/Local match alerts/i);
+    expect(
+      deviceAlertsCopy({
+        optedIn: true,
+        projectId: '52a1ee7a-e7db-49c4-bc11-419d316ebd44',
+        permission: 'granted',
+        token: 'ExponentPushToken[abcdefghijklmnopqrst]',
+        platform: 'native',
+        remote: 'synced',
+      }),
+    ).toMatch(/KickFeed closed/i);
+    expect(
+      deviceAlertsCopy({
+        optedIn: true,
+        projectId: '52a1ee7a-e7db-49c4-bc11-419d316ebd44',
+        permission: 'granted',
+        token: 'ExponentPushToken[abcdefghijklmnopqrst]',
+        platform: 'native',
+        remote: 'demo',
+      }),
+    ).toMatch(/email sign-in/i);
   });
 });
 
@@ -109,6 +129,11 @@ describe('parsePushStore', () => {
     );
     expect(parsed.prefs).toEqual({ enabled: true, kickoff: false, goals: true });
     expect(parsed.snapshot.scores['9001']).toEqual({ home: 2, away: 1 });
+    expect(parsed.token).toBeNull();
+    expect(
+      parsePushStore(JSON.stringify({ prefs: { enabled: true }, token: 'ExponentPushToken[abcdefghijklmnopqrst]' })).token,
+    ).toBe('ExponentPushToken[abcdefghijklmnopqrst]');
+    expect(parsePushStore(JSON.stringify({ token: 'not-a-token' })).token).toBeNull();
   });
 });
 
