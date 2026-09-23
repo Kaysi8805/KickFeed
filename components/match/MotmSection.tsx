@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import type { Fixture, MotmVote, Team } from '@/data/types';
 import { entityHref } from '@/lib/entityNav';
 import { isMotmOpen, type MotmCandidate, tallyMotmVotes } from '@/lib/engagement';
+import { FAN_PICKS_NOT_GAMBLING } from '@/lib/honesty';
 import { colors, radius, spacing, type } from '@/theme';
 
 export function MotmSection({
@@ -46,10 +47,10 @@ export function MotmSection({
       </Text>
       <Text style={styles.lede}>
         {!open
-          ? 'Voting opens when the match goes live. One vote per user — no take-backs.'
+          ? `Voting opens when the match goes live. One vote per user — no take-backs. ${FAN_PICKS_NOT_GAMBLING}`
           : mine
-            ? `You voted for ${mine.playerName}. That pick is locked; tallies still update as others vote.`
-            : 'Pick one player from the lineups (or squad if XIs are not cached). One vote, no take-backs.'}
+            ? `You voted for ${mine.playerName}. That pick is locked; tallies still update as others vote. ${FAN_PICKS_NOT_GAMBLING}`
+            : `Pick one player from the lineups (or squad if XIs are not cached). One vote, no take-backs. ${FAN_PICKS_NOT_GAMBLING}`}
       </Text>
 
       {!open ? (

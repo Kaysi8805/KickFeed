@@ -11,8 +11,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ExternalLinks } from '@/components/about/ExternalLinks';
 import { DemoLogin } from '@/components/DemoLogin';
 import { Segmented } from '@/components/ui/Segmented';
+import { demoModeEnabled } from '@/lib/demoMode';
+import { appChannelFromEnv, isStoreFacingChannel } from '@/lib/storeChannel';
+import { emailAuthHint } from '@/lib/storeCopy';
 import { AuthError } from '@/services/auth';
 import { useApp } from '@/services/AppProvider';
 import { colors, radius, spacing, type } from '@/theme';
@@ -22,16 +26,52 @@ type EmailMode = 'signin' | 'signup';
 
 export function AuthScreen() {
   const { supabaseConfigured } = useApp();
-  const [pane, setPane] = useState<GatePane>(supabaseConfigured ? 'email' : 'demo');
+  const demo = demoModeEnabled();
+  const storeFacing = isStoreFacingChannel(appChannelFromEnv());
+  const [pane, setPane] = useState<GatePane>(supabaseConfigured || !demo ? 'email' : 'demo');
 
-  if (pane === 'demo') {
-    return <DemoLogin onBack={supabaseConfigured ? () => setPane('email') : undefined} />;
+  if (!supabaseConfigured && !demo) {
+    return <SignInUnavailable storeFacing={storeFacing} />;
   }
 
-  return <EmailAuthForm onDemo={() => setPane('demo')} />;
+  if (demo && pane === 'demo') {
+    return <DemoLogin storeFacing={storeFacing} onBack={supabaseConfigured ? () => setPane('email') : undefined} />;
+  }
+
+  return (
+    <EmailAuthForm
+      storeFacing={storeFacing}
+      demo={demo}
+      onDemo={() => setPane('demo')}
+    />
+  );
 }
 
-function EmailAuthForm({ onDemo }: { onDemo: () => void }) {
+function SignInUnavailable({ storeFacing }: { storeFacing: boolean }) {
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <Text style={styles.logo}>KickFeed</Text>
+        <Text style={styles.tag}>
+          {storeFacing
+            ? 'Email sign-in is not available on this install. Demo profiles are turned off.'
+            : 'Email sign-in needs Supabase env vars, or set EXPO_PUBLIC_DEMO_MODE=1 for demo profiles.'}
+        </Text>
+        <ExternalLinks />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function EmailAuthForm({
+  onDemo,
+  storeFacing,
+  demo,
+}: {
+  onDemo: () => void;
+  storeFacing: boolean;
+  demo: boolean;
+}) {
   const { signInWithEmail, signUpWithEmail } = useApp();
   const [mode, setMode] = useState<EmailMode>('signin');
   const [email, setEmail] = useState('');
@@ -51,7 +91,10 @@ function EmailAuthForm({ onDemo }: { onDemo: () => void }) {
           ? await signInWithEmail(email, password)
           : await signUpWithEmail(email, password, displayName);
       if (result.status === 'confirm_email') {
-        setNotice(`Check ${result.email} for a confirmation link, then sign in. You can turn off “Confirm email” in the Supabase Auth settings for local demos.`);
+        const localNote = storeFacing
+          ? ''
+          : ' You can turn off “Confirm email” in the Supabase Auth settings for local demos.';
+        setNotice(`Check ${result.email} for a confirmation link, then sign in.${localNote}`);
         setMode('signin');
       }
     } catch (err) {
@@ -77,7 +120,11 @@ function EmailAuthForm({ onDemo }: { onDemo: () => void }) {
               <Text style={styles.badgeText}>EMAIL AUTH</Text>
             </View>
             <Text style={styles.logo}>KickFeed</Text>
-            <Text style={styles.tag}>Sign in with email, or keep using a demo profile on this device.</Text>
+            <Text style={styles.tag}>
+              {demo
+                ? 'Sign in with email, or keep using a demo profile on this device.'
+                : 'Sign in with email.'}
+            </Text>
           </View>
           <Segmented
             value={mode}
@@ -146,18 +193,18 @@ function EmailAuthForm({ onDemo }: { onDemo: () => void }) {
               {busy ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}
             </Text>
           </Pressable>
-          <Pressable
-            onPress={onDemo}
-            accessibilityRole="button"
-            accessibilityLabel="Continue with demo"
-            style={styles.demoLink}
-          >
-            <Text style={styles.demoLinkText}>Continue with demo</Text>
-          </Pressable>
-          <Text style={styles.hint}>
-            Demo profiles stay on this device. Email accounts use your Supabase project; prediction
-            leaderboards in the next batch will attach to that user id.
-          </Text>
+          {demo ? (
+            <Pressable
+              onPress={onDemo}
+              accessibilityRole="button"
+              accessibilityLabel="Continue with demo"
+              style={styles.demoLink}
+            >
+              <Text style={styles.demoLinkText}>Continue with demo</Text>
+            </Pressable>
+          ) : null}
+          <ExternalLinks />
+          <Text style={styles.hint}>{emailAuthHint(storeFacing, demo)}</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -204,5 +251,7 @@ const styles = StyleSheet.create({
   submitText: { ...type.subtitle, color: colors.bg },
   demoLink: { marginTop: spacing.lg, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
   demoLinkText: { ...type.caption, color: colors.lime },
+  legalRow: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: spacing.md },
+  legalLink: { minHeight: 44, justifyContent: 'center' },
   hint: { ...type.caption, color: colors.textDim, fontWeight: '500', marginTop: spacing.md, lineHeight: 18 },
 });

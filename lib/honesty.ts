@@ -5,6 +5,10 @@ import { matchDayHeading, type MatchDayRelation } from '@/lib/matchesWindow';
 
 export const LIVE_MIX_DISCLAIMER = `${LIVE_GEO_SHORT} live · other leagues mock`;
 
+/** Shared by Predict, MOTM, the leaderboard, Terms, and Privacy. */
+export const FAN_PICKS_NOT_GAMBLING =
+  'Score picks and Man of the Match votes are fan opinions for a leaderboard. KickFeed is not a betting or gambling product. There are no stakes and no payouts.';
+
 export const TV_EDITORIAL_DISCLAIMER =
   'Editorial TV listings — not a licensed FotMob-style guide.';
 
@@ -38,6 +42,26 @@ export const LINEUPS_ERROR_TITLE = 'Couldn’t load lineups';
 
 export const LINEUPS_ERROR_BODY =
   'The free-tier lineup request failed. Score and events are unchanged — this tab will not invent an XI.';
+
+export const STATS_UNAVAILABLE_TITLE = 'No possession or shot stats';
+
+export const STATS_UNAVAILABLE_BODY =
+  'KickFeed does not invent possession, shots, or expected goals. The score, events, and lineups are the match record when the free tier has them.';
+
+export const MATCH_SECTION_ERROR_TITLE = 'This section did not load';
+
+export const MATCH_SECTION_ERROR_BODY =
+  'The scoreboard is still here. Switch tabs or leave and come back to try again.';
+
+export const TV_UNAVAILABLE_TITLE = 'TV listing unavailable';
+
+export const TV_UNAVAILABLE_BODY =
+  'Editorial listings did not load for this match. The score is unchanged.';
+
+export const ALERTS_UNAVAILABLE_TITLE = 'Match alerts unavailable';
+
+export const ALERTS_UNAVAILABLE_BODY =
+  'The in-app notification center still works. Leave Profile and come back to try alerts again.';
 
 /**
  * Overview densify for aliased coverage clubs after a live miss.

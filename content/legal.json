@@ -1,0 +1,69 @@
+{
+  "updated": "23 September 2026",
+  "privacyPolicyUrl": "https://kaysi8805.github.io/KickFeed/privacy.html",
+  "termsUrl": "https://kaysi8805.github.io/KickFeed/terms.html",
+  "supportUrl": "https://kaysi8805.github.io/KickFeed/support.html",
+  "supportEmail": "karolurban1@gmail.com",
+  "privacy": {
+    "title": "Privacy Policy",
+    "sections": [
+      {
+        "heading": "Who operates KickFeed",
+        "body": "KickFeed is a fan app for football conversation, scores, and opinion picks. The person who publishes the KickFeed store listing operates it. This policy describes the app build you are using."
+      },
+      {
+        "heading": "Accounts",
+        "body": "You can use a demo profile that stays on this device, or create an account with an email address and a password. Email sign-in is handled by our authentication provider. This version does not offer Sign in with Apple or Sign in with Google, and those buttons are not shown."
+      },
+      {
+        "heading": "What we store",
+        "body": "For an email account we store your display name, the clubs and players you favorite, posts, score predictions, Man of the Match votes, reports, blocks, direct and group messages, and, only if you opt in, a device token so match alerts can arrive after you close the app. Demo mode keeps that information on the device."
+      },
+      {
+        "heading": "Photos and notifications",
+        "body": "If you attach a picture to a post, KickFeed reads the photo you choose from your photo library. KickFeed does not open the camera or the microphone, and it does not ask for your location. Match alerts stay off until you turn them on from Profile. They are kickoff reminders and goal updates for clubs you favorite. You can turn them off in KickFeed or in your phone settings."
+      },
+      {
+        "heading": "Scores and TV",
+        "body": "Live scores cover the Premier League, the EFL Championship, Slovakia Niké Liga, and La Liga. Other competitions in the app are sample data and are labeled mock. TV listings are editorial notes, not a licensed broadcast guide."
+      },
+      {
+        "heading": "Predictions are not betting",
+        "body": "Score picks and Man of the Match votes are fan opinions for a leaderboard. KickFeed is not a betting or gambling product. There are no stakes and no payouts."
+      },
+      {
+        "heading": "Reports and blocks",
+        "body": "You can report a post, a profile, a match-chat message, or a direct message, and you can block a fan. On an email account, reports and blocks sync to KickFeed storage for that account. In demo mode they stay on this device. There is no public moderation inbox in the app."
+      },
+      {
+        "heading": "Children, ads, and deletion",
+        "body": "KickFeed is not directed at children under 13. We do not sell personal information and we do not show third-party ads. Sign out from Profile to remove the session from this device. To delete an email account and the data stored with it, contact the address on the store listing. Signing out alone does not erase the account from KickFeed storage."
+      }
+    ]
+  },
+  "terms": {
+    "title": "Terms of Use",
+    "sections": [
+      {
+        "heading": "Using KickFeed",
+        "body": "KickFeed lets you follow football, talk with other fans, and make opinion picks. The service is provided as available. Live scores can be delayed or missing when the data source is down."
+      },
+      {
+        "heading": "Not gambling",
+        "body": "Score picks and Man of the Match votes are fan opinions for a leaderboard. KickFeed is not a betting or gambling product. There are no stakes and no payouts."
+      },
+      {
+        "heading": "Your content",
+        "body": "You are responsible for what you post and send. Do not harass other fans. Blocking and reporting hide content on your account. KickFeed is not a full moderation service."
+      },
+      {
+        "heading": "Scores, lineups, and TV",
+        "body": "When a lineup, statistic, or live score is missing, KickFeed shows an empty state. It does not invent a lineup, possession, shots, or expected goals. TV listings are editorial and can be wrong."
+      },
+      {
+        "heading": "Accounts",
+        "body": "Keep your password to yourself. Demo profiles are samples on this device, not a private identity. These terms are the copy shipped in this app build. The store listing will link the same public page."
+      }
+    ]
+  }
+}

@@ -3,23 +3,38 @@
     "name": "KickFeed",
     "slug": "kickfeed",
     "version": "1.0.0",
+    "runtimeVersion": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "kickfeed",
     "userInterfaceStyle": "dark",
+    "description": "Football social feed and live scores. Fan predictions are opinions, not betting.",
+    "owner": "kaysi8805",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.kickfeed.app",
-      "icon": "./assets/expo.icon"
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "KickFeed uses your photo library so you can attach a picture to a post."
+      }
     },
     "android": {
       "package": "com.kickfeed.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#050805",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "blockedPermissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -34,7 +49,7 @@
         {
           "backgroundColor": "#050805",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 120
+          "imageWidth": 200
         }
       ],
       [
@@ -47,7 +62,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "KickFeed uses photos so you can attach images to posts."
+          "photosPermission": "KickFeed uses your photo library so you can attach a picture to a post.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ]
     ],
@@ -57,7 +74,11 @@
     "extra": {
       "eas": {
         "projectId": "52a1ee7a-e7db-49c4-bc11-419d316ebd44"
-      }
+      },
+      "privacyPolicyUrl": "https://kaysi8805.github.io/KickFeed/privacy.html",
+      "termsUrl": "https://kaysi8805.github.io/KickFeed/terms.html",
+      "supportUrl": "https://kaysi8805.github.io/KickFeed/support.html",
+      "supportEmail": "karolurban1@gmail.com"
     }
   }
 }

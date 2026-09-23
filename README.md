@@ -6,11 +6,11 @@ v1 is **local-first**: seeded fan profiles for **demo mode**, optional **Supabas
 
 ## Features
 
-- **Auth** — email/password via **Supabase Auth** when `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY` are set. Without those (or tap **Continue with demo**), pick a seeded fan (Maya, Omar, Luca, …). Apple/Google OAuth is stubbed for a later batch.
+- **Auth** — email/password via **Supabase Auth** when `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY` are set. Without those (or tap **Continue with demo**), pick a seeded fan (Maya, Omar, Luca, …). Sign in with Apple or Google is not offered, and those buttons are not shown.
 - **Profiles & favorites** — name, photo initials, bio, favorite clubs, competitions, and players. **TV country** (UK / SK / US) defaults from the device locale, else Slovakia. Favorites drive Home live scores and Following.
 - **Social feed & follows** — follow demo users, post text (optional photo), optionally **attach a live/today/upcoming fixture**, like posts, see friends + own posts. Home and Following highlight match-attached posts and live matches for clubs/players you follow.
 - **Global search** — dedicated Search screen from the Feed bar and tab headers. Query clubs, players, competitions, and demo fans; results open the existing entity pages.
-- **Live scores & fixtures** — Live / Today / Upcoming. With a BFF URL or key, **England (PL + Championship), Slovakia Niké Liga, and Spain La Liga** from API-Football; without either, the mock worldwide catalog. Match pages with score, events, **lineups** (formation, XI, and bench when the free tier returns a team sheet), stats stubs, and **TV channels for the user’s country**.
+- **Live scores & fixtures** — Live / Today / Upcoming. With a BFF URL or key, **England (PL + Championship), Slovakia Niké Liga, and Spain La Liga** from API-Football; without either, the mock worldwide catalog. Match pages with score, events, **lineups** (formation, XI, and bench when the free tier returns a team sheet), an empty stats state when possession is not cached, and **TV channels for the user’s country**.
 - **TV / broadcast schedule** — FotMob-style listings for launch geos (**UK, Slovakia, United States**). Browse today’s and upcoming England kickoffs with channel chips; tap through to the match. Editorial/mock data — not a licensed rights guide.
 - **Clubs & players** — Team pages (crest, league table context, fixtures, clickable squad, favorite) and player pages (mock season stats, recent appearances, follow/favorite, link back to club).
 - **Worldwide leagues** — continents → countries → competitions. Live standings/scorers are England + Slovakia + La Liga; other geos stay on the mock tree. Featured PL, Championship, Niké Liga, and La Liga when live.
@@ -44,9 +44,13 @@ npm test
 
 CI runs `npm ci` → `typecheck` → `test` on pull requests (see `.github/workflows/ci.yml`). CI does **not** need an API-Football key or Supabase credentials; tests use mocks and JSON fixtures.
 
+## Store checklist
+
+Privacy, support, and terms links, production EAS settings, and the submit checklist are in [`docs/store-checklist.md`](docs/store-checklist.md). Listing copy and screenshots are in [`store/`](store/). This repo does not submit to the App Store or Play.
+
 ## Supabase email auth
 
-Without `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`, KickFeed stays on the **demo profile picker** (same as today). With both set, the gate is email sign-in / sign-up, and **Continue with demo** remains a staging fallback.
+Without `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`, KickFeed stays on the **demo profile picker** when demo mode is on. With both set, the gate is email sign-in / sign-up, and **Continue with demo** remains a fallback unless `EXPO_PUBLIC_DEMO_MODE=0` (the production EAS profile).
 
 Karol — create a free project and paste keys (never commit `.env`):
 
@@ -63,7 +67,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 5. Restart Expo (`npx expo start`) so the public env vars are inlined. Expo Go is supported (`@supabase/supabase-js` + AsyncStorage session).
 6. Optional: in the Supabase SQL editor, run the files in [`supabase/migrations/`](supabase/migrations/) (profiles, prediction tables, write-lock RPCs, **reports/blocks**, then **direct messages**). Profiles are the join key (`id` = `auth.users.id`). Live ranking writes go through kickoff-lock RPCs — not direct table upserts. Reports/blocks use RLS on `user_reports` / `user_blocks` (own rows + incoming blocks so DMs can hide). DMs use RLS on `direct_messages` (participants only; blocked pairs hidden). See [`supabase/README.md`](supabase/README.md).
 
-Google / Apple providers can be enabled in the same Auth settings later — OAuth stays a stub.
+Google / Apple sign-in is not in the app. Do not add those buttons until the providers actually complete a session.
 
 **Identity:** demo seeds stay `maya` / `omar` / …; real accounts use `auth.users.id` (uuid). Favorites, predictions, MOTM, leaderboard rows, **blocks**, **reports**, and **DMs** all key off that same id. Social graph stays on local AsyncStorage; live ranking additionally upserts the signed-in user’s picks to Postgres; email sessions also upsert that user’s blocks/reports/DMs.
 
@@ -179,7 +183,7 @@ Optional: `EXPO_PUBLIC_FOOTBALL_SEASON=2026` to pin the season start year (defau
 
 ## Batch 1 prod checklist
 
-Release builds talk only to the Cloudflare Worker. The API-Football key stays a Worker secret. Local `expo start` keeps `http://127.0.0.1:8787` when that line is set in `.env`. The worker cache is **in-memory per isolate** (free tier, no KV): a cold isolate is a cache miss. `eas.json` development uses the loopback URL; preview and production inline `https://kickfeed-football-bff.<account>.workers.dev` until you override it.
+Release builds talk only to the Cloudflare Worker. The API-Football key stays a Worker secret. Local `expo start` keeps `http://127.0.0.1:8787` when that line is set in `.env`. The worker cache is **in-memory per isolate** (free tier, no KV): a cold isolate is a cache miss. `eas.json` development uses the loopback URL. Preview and production inline `https://kickfeed-football-bff.kaysi8805.workers.dev`. An EAS plaintext env var with the same name overrides that. If the value is still the `<account>` placeholder, the app treats it as unset and stays on mocks.
 
 From the repo root, on Karol’s Mac:
 
@@ -189,17 +193,17 @@ npx wrangler@latest secret put FOOTBALL_API_KEY --config bff/wrangler.toml
 npx wrangler@latest deploy --config bff/wrangler.toml
 ```
 
-`secret put` prompts for the key. Do not commit it and do not put it in `EXPO_PUBLIC_*`. Deploy prints the origin. Paste that URL with **no trailing slash**:
+`secret put` prompts for the key. Do not commit it and do not put it in `EXPO_PUBLIC_*`. Deploy prints the origin. The committed release URL (no trailing slash) is:
 
 ```text
-https://kickfeed-football-bff.<account>.workers.dev
+https://kickfeed-football-bff.kaysi8805.workers.dev
 ```
 
-Set it as an EAS **plaintext** variable (it is inlined into the app; `secret` visibility never reaches the JS bundle). EAS environment variables override the `eas.json` placeholder of the same name. Leave `EXPO_PUBLIC_FOOTBALL_API_KEY` unset — when the BFF URL is set the live provider does not send a client key.
+Set the same value as an EAS **plaintext** variable only if you need to override `eas.json` (it is inlined into the app; `secret` visibility never reaches the JS bundle). Leave `EXPO_PUBLIC_FOOTBALL_API_KEY` unset — when the BFF URL is set the live provider does not send a client key.
 
 ```bash
-eas env:set --name EXPO_PUBLIC_FOOTBALL_BFF_URL --value https://kickfeed-football-bff.<account>.workers.dev --environment production --visibility plaintext
-eas env:set --name EXPO_PUBLIC_FOOTBALL_BFF_URL --value https://kickfeed-football-bff.<account>.workers.dev --environment preview --visibility plaintext
+eas env:set --name EXPO_PUBLIC_FOOTBALL_BFF_URL --value https://kickfeed-football-bff.kaysi8805.workers.dev --environment production --visibility plaintext
+eas env:set --name EXPO_PUBLIC_FOOTBALL_BFF_URL --value https://kickfeed-football-bff.kaysi8805.workers.dev --environment preview --visibility plaintext
 ```
 
 Local `.env` (gitignored), same machine or simulator:
@@ -213,7 +217,7 @@ A phone cannot reach your computer’s `127.0.0.1`. Use the workers.dev URL abov
 Check the worker, then Matches:
 
 ```bash
-curl -sS https://kickfeed-football-bff.<account>.workers.dev/health
+curl -sS https://kickfeed-football-bff.kaysi8805.workers.dev/health
 ```
 
 Expect `"ok": true`, `"keyConfigured": true`, and coverage leagues `39`, `40`, `332`, `140`. `cache.scope` is `"isolate"`. `quota.remaining` stays `null` until that isolate has called API-Football, then it shows the last `x-ratelimit-requests-remaining`. Install a preview or production build (or Expo with the prod URL in `.env`) and open **Matches** — England, Slovakia, and La Liga scores, with no API key in the app.
@@ -224,7 +228,7 @@ Mock club ids (`ars`, `liv`, `epl`, `slovan`, `laliga`) still resolve after hydr
 
 ## Demo mode
 
-On first launch without Supabase env, choose a demo profile. With Supabase env, email sign-in is first; **Continue with demo** still opens the picker. State (favorites including players, follows, posts, comments, **score predictions**, **MOTM votes**, **blocks**, **reports**, **direct messages**, notification read flags) is persisted with AsyncStorage under `kickfeed.v1.state` (`schemaVersion` 2). Per-user maps (favorites, predictions, MOTM, likes, following, blocks, DM reads) are keyed by `currentUserId`: seeded ids like `maya` in demo mode, or the Supabase `auth.users` uuid when signed in with email. Demo and email data can coexist on one device. Post `matchId` values are kept as stored — live remapping is display-time only. Predictions and MOTM votes use the same related-id matching as match chat, so mock ids (`fx-liv-ars`) and live England ids stay one ballot when a key is set.
+On first launch without Supabase env, choose a demo profile. With Supabase env, email sign-in is first; **Continue with demo** still opens the picker unless `EXPO_PUBLIC_DEMO_MODE=0`. Production drops a restored demo session and opens on email sign-in. State (favorites including players, follows, posts, comments, **score predictions**, **MOTM votes**, **blocks**, **reports**, **direct messages**, notification read flags) is persisted with AsyncStorage under `kickfeed.v1.state` (`schemaVersion` 2). Per-user maps (favorites, predictions, MOTM, likes, following, blocks, DM reads) are keyed by `currentUserId`: seeded ids like `maya` in demo mode, or the Supabase `auth.users` uuid when signed in with email. Demo and email data can coexist on one device. Post `matchId` values are kept as stored — live remapping is display-time only. Predictions and MOTM votes use the same related-id matching as match chat, so mock ids (`fx-liv-ars`) and live England ids stay one ballot when a key is set.
 
 Corrupt JSON is discarded. A missing or newer `schemaVersion` still keeps valid slices (signed-in demo user or uuid, follows, posts, …) and stamps the current version. Unknown `currentUserId` values (not a demo id and not a uuid) are cleared. On boot, a live Supabase session wins; if the session is gone, a leftover uuid is dropped so demo restore still works.
 
@@ -259,7 +263,7 @@ data/types.ts        Shared domain types
 data/mocks/          Seeded users, teams, squads, leagues, fixtures, posts, TV, predictions/MOTM, DMs
 supabase/             Optional SQL for `profiles`, predictions/MOTM, `user_blocks` / `user_reports`, and `direct_messages`; not used by CI
 lib/userIdentity.ts  Demo id vs Supabase uuid helpers; profile → User
-services/auth.ts     Email/password AuthProvider + demo list; OAuth stub
+services/auth.ts     Email/password AuthProvider + demo list; OAuth rejected, no buttons
 services/leaderboard.ts  Postgres fetch/upsert when Supabase is configured
 services/moderation.ts   Postgres fetch/insert for blocks + reports (email session only)
 services/dms.ts          Postgres fetch/insert for 1:1 DMs (email session only)
@@ -280,7 +284,7 @@ theme/               Color, type, and spacing tokens
 
 - `listDemoUsers()` — staging fallback picker (always available).
 - `signInWithEmail` / `signUpWithEmail` / `getSession` / `signOut` — real Supabase Auth when env is set; throw a clear error without it.
-- `signInWithOAuth` — still throws (Apple/Google polish is a later batch).
+- `signInWithOAuth` — still throws. The UI does not offer Apple or Google sign-in.
 - KickFeed `User.id` is the demo seed id or `auth.users.id` (uuid) so leaderboards can attach later without remapping.
 
 The UI gates on `currentUser`. `AuthScreen` shows email when configured, otherwise the demo picker.

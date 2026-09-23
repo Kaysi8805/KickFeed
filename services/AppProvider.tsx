@@ -53,6 +53,7 @@ import {
   upsertRemotePushDevice,
   type PushRemoteStatus,
 } from '@/services/pushDevices';
+import { demoModeEnabled, shouldDropDemoSession } from '@/lib/demoMode';
 import { isSupabaseConfigured, getSupabaseClient } from '@/services/supabase';
 import {
   addComment as addCommentState,
@@ -232,7 +233,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        const persisted = hydratePersisted(raw);
+        const restored = hydratePersisted(raw);
+        const persisted = shouldDropDemoSession(restored.authMode, demoModeEnabled())
+          ? signOutState(restored)
+          : restored;
         const client = getSupabaseClient();
         if (!client) {
           if (!cancelled) {
@@ -264,10 +268,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
         unsub = () => data.subscription.unsubscribe();
 
+        const timer = setTimeout(() => {
+          if (cancelled || booted) return;
+          booted = true;
+          setState(persisted);
+          setReady(true);
+        }, 8000);
         try {
           finishBoot(await auth.getSession());
         } catch {
-          finishBoot(null);
+          if (!cancelled && !booted) {
+            booted = true;
+            setState(persisted);
+            setReady(true);
+          }
+        } finally {
+          clearTimeout(timer);
         }
       } catch {
         if (!cancelled) setState(defaults());

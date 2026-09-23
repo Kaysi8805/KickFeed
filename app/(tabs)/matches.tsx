@@ -9,8 +9,16 @@ import { MatchRow } from '@/components/match/MatchRow';
 import { SearchButton } from '@/components/search/SearchEntry';
 import { TvButton } from '@/components/tv/TvButton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SafeBoundary } from '@/components/ui/SafeBoundary';
 import { Screen } from '@/components/ui/Screen';
-import { CATALOG_ERROR_BODY, CATALOG_ERROR_TITLE, matchesDayCaption, matchesEmptyBody } from '@/lib/honesty';
+import {
+  CATALOG_ERROR_BODY,
+  CATALOG_ERROR_TITLE,
+  MATCH_SECTION_ERROR_BODY,
+  MATCH_SECTION_ERROR_TITLE,
+  matchesDayCaption,
+  matchesEmptyBody,
+} from '@/lib/honesty';
 import { entityHref } from '@/lib/entityNav';
 import {
   filterMatchesOnDay,
@@ -33,7 +41,14 @@ export default function MatchesScreen() {
   const [selectedDay, setSelectedDay] = useState(todayMatchDay);
   const today = todayMatchDay();
   const days = useMemo(() => matchDayStrip(), [today]);
-  const fixtures = useMemo(() => football.getFixtures(), [tick, catalog.lastSyncedAt, catalog.loading]);
+  const loaded = useMemo(() => {
+    try {
+      return { fixtures: football.getFixtures(), failed: false as const };
+    } catch {
+      return { fixtures: [], failed: true as const };
+    }
+  }, [tick, catalog.lastSyncedAt, catalog.loading]);
+  const fixtures = loaded.fixtures;
   const favLeagues = useMemo(() => expandFavoriteIds(favoriteLeagueIds, 'league'), [favoriteLeagueIds, catalog.lastSyncedAt]);
   const relation = matchDayRelation(selectedDay);
 
@@ -75,15 +90,16 @@ export default function MatchesScreen() {
         <CatalogStatus />
       </View>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {catalog.source === 'live' && catalog.loading && grouped.length === 0 ? (
-          <EmptyState title="Loading matches" body={`Fetching ${catalog.geoLabel} fixtures.`} />
-        ) : catalog.source === 'live' && catalog.error && grouped.length === 0 ? (
+        <SafeBoundary title={MATCH_SECTION_ERROR_TITLE} body={MATCH_SECTION_ERROR_BODY}>
+        {loaded.failed || (catalog.source === 'live' && catalog.error && grouped.length === 0) ? (
           <EmptyState
             title={CATALOG_ERROR_TITLE}
             body={CATALOG_ERROR_BODY}
             actionLabel="Retry"
             onAction={() => void football.refresh()}
           />
+        ) : catalog.source === 'live' && catalog.loading && grouped.length === 0 ? (
+          <EmptyState title="Loading matches" body={`Fetching ${catalog.geoLabel} fixtures.`} />
         ) : grouped.length === 0 ? (
           <EmptyState
             title={relation === 'today' ? 'No matches today' : 'No matches on this day'}
@@ -106,6 +122,7 @@ export default function MatchesScreen() {
             </View>
           ))
         )}
+        </SafeBoundary>
       </ScrollView>
     </Screen>
   );

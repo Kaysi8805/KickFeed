@@ -6,14 +6,21 @@ import { PostCard } from '@/components/feed/PostCard';
 import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SafeBoundary } from '@/components/ui/SafeBoundary';
 import { Screen } from '@/components/ui/Screen';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { deviceAlertsCopy } from '@/lib/favoritePush';
 import {
+  ALERTS_UNAVAILABLE_BODY,
+  ALERTS_UNAVAILABLE_TITLE,
   BLOCKED_LIST_EMPTY_BODY,
   BLOCKED_LIST_EMPTY_TITLE,
+  FAN_PICKS_NOT_GAMBLING,
   moderationDisclaimer,
 } from '@/lib/honesty';
+import { demoModeEnabled } from '@/lib/demoMode';
+import { appChannelFromEnv, isStoreFacingChannel } from '@/lib/storeChannel';
+import { matchAlertsIntro, profileAccountNote } from '@/lib/storeCopy';
 import { shouldPersistModeration } from '@/lib/moderation';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
@@ -57,6 +64,8 @@ export default function ProfileScreen() {
   const tvCountry = tv.getCountry(resolveTvCountryId(currentUser.tvCountryId));
   const blockedPeople = users.filter((u) => blockedUserIds.includes(u.id));
   const honesty = moderationDisclaimer(shouldPersistModeration(supabaseConfigured, authMode));
+  const storeFacing = isStoreFacingChannel(appChannelFromEnv());
+  const demo = demoModeEnabled();
   const pushHint =
     pushNote ??
     deviceAlertsCopy({
@@ -65,6 +74,7 @@ export default function ProfileScreen() {
       permission: pushPrefs.enabled ? 'granted' : 'undetermined',
       token: pushToken,
       platform: Platform.OS === 'web' ? 'web' : 'native',
+      audience: storeFacing ? 'store' : 'dev',
       remote:
         pushRemote === 'synced' ||
         pushRemote === 'error' ||
@@ -152,7 +162,16 @@ export default function ProfileScreen() {
             <Pressable style={styles.btn} onPress={() => router.push('/leaderboard')}>
               <Text style={styles.btnText}>Leaderboard</Text>
             </Pressable>
+            <Pressable
+              style={styles.btn}
+              onPress={() => router.push('/about')}
+              accessibilityRole="link"
+              accessibilityLabel="About, privacy, and support"
+            >
+              <Text style={styles.btnText}>About</Text>
+            </Pressable>
           </View>
+          <Text style={styles.legalNote}>{FAN_PICKS_NOT_GAMBLING}</Text>
           {tvCountry ? (
             <Pressable style={styles.tvRow} onPress={() => router.push('/tv')}>
               <Text style={styles.tvLabel}>
@@ -207,14 +226,11 @@ export default function ProfileScreen() {
             {authMode === 'supabase' ? 'Sign out' : supabaseConfigured ? 'Switch account' : 'Switch demo user'}
           </Text>
         </Pressable>
+        <SafeBoundary title={ALERTS_UNAVAILABLE_TITLE} body={ALERTS_UNAVAILABLE_BODY}>
         <View style={styles.alerts}>
           <Text style={styles.alertsKicker}>MATCH ALERTS</Text>
           <Text style={styles.alertsTitle}>Kickoff soon and goals</Text>
-          <Text style={styles.alertsBody}>
-            Favorite clubs only. Kickoff is one reminder per match; goals fire when the score ticks up. With email
-            sign-in, the same alerts can arrive after you close the app. Expo Go on Android often needs a dev build
-            for a remote token.
-          </Text>
+          <Text style={styles.alertsBody}>{matchAlertsIntro(storeFacing)}</Text>
           {pushPrefs.enabled ? (
             <>
               <Pressable
@@ -239,15 +255,17 @@ export default function ProfileScreen() {
                   {pushPrefs.goals ? 'On' : 'Off'}
                 </Text>
               </Pressable>
-              <Pressable
-                style={styles.alertsAction}
-                onPress={() => void scheduleDemoNotification('KickFeed test', 'If you see this, device alerts work.')}
-                accessibilityRole="button"
-                accessibilityLabel="Send a test alert"
-              >
-                <Text style={styles.switcherText}>Send a test alert</Text>
-              </Pressable>
-              {authMode === 'supabase' && pushToken ? (
+              {demo ? (
+                <Pressable
+                  style={styles.alertsAction}
+                  onPress={() => void scheduleDemoNotification('KickFeed test', 'If you see this, device alerts work.')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send a test alert"
+                >
+                  <Text style={styles.switcherText}>Send a test alert</Text>
+                </Pressable>
+              ) : null}
+              {demo && authMode === 'supabase' && pushToken ? (
                 <Pressable
                   style={styles.alertsAction}
                   disabled={remoteBusy}
@@ -286,12 +304,9 @@ export default function ProfileScreen() {
           )}
           <Text style={styles.demoNote}>{pushHint}</Text>
         </View>
+        </SafeBoundary>
         <Text style={styles.demoNote}>
-          {authMode === 'supabase'
-            ? 'Favorites, predictions, MOTM votes, reports, blocks, DMs, and match-alert tokens on this device are stored under your Supabase user id. Live ranking, safety lists, DMs, and device push tokens sync to KickFeed Postgres.'
-            : supabaseConfigured
-              ? 'Demo profile — local ranking, safety lists, and DMs only. Sign out and use email to join the live KickFeed table.'
-              : 'Demo mode — ranking, safety lists, and DMs are this device + seeded fans. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for live ranking, reports, blocks, and DMs.'}
+          {profileAccountNote({ authMode, supabaseConfigured, storeFacing })}
         </Text>
       </ScrollView>
     </Screen>
@@ -435,6 +450,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.md,
     minHeight: 44,
+  },
+  legalNote: {
+    ...type.caption,
+    color: colors.textDim,
+    textAlign: 'center',
+    marginTop: spacing.md,
+    fontWeight: '500',
+    lineHeight: 18,
   },
   demoNote: { ...type.caption, color: colors.textDim, textAlign: 'center', marginTop: spacing.sm, fontWeight: '500' },
 });

@@ -10,6 +10,7 @@ import {
   isPredictionOpen,
   scoreline,
 } from '@/lib/engagement';
+import { FAN_PICKS_NOT_GAMBLING } from '@/lib/honesty';
 import { colors, radius, spacing, type } from '@/theme';
 
 function Stepper({
@@ -92,10 +93,10 @@ export function PredictSection({
       <Text style={styles.kicker}>{open ? 'Pick the score before kickoff' : 'Predictions locked'}</Text>
       <Text style={styles.lede}>
         {open
-          ? 'Friendly fan picks only — not a betting market. You can update until kickoff.'
+          ? `${FAN_PICKS_NOT_GAMBLING} You can update until kickoff.`
           : mine
-            ? `You predicted ${scoreline(mine.homeScore, mine.awayScore)} before kickoff. Picks freeze once the match is live.`
-            : 'This match has started. Score picks lock at kickoff — no late entries.'}
+            ? `You predicted ${scoreline(mine.homeScore, mine.awayScore)} before kickoff. Picks freeze once the match is live. ${FAN_PICKS_NOT_GAMBLING}`
+            : `This match has started. Score picks lock at kickoff. ${FAN_PICKS_NOT_GAMBLING}`}
       </Text>
 
       <View style={[styles.pickCard, !open && styles.pickCardLocked]}>
