@@ -59,12 +59,12 @@ describe('honesty copy', () => {
     expect(MODERATION_LIVE_COPY).toMatch(/no public moderation inbox/i);
   });
 
-  it('keeps DM copy honest about demo device vs Postgres, and not a group inbox', () => {
+  it('keeps DM copy honest about demo device vs Postgres, including groups', () => {
     expect(dmDisclaimer(false)).toBe(DM_DEMO_COPY);
     expect(dmDisclaimer(true)).toBe(DM_LIVE_COPY);
     expect(DM_DEMO_COPY).toMatch(/this device/i);
     expect(DM_LIVE_COPY).toMatch(/Postgres/i);
-    expect(DM_LIVE_COPY).toMatch(/not a group inbox/i);
+    expect(DM_LIVE_COPY).toMatch(/group/i);
     expect(DM_DEMO_COPY).toMatch(/Slack/i);
   });
 

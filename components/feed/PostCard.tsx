@@ -1,9 +1,12 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View, Platform } from 'react-native';
 
 import { EntityText } from '@/components/feed/EntityText';
+import { sharedPayloadForPost } from '@/components/feed/postShare';
+import { ShareToChatSheet } from '@/components/feed/ShareToChatSheet';
 import { HomeReasonLabel } from '@/components/feed/HomeReasonLabel';
 import { LiveBadge } from '@/components/match/LiveBadge';
 import { SafetyMenu } from '@/components/moderation/SafetyMenu';
@@ -41,6 +44,8 @@ export function PostCard({
   const live = match?.status === 'live' || match?.status === 'ht';
   const matchLabel = match && home && away ? fixtureScoreLabel(football, match) : undefined;
   const canShare = isShareAvailable();
+  const sharePayload = sharedPayloadForPost(post, author);
+  const [sendOpen, setSendOpen] = useState(false);
 
   return (
     <View style={[styles.card, live && styles.liveCard]}>
@@ -106,6 +111,19 @@ export function PostCard({
             <Text style={styles.actionText}>Chat</Text>
           </Pressable>
         ) : null}
+        {sharePayload ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Send in KickFeed"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+              setSendOpen(true);
+            }}
+            style={styles.action}
+          >
+            <Text style={[styles.actionText, styles.actionShare]}>Send</Text>
+          </Pressable>
+        ) : null}
         {canShare ? (
           <Pressable
             accessibilityRole="button"
@@ -125,6 +143,9 @@ export function PostCard({
           </Pressable>
         ) : null}
       </View>
+      {sharePayload ? (
+        <ShareToChatSheet visible={sendOpen} payload={sharePayload} onClose={() => setSendOpen(false)} />
+      ) : null}
     </View>
   );
 }
@@ -178,6 +199,7 @@ const styles = StyleSheet.create({
   matchChipText: { ...type.badge, color: colors.text, letterSpacing: 0.2, fontVariant: ['tabular-nums'] as Array<'tabular-nums'> },
   actions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.lg,
     marginTop: 4,
     paddingTop: spacing.sm,

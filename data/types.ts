@@ -304,6 +304,8 @@ export interface AppNotification {
   matchId?: string;
   /** Actor or related user (never equal to recipientId for self-activity). */
   userId?: string;
+  /** Set when this notification came from a group chat. */
+  groupId?: string;
 }
 
 export const REPORT_TARGET_TYPES = ['post', 'profile', 'comment', 'dm'] as const;
@@ -322,6 +324,21 @@ export interface UserReport {
   createdAt: string;
 }
 
+/**
+ * In-app post card inside a 1:1 or group message.
+ * No URL — KickFeed has no public post route to deep-link.
+ */
+export interface SharedPostPayload {
+  postId: string;
+  authorId: string;
+  authorName: string;
+  authorHandle: string;
+  snippet: string;
+  matchLabel?: string;
+  /** Real match route id when the post is attached to a fixture. */
+  matchId?: string;
+}
+
 /** 1:1 direct message. Keyed by demo seed id or auth.users uuid. */
 export interface DirectMessage {
   id: string;
@@ -329,4 +346,24 @@ export interface DirectMessage {
   recipientId: string;
   text: string;
   createdAt: string;
+  share?: SharedPostPayload;
+}
+
+/** Group thread. Members are demo ids or auth uuids. `title` null → derive from names. */
+export interface DmGroup {
+  id: string;
+  title: string | null;
+  createdBy: string;
+  memberIds: string[];
+  createdAt: string;
+}
+
+/** Message in a group. Stored beside 1:1 rows when synced (same `direct_messages` table). */
+export interface GroupMessage {
+  id: string;
+  groupId: string;
+  senderId: string;
+  text: string;
+  createdAt: string;
+  share?: SharedPostPayload;
 }

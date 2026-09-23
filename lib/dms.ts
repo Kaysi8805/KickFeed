@@ -1,4 +1,5 @@
-import type { AppNotification, DirectMessage, User } from '@/data/types';
+import type { AppNotification, DirectMessage, SharedPostPayload, User } from '@/data/types';
+import { parseSharedPost } from '@/lib/shareToChat';
 import { DM_SLOW_MODE_HINT } from '@/lib/honesty';
 import {
   formatSlowModeWait,
@@ -21,6 +22,7 @@ export type SendDmInput = {
   senderId: string;
   recipientId: string;
   text: string;
+  share?: SharedPostPayload;
 };
 
 export type SendDmResult =
@@ -68,7 +70,10 @@ export function parseDirectMessage(value: unknown): DirectMessage | null {
       : null;
   if (!createdAt) return null;
   const id = typeof row.id === 'string' && row.id.trim() ? row.id.trim() : `dm-${Date.parse(createdAt)}`;
-  return { id, senderId, recipientId, text, createdAt };
+  const message: DirectMessage = { id, senderId, recipientId, text, createdAt };
+  const share = parseSharedPost(row.share);
+  if (share) message.share = share;
+  return message;
 }
 
 export function buildDirectMessage(input: SendDmInput, now: number, id?: string): DirectMessage | null {
@@ -78,6 +83,7 @@ export function buildDirectMessage(input: SendDmInput, now: number, id?: string)
     recipientId: input.recipientId,
     text: input.text,
     createdAt: new Date(now).toISOString(),
+    share: input.share,
   });
 }
 
@@ -188,24 +194,54 @@ export function unreadDmCount(
   return inboxThreads(messages, userId, hiddenPeerIds, reads).reduce((sum, thread) => sum + thread.unreadCount, 0);
 }
 
-function latestSentMs(rows: DirectMessage[]): number | null {
-  let max = Number.NEGATIVE_INFINITY;
+export function stampsAtOrBefore(rows: readonly { createdAt: string }[], now: number): number[] {
+  const out: number[] = [];
   for (const row of rows) {
     const stamp = Date.parse(row.createdAt);
-    if (Number.isFinite(stamp) && stamp > max) max = stamp;
+    if (Number.isFinite(stamp) && stamp <= now) out.push(stamp);
   }
-  return Number.isFinite(max) ? max : null;
+  return out;
+}
+
+/** Shared 20s thread cooldown + 8 / 2 min burst used by 1:1 and group sends. */
+export function slowModeFromStamps(
+  threadStamps: readonly number[],
+  allStamps: readonly number[],
+  now: number,
+): SlowModeDecision {
+  let lastThread = Number.NEGATIVE_INFINITY;
+  for (const stamp of threadStamps) {
+    if (stamp > lastThread) lastThread = stamp;
+  }
+  if (lastThread !== Number.NEGATIVE_INFINITY) {
+    const retryAt = lastThread + DM_SLOW_MODE_COOLDOWN_MS;
+    if (now < retryAt) {
+      return { ok: false, remainingMs: retryAt - now, retryAt, kind: 'cooldown' };
+    }
+  }
+
+  const burst = allStamps.filter((stamp) => now - stamp < DM_SLOW_MODE_BURST_WINDOW_MS);
+  if (burst.length >= DM_SLOW_MODE_BURST_COUNT) {
+    const oldest = Math.min(...burst);
+    const retryAt = oldest + DM_SLOW_MODE_BURST_WINDOW_MS;
+    if (now < retryAt) {
+      return { ok: false, remainingMs: retryAt - now, retryAt, kind: 'burst' };
+    }
+  }
+  return { ok: true };
 }
 
 /**
  * DM rate limit for the signed-in identity (demo id or uuid).
  * 20s cooldown in the current thread; 8 messages / 2 min across all DMs.
+ * `otherSends` (group messages) count toward the burst only.
  */
 export function dmSlowMode(
   messages: DirectMessage[],
   userId: string | null | undefined,
   peerId: string | null | undefined,
   now: number,
+  otherSends: readonly { createdAt: string }[] = [],
 ): SlowModeDecision {
   if (!userId) return { ok: true };
   const mine = messages.filter((row) => row.senderId === userId);
@@ -213,32 +249,11 @@ export function dmSlowMode(
     peerId && isPersistedUserId(peerId)
       ? mine.filter((row) => dmThreadId(row.senderId, row.recipientId) === dmThreadId(userId, peerId))
       : mine;
-
-  const lastThread = latestSentMs(
-    thread.filter((row) => {
-      const stamp = Date.parse(row.createdAt);
-      return Number.isFinite(stamp) && stamp <= now;
-    }),
+  return slowModeFromStamps(
+    stampsAtOrBefore(thread, now),
+    [...stampsAtOrBefore(mine, now), ...stampsAtOrBefore(otherSends, now)],
+    now,
   );
-  if (lastThread != null) {
-    const retryAt = lastThread + DM_SLOW_MODE_COOLDOWN_MS;
-    if (now < retryAt) {
-      return { ok: false, remainingMs: retryAt - now, retryAt, kind: 'cooldown' };
-    }
-  }
-
-  const burst = mine.filter((row) => {
-    const stamp = Date.parse(row.createdAt);
-    return Number.isFinite(stamp) && stamp <= now && now - stamp < DM_SLOW_MODE_BURST_WINDOW_MS;
-  });
-  if (burst.length >= DM_SLOW_MODE_BURST_COUNT) {
-    const oldest = Math.min(...burst.map((row) => Date.parse(row.createdAt)));
-    const retryAt = oldest + DM_SLOW_MODE_BURST_WINDOW_MS;
-    if (now < retryAt) {
-      return { ok: false, remainingMs: retryAt - now, retryAt, kind: 'burst' };
-    }
-  }
-  return { ok: true };
 }
 
 export function dmSlowModeComposerCopy(decision: SlowModeDecision): string {

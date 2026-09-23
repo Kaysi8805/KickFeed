@@ -18,7 +18,10 @@ import {
   mergeRemoteModeration,
   notificationsFor,
   rememberProfiles,
+  createDmGroup,
+  leaveDmGroup,
   sendDirectMessage,
+  sendGroupMessage,
   setMotmVote,
   setPrediction,
   signInAccount,
@@ -756,6 +759,86 @@ describe('direct messages', () => {
     ]);
     expect(merged.directMessages.some((row) => row.id === 'dm-cloud')).toBe(true);
     expect(merged.directMessages.length).toBe(demoCount + 1);
+  });
+
+  it('creates a group from mutual friends and shares a post into it', () => {
+    let state = signInDemo(defaults(), 'maya');
+    const created = createDmGroup(state, ['omar', 'jordan'], 'Match night', 50_000);
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const group = created.result.group;
+    state = created.state;
+    expect(group.memberIds).toEqual(['maya', 'omar', 'jordan']);
+    expect(group.title).toBe('Match night');
+
+    const shared = sendGroupMessage(
+      state,
+      group.id,
+      'Maya Chen (@mayagoals) on KickFeed: Still believe.',
+      80_000,
+      {
+        postId: 'p2',
+        authorId: 'maya',
+        authorName: 'Maya Chen',
+        authorHandle: 'mayagoals',
+        snippet: 'Still believe.',
+        matchId: 'fx-liv-ars',
+      },
+    );
+    expect(shared.result.ok).toBe(true);
+    if (!shared.result.ok) return;
+    expect(shared.result.message.share?.postId).toBe('p2');
+    expect(shared.result.message.share && 'url' in shared.result.message.share).toBe(false);
+    expect(shared.state.notifications.some((note) => note.groupId === group.id && note.recipientId === 'omar')).toBe(true);
+
+    state = blockUser(shared.state, 'omar');
+    const again = sendGroupMessage(state, group.id, 'still in', 120_000);
+    expect(again.result.ok).toBe(false);
+    const blockedCreate = createDmGroup(state, ['omar', 'jordan'], null, 130_000);
+    expect(blockedCreate.result.ok).toBe(false);
+
+    const hydrated = hydratePersisted(JSON.stringify(shared.state));
+    expect(hydrated.dmGroups).toHaveLength(1);
+    expect(hydrated.groupMessages[0]?.share?.snippet).toBe('Still believe.');
+  });
+
+  it('removes the signed-in member when they leave, and ignores a second leave', () => {
+    let state = signInDemo(defaults(), 'maya');
+    const created = createDmGroup(state, ['omar', 'jordan'], null, 50_000);
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    state = created.state;
+    const groupId = created.result.group.id;
+
+    const left = leaveDmGroup(state, groupId);
+    expect(left).not.toBe(state);
+    expect(left.dmGroups.find((group) => group.id === groupId)?.memberIds).toEqual(['omar', 'jordan']);
+
+    const again = leaveDmGroup(left, groupId);
+    expect(again).toBe(left);
+
+    const asOmar = signInDemo(state, 'omar');
+    const omarLeft = leaveDmGroup(asOmar, groupId);
+    expect(omarLeft.dmGroups.find((group) => group.id === groupId)?.memberIds).toEqual(['maya', 'jordan']);
+  });
+
+  it('drops a hydrated group that has only one member', () => {
+    const next = hydratePersisted(
+      JSON.stringify({
+        schemaVersion: 2,
+        currentUserId: 'maya',
+        dmGroups: [
+          {
+            id: 'grp-abcd-maya',
+            title: null,
+            createdBy: 'maya',
+            memberIds: ['maya'],
+            createdAt: '2026-09-23T12:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    expect(next.dmGroups).toEqual([]);
   });
 });
 

@@ -7,6 +7,7 @@ import {
   dmToRemote,
   fetchRemoteDirectMessages,
   insertRemoteDirectMessage,
+  insertRemoteDmGroup,
   parseRemoteDirectMessage,
 } from '@/services/dms';
 
@@ -118,8 +119,66 @@ describe('remote dm rows', () => {
     ).toBe('slow_mode');
   });
 
+  it('keeps group rows on direct_messages and refuses share urls', () => {
+    const sql = readFileSync(join(process.cwd(), 'supabase/migrations', '20260923120000_dm_groups.sql'), 'utf8');
+    expect(sql).toMatch(/group_id/);
+    expect(sql).toMatch(/dm_group_members/);
+    expect(sql).toMatch(/user_blocks/);
+    expect(sql).toMatch(/private\.dm_is_group_member/);
+    expect(sql).toMatch(/not \(share \? 'url'\)/);
+    expect(sql).toMatch(/not \(share \? 'link'\)/);
+    expect(sql).toMatch(/kickfeed_create_dm_group/);
+    expect(sql).toMatch(/revoke insert on public\.dm_groups/);
+    expect(sql).toMatch(/enable row level security/);
+  });
+
+  it('creates a group with one RPC so a member failure cannot orphan the row', async () => {
+    const calls: Array<{ fn: string; args: Record<string, unknown> }> = [];
+    const inserts: string[] = [];
+    const client = asDmsClient({
+      from: (table: string) => ({
+        select: () => ({
+          eq: async () => ({ data: [], error: null }),
+          in: async () => ({ data: [], error: null }),
+        }),
+        insert: async () => {
+          inserts.push(table);
+          return { error: null };
+        },
+        delete: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
+      }),
+      rpc: async (fn, args) => {
+        calls.push({ fn, args: args ?? {} });
+        return { error: { message: 'blocked' } };
+      },
+    });
+    const saved = await insertRemoteDmGroup(client, {
+      id: 'grp-abcd-maya',
+      title: 'Match night',
+      createdBy: 'maya',
+      memberIds: ['maya', 'omar', 'jordan'],
+      createdAt: '2026-09-23T12:00:00.000Z',
+    });
+    expect(saved.error).toBe('blocked');
+    expect(inserts).toEqual([]);
+    expect(calls).toEqual([
+      {
+        fn: 'kickfeed_create_dm_group',
+        args: {
+          p_id: 'grp-abcd-maya',
+          p_title: 'Match night',
+          p_member_ids: ['maya', 'omar', 'jordan'],
+        },
+      },
+    ]);
+  });
+
   it('stamps created_at in the insert trigger so client clocks cannot skip slow-mode', () => {
-    for (const file of ['20260919120000_direct_messages.sql', '20260919133000_dm_stamp_created_at.sql']) {
+    for (const file of [
+      '20260919120000_direct_messages.sql',
+      '20260919133000_dm_stamp_created_at.sql',
+      '20260923120000_dm_groups.sql',
+    ]) {
       const sql = readFileSync(join(process.cwd(), 'supabase/migrations', file), 'utf8');
       expect(sql).toMatch(/new\.created_at\s*:=\s*now\(\)/i);
     }

@@ -26,7 +26,9 @@ export function HeaderBar({
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
       ) : null}
-      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.title} numberOfLines={1}>
+        {title}
+      </Text>
       <View style={styles.right}>{right}</View>
     </View>
   );
