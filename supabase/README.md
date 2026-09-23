@@ -20,7 +20,7 @@ Reports and blocks: authenticated users can insert/select their own `user_report
 
 Direct messages: participants select/insert `direct_messages` when they are `sender_id` or `recipient_id` and neither person blocked the other. The insert trigger stamps `created_at := now()` (client clocks ignored) then enforces `slow_mode` (20s / thread + 8 / 2 min). Text 1–1000 chars.
 
-Group chats use the same `direct_messages` table. A group row sets `group_id` and leaves `recipient_id` null. Membership lives in `dm_groups` / `dm_group_members`. The creator inserts members; a block in either direction refuses that member and later sends into the group. Optional `share` jsonb is an in-app post card and must not include a `url`. Demo ids stay in AsyncStorage.
+Group chats use the same `direct_messages` table. A group row sets `group_id` and leaves `recipient_id` null. Membership lives in `dm_groups` / `dm_group_members`. `kickfeed_create_dm_group` inserts the group and every member in one transaction (a block rolls the whole create back). Direct inserts into those tables are revoked. Optional `share` jsonb is an in-app post card and must not include a `url`, `href`, or `link`. Mutual friends are checked in the app; Postgres has no friends graph. Demo ids stay in AsyncStorage.
 
 ### Apply notes (Karol)
 

@@ -56,6 +56,7 @@ alter table public.direct_messages
       jsonb_typeof(share) = 'object'
       and not (share ? 'url')
       and not (share ? 'href')
+      and not (share ? 'link')
       and char_length(share::text) <= 2000
     )
   );
@@ -156,8 +157,74 @@ create policy "members can leave"
 
 revoke all on public.dm_groups from anon, public;
 revoke all on public.dm_group_members from anon, public;
-grant select, insert on public.dm_groups to authenticated;
-grant select, insert, delete on public.dm_group_members to authenticated;
+-- Creates go through kickfeed_create_dm_group so the group and its members
+-- commit together. Direct insert is revoked; select/leave stay.
+grant select on public.dm_groups to authenticated;
+grant select, delete on public.dm_group_members to authenticated;
+
+-- One transaction: a block or member failure rolls the group row back.
+-- Mutual friends are enforced in the client; Postgres has no friends graph.
+create or replace function public.kickfeed_create_dm_group(
+  p_id text,
+  p_title text,
+  p_member_ids text[]
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  uid text := (select auth.uid())::text;
+  member_count int;
+begin
+  if uid is null then
+    raise exception 'not authenticated';
+  end if;
+  if p_id is null or char_length(p_id) < 4 or char_length(p_id) > 80 then
+    raise exception 'bad_group';
+  end if;
+  if p_title is not null and (char_length(btrim(p_title)) < 1 or char_length(btrim(p_title)) > 80) then
+    raise exception 'bad_title';
+  end if;
+  if p_member_ids is null or not (uid = any (p_member_ids)) then
+    raise exception 'bad_members';
+  end if;
+
+  select count(distinct member_id) into member_count
+  from unnest(p_member_ids) as members(member_id);
+  if member_count < 3 or member_count > 21 then
+    raise exception 'bad_members';
+  end if;
+
+  if exists (
+    select 1
+    from unnest(p_member_ids) as members(member_id)
+    where member_id <> uid
+      and exists (
+        select 1
+        from public.user_blocks b
+        where (b.blocker_id = uid and b.blocked_id = member_id)
+           or (b.blocker_id = member_id and b.blocked_id = uid)
+      )
+  ) then
+    raise exception 'blocked';
+  end if;
+
+  insert into public.dm_groups (id, title, created_by)
+  values (p_id, nullif(btrim(p_title), ''), uid);
+
+  insert into public.dm_group_members (group_id, user_id)
+  select distinct p_id, member_id
+  from unnest(p_member_ids) as members(member_id);
+end;
+$$;
+
+revoke insert on public.dm_groups from anon, authenticated, public;
+revoke insert on public.dm_group_members from anon, authenticated, public;
+
+revoke all on function public.kickfeed_create_dm_group(text, text, text[]) from public, anon;
+grant execute on function public.kickfeed_create_dm_group(text, text, text[]) to authenticated;
 
 -- Read / send: 1:1 unchanged, plus group rows for current members.
 -- A group send is refused when the sender is blocked with any other member.

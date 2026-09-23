@@ -22,6 +22,7 @@ export type DmsClient = {
       };
     };
   };
+  rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: DmRowError | null }>;
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -80,7 +81,15 @@ export function parseRemoteGroupMessage(value: unknown): GroupMessage | null {
   });
 }
 
-export function asDmsClient(client: { from: (table: string) => unknown } | null): DmsClient | null {
+export function asDmsClient(
+  client: {
+    from: (table: string) => unknown;
+    rpc?: (
+      fn: string,
+      args?: Record<string, unknown>,
+    ) => PromiseLike<{ error: { message: string } | null }>;
+  } | null,
+): DmsClient | null {
   if (!client) return null;
   return {
     from: (table: string) => {
@@ -135,6 +144,11 @@ export function asDmsClient(client: { from: (table: string) => unknown } | null)
           }),
         }),
       };
+    },
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      if (!client.rpc) return { error: { message: 'not_configured' } };
+      const { error } = await client.rpc(fn, args);
+      return { error: error ? { message: error.message } : null };
     },
   };
 }
@@ -283,17 +297,13 @@ export async function insertRemoteDmGroup(
   if (!isGroupId(group.id) || !isPersistedUserId(group.createdBy)) return { error: 'bad_identity' };
   if (!group.memberIds.includes(group.createdBy) || group.memberIds.length < 3) return { error: 'bad_members' };
   try {
-    const created = await client.from('dm_groups').insert({
-      id: group.id,
-      title: group.title,
-      created_by: group.createdBy,
+    // One RPC. Postgres rolls the group row back if any member insert fails.
+    const { error } = await client.rpc('kickfeed_create_dm_group', {
+      p_id: group.id,
+      p_title: group.title,
+      p_member_ids: group.memberIds,
     });
-    const createdError = remoteWriteError(created.error?.message);
-    if (createdError) return { error: createdError };
-    const members = await client.from('dm_group_members').insert(
-      group.memberIds.map((userId) => ({ group_id: group.id, user_id: userId })),
-    );
-    return { error: remoteWriteError(members.error?.message) };
+    return { error: remoteWriteError(error?.message) };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'insert failed' };
   }

@@ -9,6 +9,7 @@ import {
   displayGroupTitle,
   groupSendBlockReason,
   groupSlowMode,
+  parseDmGroup,
   planDmGroup,
   unreadInGroup,
 } from '@/lib/groups';
@@ -80,6 +81,20 @@ describe('planDmGroup', () => {
         title: 'x'.repeat(81),
       }).ok,
     ).toBe(false);
+  });
+});
+
+describe('parseDmGroup', () => {
+  it('drops a group that only has one member', () => {
+    expect(
+      parseDmGroup({
+        id: 'grp-abcd-maya',
+        title: null,
+        createdBy: 'maya',
+        memberIds: ['maya'],
+        createdAt: '2026-09-23T12:00:00.000Z',
+      }),
+    ).toBeNull();
   });
 });
 

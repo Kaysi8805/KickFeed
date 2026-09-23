@@ -19,6 +19,7 @@ import {
   notificationsFor,
   rememberProfiles,
   createDmGroup,
+  leaveDmGroup,
   sendDirectMessage,
   sendGroupMessage,
   setMotmVote,
@@ -799,6 +800,45 @@ describe('direct messages', () => {
     const hydrated = hydratePersisted(JSON.stringify(shared.state));
     expect(hydrated.dmGroups).toHaveLength(1);
     expect(hydrated.groupMessages[0]?.share?.snippet).toBe('Still believe.');
+  });
+
+  it('removes the signed-in member when they leave, and ignores a second leave', () => {
+    let state = signInDemo(defaults(), 'maya');
+    const created = createDmGroup(state, ['omar', 'jordan'], null, 50_000);
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    state = created.state;
+    const groupId = created.result.group.id;
+
+    const left = leaveDmGroup(state, groupId);
+    expect(left).not.toBe(state);
+    expect(left.dmGroups.find((group) => group.id === groupId)?.memberIds).toEqual(['omar', 'jordan']);
+
+    const again = leaveDmGroup(left, groupId);
+    expect(again).toBe(left);
+
+    const asOmar = signInDemo(state, 'omar');
+    const omarLeft = leaveDmGroup(asOmar, groupId);
+    expect(omarLeft.dmGroups.find((group) => group.id === groupId)?.memberIds).toEqual(['maya', 'jordan']);
+  });
+
+  it('drops a hydrated group that has only one member', () => {
+    const next = hydratePersisted(
+      JSON.stringify({
+        schemaVersion: 2,
+        currentUserId: 'maya',
+        dmGroups: [
+          {
+            id: 'grp-abcd-maya',
+            title: null,
+            createdBy: 'maya',
+            memberIds: ['maya'],
+            createdAt: '2026-09-23T12:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    expect(next.dmGroups).toEqual([]);
   });
 });
 
