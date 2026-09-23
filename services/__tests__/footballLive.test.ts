@@ -95,7 +95,9 @@ function fakeHttp(): FootballHttp {
       return [{
         team: { id: 40, name: 'Liverpool' },
         formation: '4-3-3',
-        startXI: [{ player: { id: 306, name: 'Salah', number: 11, pos: 'F' } }],
+        coach: { id: 1, name: 'Arne Slot' },
+        startXI: [{ player: { id: 306, name: 'Salah', number: 11, pos: 'F', grid: '4:3' } }],
+        substitutes: [{ player: { id: 999, name: 'Bench Player', number: 99, pos: 'M', grid: null } }],
       }];
     }
     return [];
@@ -165,6 +167,7 @@ describe('live football provider', () => {
     expect(live.relatedIds('match', 'fx-liv-ars')).toContain('9001');
     expect(live.relatedIds('match', '9001')).not.toContain('fx-facup-liv-ars');
     expect(live.relatedIds('match', '9201')).toEqual(expect.arrayContaining(['9201', 'fx-rma-bar']));
+    expect((http as ReturnType<typeof vi.fn>).mock.calls.some((call) => call[0] === '/fixtures/lineups')).toBe(false);
   });
 
   it('reuses the in-memory cache on a second hydrate within ttl', async () => {
@@ -198,7 +201,65 @@ describe('live football provider', () => {
     expect(live.getPlayer('p-liv-11')?.id).toBe('306');
     await live.ensureMatchDetail('9001');
     expect(live.getFixture('9001')?.events[0]?.type).toBe('goal');
-    expect(live.getLineups(live.getFixture('9001')!).home.players[0]?.playerId).toBe('306');
+    const lineupCalls = () => (http as ReturnType<typeof vi.fn>).mock.calls.filter((call) => call[0] === '/fixtures/lineups');
+    expect(lineupCalls()).toHaveLength(0);
+    expect(live.getLineups(live.getFixture('9001')!).home.players).toEqual([]);
+    expect(await live.ensureLineups('9001')).toBe('ready');
+    const sheet = live.getLineups(live.getFixture('9001')!);
+    expect(sheet.home.players[0]).toMatchObject({ playerId: '306', grid: { row: 4, col: 3 } });
+    expect(sheet.home.bench?.[0]?.playerId).toBe('999');
+    expect(sheet.home.source).toBe('sheet');
+    expect(sheet.home.coach).toBe('Arne Slot');
+    expect(lineupCalls()).toHaveLength(1);
+    expect(await live.ensureLineups('9001')).toBe('ready');
+    expect(lineupCalls()).toHaveLength(1);
+  });
+
+  it('caches an empty lineup response and does not invent an XI', async () => {
+    const base = fakeHttp();
+    const http = vi.fn(async (path: string, params?: Record<string, string | number | undefined>) => {
+      if (path === '/fixtures/lineups') return [];
+      return base(path, params);
+    });
+    let t = Date.parse('2026-09-16T12:00:00.000Z');
+    const live = createLiveFootballProvider({
+      fallback: mockFootballProvider,
+      http,
+      season: 2026,
+      now: () => t,
+    });
+    await live.hydrate();
+    const calls = () => http.mock.calls.filter((call) => call[0] === '/fixtures/lineups');
+    expect(await live.ensureLineups('fx-int-mil')).toBe('ready');
+    expect(calls()).toHaveLength(0);
+    expect(await live.ensureLineups('9201')).toBe('empty');
+    expect(live.getLineups(live.getFixture('9201')!).home).toMatchObject({ players: [], formation: '—' });
+    expect(live.getLineups(live.getFixture('9201')!).home.source).toBeUndefined();
+    expect(calls()).toHaveLength(1);
+    t += 60_000;
+    expect(await live.ensureLineups('9201')).toBe('empty');
+    expect(calls()).toHaveLength(1);
+    t += 10 * 60_000;
+    expect(await live.ensureLineups('9201')).toBe('empty');
+    expect(calls()).toHaveLength(2);
+  });
+
+  it('returns an error when lineups fail and leaves the cache empty', async () => {
+    const base = fakeHttp();
+    const http = vi.fn(async (path: string, params?: Record<string, string | number | undefined>) => {
+      if (path === '/fixtures/lineups') throw new Error('upstream');
+      return base(path, params);
+    });
+    const live = createLiveFootballProvider({
+      fallback: mockFootballProvider,
+      http,
+      season: 2026,
+      now: () => Date.parse('2026-09-16T12:00:00.000Z'),
+    });
+    await live.hydrate();
+    expect(await live.ensureLineups('9201')).toBe('error');
+    expect(live.getLineups(live.getFixture('9201')!).home.players).toEqual([]);
+    expect(live.getCachedLiveLineups(live.getFixture('9201')!)).toBeUndefined();
   });
 
   it('hydrates one player season and does not fan out /players for a squad', async () => {

@@ -141,18 +141,38 @@ export interface Scorer {
   assists: number;
 }
 
+/** API-Football `grid` cell. Row 1 is the goalkeeper; columns run across that row. */
+export interface LineupGrid {
+  row: number;
+  col: number;
+}
+
 export interface LineupPlayer {
   name: string;
   number: number;
   pos: PlayerPosition;
   playerId?: string;
+  /** Present only when the payload included a `row:col` grid. */
+  grid?: LineupGrid;
 }
 
 export interface Lineup {
   formation: string;
+  /** Starting XI. MOTM ballots from this list, not the bench. */
   players: LineupPlayer[];
+  /**
+   * Substitutes from the same payload.
+   * Omitted when the payload did not include a bench — never a guessed list.
+   */
+  bench?: LineupPlayer[];
   /** Head coach when a lineup payload already included one. */
   coach?: string;
+  /**
+   * `sheet` — published XI from `/fixtures/lineups` (official team sheet).
+   * `demo` — seeded mock catalog. Never label a demo XI as confirmed.
+   * Absent on an empty free-tier miss.
+   */
+  source?: 'sheet' | 'demo';
 }
 
 /** Home / away / total counts. Missing sides stay absent — never filled with a guessed 0. */

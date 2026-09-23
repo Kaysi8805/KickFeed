@@ -31,7 +31,9 @@ describe('entity catalog', () => {
     expect(fixture).toBeTruthy();
     const lineups = football.getLineups(fixture!);
     expect(lineups.home.players).toHaveLength(11);
-    expect(lineups.home.players.every((p) => p.playerId && football.getPlayer(p.playerId))).toBe(true);
+    expect(lineups.home.bench?.length).toBeGreaterThan(0);
+    expect(lineups.home.players.every((p) => p.grid && p.playerId && football.getPlayer(p.playerId))).toBe(true);
+    expect(lineups.home.bench?.every((p) => p.playerId && football.getPlayer(p.playerId))).toBe(true);
     expect(lineups.away.players.every((p) => p.playerId && football.getPlayer(p.playerId))).toBe(true);
   });
 

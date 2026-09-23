@@ -251,12 +251,29 @@ describe('football mappers', () => {
         { teamId: '40', leagueId: '39', season: 2026 },
       )?.coach,
     ).toBe('Arne Slot');
-    expect(mapLineup({
+    const coachOnly = mapLineup({
       team: { id: 40, name: 'Liverpool' },
       formation: '4-3-3',
       coach: { id: 1, name: ' Arne Slot ' },
       startXI: [],
-    }).coach).toBe('Arne Slot');
+    });
+    expect(coachOnly.coach).toBe('Arne Slot');
+    expect(coachOnly.source).toBeUndefined();
+    expect(coachOnly.players).toEqual([]);
+    const sheet = mapLineup({
+      team: { id: 40, name: 'Liverpool' },
+      formation: ' 4-3-3 ',
+      startXI: [{ player: { id: 306, name: 'Salah', number: 11, pos: 'F', grid: '4:2' } }],
+      substitutes: [{ player: { id: 999, name: 'Jones', number: 17, pos: 'M', grid: null } }],
+    });
+    expect(sheet).toMatchObject({
+      formation: '4-3-3',
+      source: 'sheet',
+      players: [{ playerId: '306', grid: { row: 4, col: 2 }, pos: 'FW' }],
+      bench: [{ playerId: '999', pos: 'MF' }],
+    });
+    expect(sheet.bench?.[0]?.grid).toBeUndefined();
+    expect(mapLineup({ team: { id: 40, name: 'Liverpool' }, startXI: [{ player: { id: 1, name: 'A', number: 1, pos: 'G' } }] }).formation).toBe('—');
   });
 
   it('maps goals, cards, and subs from events', () => {

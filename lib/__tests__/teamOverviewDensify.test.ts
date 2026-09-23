@@ -98,7 +98,7 @@ describe('teamOverviewDensify', () => {
     expect(overviewLastXi('live', [...window, finishedMockLiv], '40', live)).toBeUndefined();
     expect(overviewLastXi('live', [...window, finishedMockLiv], 'liv', live)).toBeUndefined();
 
-    await live.ensureMatchDetail('9001');
+    await live.ensureLineups('9001');
     const cached = live.getFixture('9001');
     expect(cached).toBeTruthy();
     const shown = overviewLastXi('live', [cached!, finishedMockLiv], '40', live);

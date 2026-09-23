@@ -64,6 +64,12 @@ export interface FootballProvider {
   subscribe(listener: () => void): () => void;
   ensureSquad(teamId: string): Promise<void>;
   ensureMatchDetail(fixtureId: string): Promise<void>;
+  /**
+   * One `GET /fixtures/lineups?fixture=` for a live-coverage match.
+   * Call when Lineups opens, or when MOTM voting is open — not during catalog hydrate.
+   * `empty` means the free tier returned no starting XI. `ready` includes demo lineups.
+   */
+  ensureLineups(fixtureId: string): Promise<'ready' | 'empty' | 'error'>;
   ensureScorers(leagueId: string): Promise<void>;
   /** One `GET /players?id=&season=` per player. Never call this while listing a squad. */
   ensurePlayerSeason(playerId: string): Promise<void>;

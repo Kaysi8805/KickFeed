@@ -55,7 +55,19 @@ function takePos(squad: Player[], pos: PlayerPosition, n: number, used: Set<stri
   return picked;
 }
 
-function startingXi(teamId: string): Lineup {
+/** 4-3-3 grid: goalkeeper, then each outfield row. Index follows `demoLineup` order. */
+function demoGrid(index: number): { row: number; col: number } {
+  const rows = [1, 4, 3, 3];
+  let cursor = index;
+  for (let row = 0; row < rows.length; row += 1) {
+    const size = rows[row]!;
+    if (cursor < size) return { row: row + 1, col: cursor + 1 };
+    cursor -= size;
+  }
+  return { row: 1, col: 1 };
+}
+
+function demoLineup(teamId: string): Lineup {
   const squad = squadFor(teamId);
   const used = new Set<string>();
   const xi = [
@@ -71,9 +83,18 @@ function startingXi(teamId: string): Lineup {
       used.add(p.id);
     }
   }
+  const bench = squad.filter((p) => !used.has(p.id));
   return {
     formation: '4-3-3',
-    players: xi.map((p) => ({ name: p.name, number: p.number, pos: p.pos, playerId: p.id })),
+    source: 'demo',
+    players: xi.map((p, index) => ({
+      name: p.name,
+      number: p.number,
+      pos: p.pos,
+      playerId: p.id,
+      grid: demoGrid(index),
+    })),
+    bench: bench.map((p) => ({ name: p.name, number: p.number, pos: p.pos, playerId: p.id })),
   };
 }
 
@@ -168,7 +189,7 @@ function appearancesFor(player: Player, now = Date.now()): PlayerAppearance[] {
 
   const out: PlayerAppearance[] = [];
   for (const f of fixtures) {
-    const starter = startingXi(player.teamId).players.some((p) => p.playerId === player.id);
+    const starter = demoLineup(player.teamId).players.some((p) => p.playerId === player.id);
     const events = f.events.filter(
       (e) => e.playerId === player.id || (e.teamId === player.teamId && foldName(e.playerName) === foldName(player.shortName)),
     );
@@ -264,8 +285,8 @@ export const mockFootballProvider: FootballProvider = {
   getStandings: (leagueId) => standingsFor(leagueId),
   getTopScorers: (leagueId) => scorersFor(leagueId),
   getLineups: (fixture) => ({
-    home: startingXi(fixture.homeTeamId),
-    away: startingXi(fixture.awayTeamId),
+    home: demoLineup(fixture.homeTeamId),
+    away: demoLineup(fixture.awayTeamId),
   }),
   getCachedLiveLineups: () => undefined,
   getStatus: () => MOCK_FOOTBALL_STATUS,
@@ -274,6 +295,7 @@ export const mockFootballProvider: FootballProvider = {
   subscribe: () => () => undefined,
   ensureSquad: noopAsync,
   ensureMatchDetail: noopAsync,
+  ensureLineups: async () => 'ready',
   ensureScorers: noopAsync,
   ensurePlayerSeason: noopAsync,
   ensureTeamStats: noopAsync,

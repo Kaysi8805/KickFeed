@@ -36,7 +36,10 @@ export const BFF_TTL_MS = {
   scorers: 30 * 60_000,
   squads: 30 * 60_000,
   events: 60_000,
-  lineups: 60_000,
+  /** `/fixtures/lineups` before a team sheet is in the body. */
+  lineups: 10 * 60_000,
+  /** Published `startXI`. Official sheets are not polled every minute. */
+  lineupsSheet: 30 * 60_000,
   /** `GET /players?id=&season=` — long TTL so a player open does not burn the daily quota. */
   players: 12 * 60 * 60_000,
   /** `GET /teams/statistics?league=&season=&team=` — one origin read per club per day. */
@@ -146,6 +149,30 @@ export function bffPlayerSeasonQueryError(params: URLSearchParams): string | nul
  * `/teams/statistics` is one club in one covered league.
  * Extra keys (`date`, `page`, a second team) would multiply origin calls.
  */
+/**
+ * `/fixtures/lineups` and `/fixtures/events` are one numeric fixture.
+ * Extra keys (`team`, `player`, `type`) would be a second shape of the same call.
+ */
+export function bffFixtureDetailQueryError(pathLabel: string, params: URLSearchParams): string | null {
+  const fixture = params.get('fixture')?.trim() ?? '';
+  if (!/^[1-9]\d*$/.test(fixture)) return `${pathLabel} requires a numeric fixture`;
+  for (const key of params.keys()) {
+    if (key !== 'fixture') return `${pathLabel} only allows fixture`;
+  }
+  return null;
+}
+
+/** True when a lineups envelope includes at least one starting XI. */
+export function lineupsEnvelopeHasSheet(body: string): boolean {
+  try {
+    const json = JSON.parse(body) as { response?: Array<{ startXI?: unknown[] | null }> };
+    const rows = Array.isArray(json.response) ? json.response : [];
+    return rows.some((row) => Array.isArray(row?.startXI) && row.startXI.length > 0);
+  } catch {
+    return false;
+  }
+}
+
 export function bffTeamStatisticsQueryError(params: URLSearchParams): string | null {
   const league = params.get('league')?.trim() ?? '';
   const season = params.get('season')?.trim() ?? '';
@@ -197,6 +224,9 @@ export function fixturesEnvelopeHasLive(body: string): boolean {
 export function bffTtlMsForResponse(pathname: string, body: string): number {
   if (normalizeBffPath(pathname) === '/fixtures') {
     return fixturesEnvelopeHasLive(body) ? BFF_TTL_MS.fixturesLive : BFF_TTL_MS.fixturesIdle;
+  }
+  if (normalizeBffPath(pathname) === '/fixtures/lineups') {
+    return lineupsEnvelopeHasSheet(body) ? BFF_TTL_MS.lineupsSheet : BFF_TTL_MS.lineups;
   }
   return bffTtlMsForPath(pathname);
 }
@@ -266,7 +296,7 @@ function healthBody(cacheSize: number, keyConfigured: boolean, quota: BffQuotaSn
       perMinuteLimit: quota.perMinuteLimit,
       perMinuteRemaining: quota.perMinuteRemaining,
       observedAt: quota.observedAt,
-      note: 'Allowlisted leagues only. Fixtures 45s if any row is live, else 5 min. Standings 15 min. Player season 12h (id + season only). Team statistics 24h (league + season + team only, one club per day). 429/5xx reuse stale cache within 6h. limit/remaining are the last API-Football rate-limit headers seen by this isolate, not a global counter. Never put FOOTBALL_API_KEY in Expo or CI.',
+      note: 'Allowlisted leagues only. Fixtures 45s if any row is live, else 5 min. Standings 15 min. Player season 12h (id + season only). Team statistics 24h (league + season + team only, one club per day). Lineups 10 min until a starting XI is cached, then 30 min. Events 60s. 429/5xx reuse stale cache within 6h. limit/remaining are the last API-Football rate-limit headers seen by this isolate, not a global counter. Never put FOOTBALL_API_KEY in Expo or CI.',
     },
   };
 }
@@ -358,6 +388,12 @@ export async function handleFootballBffRequest(
   if (path === '/teams/statistics') {
     const statsError = bffTeamStatisticsQueryError(url.searchParams);
     if (statsError) return jsonResponse(400, { errors: { bff: statsError } });
+  }
+
+  if (path === '/fixtures/lineups' || path === '/fixtures/events') {
+    const label = path === '/fixtures/lineups' ? 'fixtures/lineups' : 'fixtures/events';
+    const fixtureError = bffFixtureDetailQueryError(label, url.searchParams);
+    if (fixtureError) return jsonResponse(400, { errors: { bff: fixtureError } });
   }
 
   const apiKey = env.apiKey.trim();

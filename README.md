@@ -10,7 +10,7 @@ v1 is **local-first**: seeded fan profiles for **demo mode**, optional **Supabas
 - **Profiles & favorites** — name, photo initials, bio, favorite clubs, competitions, and players. **TV country** (UK / SK / US) defaults from the device locale, else Slovakia. Favorites drive Home live scores and Following.
 - **Social feed & follows** — follow demo users, post text (optional photo), optionally **attach a live/today/upcoming fixture**, like posts, see friends + own posts. Home and Following highlight match-attached posts and live matches for clubs/players you follow.
 - **Global search** — dedicated Search screen from the Feed bar and tab headers. Query clubs, players, competitions, and demo fans; results open the existing entity pages.
-- **Live scores & fixtures** — Live / Today / Upcoming. With a BFF URL or key, **England (PL + Championship), Slovakia Niké Liga, and Spain La Liga** from API-Football; without either, the mock worldwide catalog. Match pages with score, events, lineups (when the free tier returns them), stats stubs, and **TV channels for the user’s country**.
+- **Live scores & fixtures** — Live / Today / Upcoming. With a BFF URL or key, **England (PL + Championship), Slovakia Niké Liga, and Spain La Liga** from API-Football; without either, the mock worldwide catalog. Match pages with score, events, **lineups** (formation, XI, and bench when the free tier returns a team sheet), stats stubs, and **TV channels for the user’s country**.
 - **TV / broadcast schedule** — FotMob-style listings for launch geos (**UK, Slovakia, United States**). Browse today’s and upcoming England kickoffs with channel chips; tap through to the match. Editorial/mock data — not a licensed rights guide.
 - **Clubs & players** — Team pages (crest, league table context, fixtures, clickable squad, favorite) and player pages (mock season stats, recent appearances, follow/favorite, link back to club).
 - **Worldwide leagues** — continents → countries → competitions. Live standings/scorers are England + Slovakia + La Liga; other geos stay on the mock tree. Featured PL, Championship, Niké Liga, and La Liga when live.
@@ -347,6 +347,7 @@ Karol’s batches:
 - **Live geos — done.** Slovakia Niké Liga + La Liga on the existing BFF allowlist + quota TTLs.
 - **Matchday Home — done.** Home pins live/next favorite (or featured live coverage) above the feed.
 - **EAS push — done.** Favorite kickoff-soon + goal device alerts via Expo Notifications + EAS `projectId`. No extra football polling.
+- **Pre-match lineups — done.** Match hub Lineups tab for leagues 39, 40, 332, and 140. Formation, starting XI, and bench from `GET /fixtures/lineups` through the existing BFF. Fetched when Lineups opens (and when MOTM voting is open), not during Matches hydrate. Demo catalog still shows a seeded XI and bench. The free tier publishes official sheets, not probable XIs — a miss stays “Not in free-tier cache yet”.
 - **Report / block — done.** Demo = AsyncStorage; email session = Postgres RLS. Not a moderation dashboard.
 - **This PR.** 1:1 DMs. Demo = AsyncStorage (Maya↔Omar seed); email session = Postgres RLS + slow-mode trigger. Not in this PR: group chats, media DMs, push for messages, moderation dashboard, licensed TV, Apple/Google polish, more geos. Not gambling.
 
@@ -371,6 +372,24 @@ Match hub tabs **Predict** and **MOTM** sit next to Events / Lineups / Stats / H
 - **Predict** — upcoming fixtures only. Stepper for home/away (0–9). Upsert until kickoff; live / HT / FT (or kickoff time reached) lock the pick. Community average, most-common scoreline, and home/draw/away counts include other demo users (seeded mocks).
 - **MOTM** — live, half-time, and finished. Ballot is `FootballProvider.getLineups`; if XIs are empty (free-tier skip), `getSquad` for both clubs. One vote per user per match (demo id or Supabase uuid; related mock/live ids count as one). Tallies persist with the rest of app state.
 - Confirmations land in Notifications (“You predicted 2–1”, “You voted for Salah”). No odds, stakes, or third-party betting APIs.
+
+## Pre-match lineups
+
+The match hub **Lineups** tab shows both clubs’ formation, starting XI, and bench. Live coverage uses the free API-Football path the app already has: `GET /fixtures/lineups?fixture=` through the in-repo BFF (`EXPO_PUBLIC_FOOTBALL_BFF_URL`). Leagues stay **39, 40, 332, and 140**. There is no probable-XI product, no odds endpoint, and no extra sports-data vendor.
+
+The free tier returns an official team sheet (usually close to kickoff), including `startXI`, `substitutes`, `formation`, and `grid` when the competition sends them. KickFeed labels that **Confirmed**. It does not invent a probable XI, shots, possession, or xG. If the cache has no sheet, the tab says **Not in free-tier cache yet**.
+
+Demo mode (no BFF URL and no client key) still draws a seeded 4-3-3 plus the rest of the mock squad on the bench, with player links into the mock catalog. MOTM still ballots from the starting XI when a sheet or demo XI is present, and falls back to both squads when the XI is empty.
+
+**Quota.** Opening Matches does not call `/fixtures/lineups`. The call happens when you open Lineups, or MOTM once voting is open (live / half-time / full time). The app and the BFF cache an empty answer for about **10 minutes** and a published sheet for about **30 minutes**, so sitting on the tab or reopening it does not spend another origin request. Cold Matches hydrate is unchanged (fixtures, standings, Premier League scorers only).
+
+**Try on a device**
+
+1. In `.env` (never commit it), set `EXPO_PUBLIC_FOOTBALL_BFF_URL=https://kickfeed-football-bff.kaysi8805.workers.dev` and leave `EXPO_PUBLIC_FOOTBALL_API_KEY` empty.
+2. `npx expo start` and open an upcoming Premier League, Championship, Niké Liga, or La Liga match.
+3. Open **Lineups**. A cached sheet shows both formations, the XIs on the pitch, and the benches. Tap a player whose squad id resolved to open the player page.
+4. If the sheet is not published yet, you get **Not in free-tier cache yet** — not a guessed XI.
+5. Unset the BFF URL and restart Expo. The same tab shows the demo XI and bench with no key.
 
 ## Prediction leaderboards
 

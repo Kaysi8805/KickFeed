@@ -89,6 +89,13 @@ describe('MOTM candidates', () => {
     expect(ballot.every((p) => p.playerId && mockFootballProvider.getPlayer(p.playerId))).toBe(true);
     expect(ballot.some((p) => p.key === 'p-liv-11')).toBe(true);
     expect(ballot.some((p) => p.teamId === 'ars')).toBe(true);
+    const lineups = mockFootballProvider.getLineups(fixture!);
+    const benchIds = new Set([...(lineups.home.bench ?? []), ...(lineups.away.bench ?? [])].map((p) => p.playerId));
+    const starterIds = new Set([...lineups.home.players, ...lineups.away.players].map((p) => p.playerId));
+    expect(lineups.home.bench?.length).toBeGreaterThan(0);
+    expect(lineups.home.source).toBe('demo');
+    expect([...benchIds].some((id) => id && !starterIds.has(id))).toBe(true);
+    expect(ballot.every((p) => !p.playerId || starterIds.has(p.playerId))).toBe(true);
   });
 
   it('falls back to squads when lineups are empty', () => {

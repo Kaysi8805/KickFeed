@@ -23,6 +23,7 @@ import type {
   ApiEvent,
   ApiFixture,
   ApiLineup,
+  ApiLineupPlayer,
   ApiScorer,
   ApiSideAverage,
   ApiSideCount,
@@ -40,6 +41,7 @@ import {
   isEnglandLiveLeagueId,
   isLiveLeagueId,
 } from '@/lib/footballCoverage';
+import { parseLineupGrid } from '@/lib/lineupPitch';
 
 const liveLeagueSeed: League[] = [
   {
@@ -306,15 +308,29 @@ export function mapMatchEvent(row: ApiEvent, index: number): MatchEvent | undefi
   };
 }
 
-export function mapLineup(row: ApiLineup): Lineup {
-  const players: LineupPlayer[] = (row.startXI ?? []).map((slot) => ({
+function mapLineupPlayer(slot: ApiLineupPlayer): LineupPlayer {
+  const grid = parseLineupGrid(slot.player.grid);
+  return {
     name: slot.player.name,
     number: slot.player.number ?? 0,
     pos: mapPosition(slot.player.pos),
     playerId: String(slot.player.id),
-  }));
+    ...(grid ? { grid } : {}),
+  };
+}
+
+export function mapLineup(row: ApiLineup): Lineup {
+  const players = (row.startXI ?? []).map((slot) => mapLineupPlayer(slot));
+  const bench = row.substitutes ? row.substitutes.map((slot) => mapLineupPlayer(slot)) : undefined;
   const coach = row.coach?.name?.trim();
-  return { formation: row.formation || '4-3-3', players, ...(coach ? { coach } : {}) };
+  const formation = row.formation?.trim() || '—';
+  return {
+    formation,
+    players,
+    ...(bench ? { bench } : {}),
+    ...(coach ? { coach } : {}),
+    ...(players.length ? { source: 'sheet' as const } : {}),
+  };
 }
 
 /** Full season form (oldest → newest). Standings chips still use `mapForm`, which keeps five. */

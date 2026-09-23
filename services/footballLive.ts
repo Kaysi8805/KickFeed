@@ -464,20 +464,41 @@ export function createLiveFootballProvider(opts: {
         const mappedEvents = events.map(mapMatchEvent).filter((e): e is NonNullable<typeof e> => !!e);
         const current = snap.fixtures.get(fixture.id);
         if (current) snap.fixtures.set(fixture.id, { ...current, events: mappedEvents });
-        const lineups = await load(`lineups:${fixture.id}`, ttl, () =>
-          http('/fixtures/lineups', { fixture: fixture.id }).then((r) => asArray<ApiLineup>(r)),
-        );
-        if (lineups.length) {
-          const home = lineups.find((l) => String(l.team.id) === fixture.homeTeamId);
-          const away = lineups.find((l) => String(l.team.id) === fixture.awayTeamId);
-          snap.lineups.set(fixture.id, {
-            home: home ? mapLineup(home) : emptyLineup(),
-            away: away ? mapLineup(away) : emptyLineup(),
-          });
-        }
         emit();
       } catch (err) {
         setStatus({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+    ensureLineups: async (fixtureId) => {
+      const fixture = snap.fixtures.get(fixtureId) ?? fallback.getFixture(fixtureId);
+      if (!fixture || !snap.fixtures.has(fixture.id)) return 'ready';
+      const key = `lineups:${fixture.id}`;
+      const apply = (rows: ApiLineup[]): 'ready' | 'empty' => {
+        const home = rows.find((row) => String(row.team.id) === fixture.homeTeamId);
+        const away = rows.find((row) => String(row.team.id) === fixture.awayTeamId);
+        const homeLine = home ? mapLineup(home) : emptyLineup();
+        const awayLine = away ? mapLineup(away) : emptyLineup();
+        if (!homeLine.players.length && !awayLine.players.length) return 'empty';
+        snap.lineups.set(fixture.id, { home: homeLine, away: awayLine });
+        return 'ready';
+      };
+      try {
+        let rows = cache.get(key, now()) as ApiLineup[] | undefined;
+        const fromCache = !!rows;
+        if (!rows) {
+          rows = await load(key, FOOTBALL_TTL.lineupsMissMs, () =>
+            http('/fixtures/lineups', { fixture: fixture.id }).then((r) => asArray<ApiLineup>(r)),
+          );
+        }
+        if (!rows) return 'error';
+        const hasSheet = rows.some((row) => (row.startXI?.length ?? 0) > 0);
+        // Upgrade only the fetch that just landed. A later tab open must not slide the TTL.
+        if (!fromCache && hasSheet) cache.set(key, rows, FOOTBALL_TTL.lineupsSheetMs, now());
+        const result = apply(rows);
+        emit();
+        return result;
+      } catch {
+        return 'error';
       }
     },
     ensureScorers: async (leagueId) => {
