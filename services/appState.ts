@@ -38,6 +38,7 @@ import {
   type ReportResult,
 } from '@/lib/moderation';
 import { friendPostRecipientIds } from '@/lib/homeFeed';
+import { isLiveCircleDebounced, liveCirclePushBody } from '@/lib/liveCircle';
 import {
   inferAuthMode,
   isDemoUserId,
@@ -83,6 +84,11 @@ export interface Persisted {
   groupMessages: GroupMessage[];
   /** userId → groupId → last-read ISO. Unread is this device. */
   groupReads: Record<string, Record<string, string>>;
+  /**
+   * Live Circle opt-in per user. Missing key = never chosen (off).
+   * Explicit false stays off and is not replaced by a remote true.
+   */
+  liveCircleEnabled: Record<string, boolean>;
 }
 
 export function defaults(): Persisted {
@@ -111,6 +117,7 @@ export function defaults(): Persisted {
     dmGroups: [],
     groupMessages: [],
     groupReads: {},
+    liveCircleEnabled: {},
   };
 }
 
@@ -202,6 +209,16 @@ function pickFavorites(value: unknown, fallback: Persisted['favorites']): Persis
   return out;
 }
 
+function pickLiveCircle(value: unknown): Record<string, boolean> {
+  if (!isPlainObject(value)) return {};
+  const out: Record<string, boolean> = {};
+  for (const [userId, enabled] of Object.entries(value)) {
+    if (!isPersistedUserId(userId)) continue;
+    if (enabled === true || enabled === false) out[userId] = enabled;
+  }
+  return out;
+}
+
 function pickBlocks(value: unknown, fallback: Persisted['blocks']): Persisted['blocks'] {
   if (!isPlainObject(value)) return fallback;
   const out: Persisted['blocks'] = { ...fallback };
@@ -284,6 +301,56 @@ export function hydratePersisted(raw: string | null): Persisted {
     dmGroups: pickParsedRows(parsed.dmGroups, base.dmGroups, parseDmGroup),
     groupMessages: pickParsedRows(parsed.groupMessages, base.groupMessages, parseGroupMessage),
     groupReads: pickGroupReads(parsed.groupReads, base.groupReads),
+    liveCircleEnabled: pickLiveCircle(parsed.liveCircleEnabled),
+  };
+}
+
+export function liveCircleEnabledFor(state: Persisted, userId: string | null): boolean {
+  if (!userId) return false;
+  return state.liveCircleEnabled[userId] === true;
+}
+
+export function setLiveCircleEnabled(state: Persisted, enabled: boolean): Persisted {
+  if (!state.currentUserId) return state;
+  if (state.liveCircleEnabled[state.currentUserId] === enabled) return state;
+  return {
+    ...state,
+    liveCircleEnabled: { ...state.liveCircleEnabled, [state.currentUserId]: enabled },
+  };
+}
+
+/** In-app notice when a friend appears on the match you have open. Debounced. */
+export function noteFriendLive(
+  state: Persisted,
+  input: { actorId: string; actorName: string; fixtureId: string; fixtureLabel: string },
+  now = Date.now(),
+): { state: Persisted; fresh: boolean } {
+  const recipientId = state.currentUserId;
+  if (!recipientId || recipientId === input.actorId || !liveCircleEnabledFor(state, recipientId)) {
+    return { state, fresh: false };
+  }
+  const id = `lc-${recipientId}-${input.actorId}-${input.fixtureId}`;
+  const existing = state.notifications.find((row) => row.id === id);
+  if (existing && isLiveCircleDebounced(Date.parse(existing.createdAt), now)) {
+    return { state, fresh: false };
+  }
+  const note: AppNotification = {
+    id,
+    type: 'live_circle',
+    title: 'Live Circle',
+    body: liveCirclePushBody(input.actorName, input.fixtureLabel),
+    createdAt: new Date(now).toISOString(),
+    read: false,
+    recipientId,
+    matchId: input.fixtureId,
+    userId: input.actorId,
+  };
+  return {
+    fresh: true,
+    state: {
+      ...state,
+      notifications: [note, ...state.notifications.filter((row) => row.id !== id)],
+    },
   };
 }
 

@@ -309,6 +309,37 @@ export async function applyDeviceAlerts(alerts: DeviceAlert[]): Promise<void> {
   }
 }
 
+/** Local banner for a friend who just showed up on the match you have open. */
+export async function presentLiveCircleBanner(input: {
+  fingerprint: string;
+  matchId: string;
+  title: string;
+  body: string;
+}): Promise<void> {
+  if (Platform.OS === 'web' || !input.fingerprint || !input.matchId) return;
+  if (presentedFingerprints.has(input.fingerprint)) return;
+  try {
+    const Notifications = await loadNotifications();
+    if (!Notifications) return;
+    await ensureHandler(Notifications);
+    await ensureAndroidChannel(Notifications);
+    if (!(await canPresent(Notifications))) return;
+    notePresentedFingerprints([input.fingerprint]);
+    await Notifications.scheduleNotificationAsync({
+      identifier: notificationIdentifier(input.fingerprint),
+      content: {
+        title: input.title,
+        body: input.body,
+        sound: false,
+        data: { matchId: input.matchId, type: 'live_circle', fingerprint: input.fingerprint },
+      },
+      trigger: Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL } : null,
+    });
+  } catch {
+    /* the in-app notification center still has the notice */
+  }
+}
+
 export async function cancelAllDeviceAlerts(): Promise<void> {
   if (Platform.OS === 'web') return;
   try {

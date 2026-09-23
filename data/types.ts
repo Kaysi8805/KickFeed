@@ -14,7 +14,16 @@ export type MatchEventType = 'goal' | 'yellow' | 'red' | 'sub' | 'var';
 
 export type FormResult = 'W' | 'D' | 'L';
 
-export type NotificationType = 'goal' | 'kickoff' | 'follow' | 'comment' | 'friend_post' | 'prediction' | 'motm' | 'dm';
+export type NotificationType =
+  | 'goal'
+  | 'kickoff'
+  | 'follow'
+  | 'comment'
+  | 'friend_post'
+  | 'prediction'
+  | 'motm'
+  | 'dm'
+  | 'live_circle';
 
 export interface Continent {
   id: ContinentId;

@@ -10,6 +10,7 @@ import { SafeBoundary } from '@/components/ui/SafeBoundary';
 import { Screen } from '@/components/ui/Screen';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { deviceAlertsCopy } from '@/lib/favoritePush';
+import { LIVE_CIRCLE_SETTING_BODY, LIVE_CIRCLE_SETTING_TITLE } from '@/lib/liveCircle';
 import {
   ALERTS_UNAVAILABLE_BODY,
   ALERTS_UNAVAILABLE_TITLE,
@@ -50,6 +51,8 @@ export default function ProfileScreen() {
     easProjectId,
     enableDeviceAlerts,
     setPushPref,
+    liveCircleEnabled,
+    setLiveCircleEnabled,
     sendRemotePushTest,
     blockedUserIds,
     unblockUser,
@@ -234,6 +237,24 @@ export default function ProfileScreen() {
             {authMode === 'supabase' ? 'Sign out' : supabaseConfigured ? 'Switch account' : 'Switch demo user'}
           </Text>
         </Pressable>
+        <View style={styles.alerts}>
+          <Text style={styles.alertsKicker}>PRIVACY</Text>
+          <Text style={styles.alertsTitle}>{LIVE_CIRCLE_SETTING_TITLE}</Text>
+          <Text style={styles.alertsBody}>{LIVE_CIRCLE_SETTING_BODY}</Text>
+          <Pressable
+            style={styles.toggle}
+            onPress={() => setLiveCircleEnabled(!liveCircleEnabled)}
+            accessibilityRole="switch"
+            accessibilityLabel="Live Circle"
+            accessibilityHint="Friends can see when you are on a match"
+            accessibilityState={{ checked: liveCircleEnabled }}
+          >
+            <Text style={styles.toggleLabel}>Show me to friends on a match</Text>
+            <Text style={[styles.toggleValue, liveCircleEnabled && styles.toggleOn]}>
+              {liveCircleEnabled ? 'On' : 'Off'}
+            </Text>
+          </Pressable>
+        </View>
         <SafeBoundary title={ALERTS_UNAVAILABLE_TITLE} body={ALERTS_UNAVAILABLE_BODY}>
         <View style={styles.alerts}>
           <Text style={styles.alertsKicker}>MATCH ALERTS</Text>

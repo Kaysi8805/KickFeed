@@ -33,6 +33,7 @@ import {
   type InboxEntry,
   type SendGroupResult,
 } from '@/lib/groups';
+import { shouldPersistLiveCircle } from '@/lib/liveCircle';
 import { sharedPostBody } from '@/lib/shareToChat';
 import {
   applyDeviceAlerts,
@@ -70,6 +71,8 @@ import {
   follow as followState,
   groupReadsFor,
   leaveDmGroup as leaveDmGroupState,
+  liveCircleEnabledFor,
+  noteFriendLive as noteFriendLiveState,
   hydratePersisted,
   markDmThreadRead as markDmThreadReadState,
   markNotificationsRead as markNotificationsReadState,
@@ -83,6 +86,7 @@ import {
   Persisted,
   sendDirectMessage as sendDirectMessageState,
   sendGroupMessage as sendGroupMessageState,
+  setLiveCircleEnabled as setLiveCircleEnabledState,
   setMotmVote as setMotmVoteState,
   setPrediction as setPredictionState,
   signInAccount,
@@ -113,6 +117,14 @@ import {
   insertRemoteReport,
   syncRemoteModeration,
 } from '@/services/moderation';
+import {
+  clearDemoPresence,
+  clearRemoteLiveCircle,
+  fetchRemoteLiveCircleEnabled,
+  liveCircleClient,
+  setRemoteLiveCircle,
+  syncRemoteFollows,
+} from '@/services/liveCircle';
 import {
   asDmsClient,
   deleteRemoteGroupMember,
@@ -205,6 +217,14 @@ interface AppContextValue {
   enableDeviceAlerts: () => Promise<PushRegisterResult>;
   setPushPref: (patch: Partial<Pick<PushPrefs, 'kickoff' | 'goals' | 'enabled'>>) => void;
   sendRemotePushTest: () => Promise<string>;
+  liveCircleEnabled: boolean;
+  setLiveCircleEnabled: (enabled: boolean) => void;
+  noteFriendLive: (input: {
+    actorId: string;
+    actorName: string;
+    fixtureId: string;
+    fixtureLabel: string;
+  }) => boolean;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -432,6 +452,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [ready, state.currentUserId, state.authMode, supabaseConfigured]);
 
+  const followKey = (state.currentUserId ? (state.following[state.currentUserId] ?? []) : []).join('\n');
+  useEffect(() => {
+    if (!ready) return;
+    const userId = state.currentUserId;
+    if (!userId || !shouldPersistLiveCircle(supabaseConfigured, state.authMode)) return;
+    void syncRemoteFollows(liveCircleClient(), state.following[userId] ?? []);
+  }, [followKey, ready, state.authMode, state.currentUserId, state.following, supabaseConfigured]);
+
+  const liveChoice = state.currentUserId ? state.liveCircleEnabled[state.currentUserId] : undefined;
+  useEffect(() => {
+    if (!ready) return;
+    const userId = state.currentUserId;
+    if (!userId || !shouldPersistLiveCircle(supabaseConfigured, state.authMode)) return;
+    const client = liveCircleClient();
+    let cancelled = false;
+    void (async () => {
+      if (liveChoice === undefined) {
+        const remote = await fetchRemoteLiveCircleEnabled(client, userId);
+        if (cancelled || remote !== true) return;
+        setState((prev) => {
+          if (prev.currentUserId !== userId || prev.liveCircleEnabled[userId] !== undefined) return prev;
+          return setLiveCircleEnabledState(prev, true);
+        });
+        return;
+      }
+      await setRemoteLiveCircle(client, liveChoice);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [liveChoice, ready, state.authMode, state.currentUserId, supabaseConfigured]);
+
   const users = useMemo(() => usersFromState(state), [state]);
 
   const currentUser = users.find((u) => u.id === state.currentUserId) ?? null;
@@ -458,6 +510,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const friendIds = currentUser
     ? followingIds.filter((id) => (state.following[id] ?? []).includes(currentUser.id))
     : [];
+  const liveCircleOn = liveCircleEnabledFor(state, currentUser?.id ?? null);
   const favoriteTeamIds = currentUser?.favoriteTeamIds ?? [];
   const favoriteLeagueIds = currentUser?.favoriteLeagueIds ?? [];
   const favoritePlayerIds = currentUser ? (state.favorites[currentUser.id]?.players ?? []) : [];
@@ -789,6 +842,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const prev = stateRef.current;
         const platform = pushPlatform(Platform.OS);
         const client = asPushDeviceClient(getSupabaseClient());
+        if (prev.currentUserId) clearDemoPresence(prev.currentUserId);
+        if (shouldPersistLiveCircle(supabaseConfigured, prev.authMode)) {
+          void clearRemoteLiveCircle(liveCircleClient());
+        }
         patch(signOutState);
         void (async () => {
           if (token && platform && client && shouldPersistPushDevice(supabaseConfigured, prev.authMode)) {
@@ -907,6 +964,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const result = await requestRemotePushTest(client);
         return result.message;
       },
+      liveCircleEnabled: liveCircleOn,
+      setLiveCircleEnabled: (enabled) =>
+        patch((p) => {
+          const next = setLiveCircleEnabledState(p, enabled);
+          if (shouldPersistLiveCircle(supabaseConfigured, next.authMode)) {
+            void setRemoteLiveCircle(liveCircleClient(), enabled);
+            if (!enabled) void clearRemoteLiveCircle(liveCircleClient());
+          }
+          if (!enabled && next.currentUserId) clearDemoPresence(next.currentUserId);
+          return next;
+        }),
+      noteFriendLive: (input) => {
+        let fresh = false;
+        patch((p) => {
+          const next = noteFriendLiveState(p, input, Date.now());
+          fresh = next.fresh;
+          return next.state;
+        });
+        return fresh;
+      },
     }),
     [
       blockedUserIds,
@@ -924,6 +1001,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       followingIds,
       friendIds,
       likedPostIds,
+      liveCircleOn,
       notifications,
       patch,
       pushPrefs,
