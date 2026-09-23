@@ -167,6 +167,47 @@ Solo local without the BFF: copy `.env.example` to `.env` (gitignored) and set `
 
 Optional: `EXPO_PUBLIC_FOOTBALL_SEASON=2026` to pin the season start year (defaults to the current European season).
 
+## Batch 1 prod checklist
+
+Release builds talk only to the Cloudflare Worker. The API-Football key stays a Worker secret. Local `expo start` keeps `http://127.0.0.1:8787` when that line is set in `.env`. The worker cache is **in-memory per isolate** (free tier, no KV): a cold isolate is a cache miss. `eas.json` development uses the loopback URL; preview and production inline `https://kickfeed-football-bff.<account>.workers.dev` until you override it.
+
+From the repo root, on Karol’s Mac:
+
+```bash
+npx wrangler@latest login
+npx wrangler@latest secret put FOOTBALL_API_KEY --config bff/wrangler.toml
+npx wrangler@latest deploy --config bff/wrangler.toml
+```
+
+`secret put` prompts for the key. Do not commit it and do not put it in `EXPO_PUBLIC_*`. Deploy prints the origin. Paste that URL with **no trailing slash**:
+
+```text
+https://kickfeed-football-bff.<account>.workers.dev
+```
+
+Set it as an EAS **plaintext** variable (it is inlined into the app; `secret` visibility never reaches the JS bundle). EAS environment variables override the `eas.json` placeholder of the same name. Leave `EXPO_PUBLIC_FOOTBALL_API_KEY` unset — when the BFF URL is set the live provider does not send a client key.
+
+```bash
+eas env:set --name EXPO_PUBLIC_FOOTBALL_BFF_URL --value https://kickfeed-football-bff.<account>.workers.dev --environment production --visibility plaintext
+eas env:set --name EXPO_PUBLIC_FOOTBALL_BFF_URL --value https://kickfeed-football-bff.<account>.workers.dev --environment preview --visibility plaintext
+```
+
+Local `.env` (gitignored), same machine or simulator:
+
+```bash
+EXPO_PUBLIC_FOOTBALL_BFF_URL=http://127.0.0.1:8787
+```
+
+A phone cannot reach your computer’s `127.0.0.1`. Use the workers.dev URL above for a device build.
+
+Check the worker, then Matches:
+
+```bash
+curl -sS https://kickfeed-football-bff.<account>.workers.dev/health
+```
+
+Expect `"ok": true`, `"keyConfigured": true`, and coverage leagues `39`, `40`, `332`, `140`. `cache.scope` is `"isolate"`. `quota.remaining` stays `null` until that isolate has called API-Football, then it shows the last `x-ratelimit-requests-remaining`. Install a preview or production build (or Expo with the prod URL in `.env`) and open **Matches** — England, Slovakia, and La Liga scores, with no API key in the app.
+
 Docs: [API-Football v3](https://www.api-football.com/documentation-v3). Direct client header: `x-apisports-key`. Client cache: fixtures ~45s if anything in that league window is live, else 5 min; standings 5 min; scorers 15 min; squads / match detail lazy; team statistics 24 h (one club, fetched when Overview opens). The BFF is stricter on origin: allowlisted leagues only, fixtures 45s if any row is live else 5 min, standings 15 min, scorers 30 min, player season 12 h, team statistics 24 h, and **429/5xx reuse stale cache**. Cold hydrate is 9 origin calls (4 leagues × fixtures+standings + PL scorers); team statistics are not in that burst. Extra devices HIT the BFF. If the free tier omits a squad, lineup, or season block, the team/match page still shows scores and says “Not in free-tier cache yet” instead of inventing shots, possession, or xG.
 
 Mock club ids (`ars`, `liv`, `epl`, `slovan`, `laliga`) still resolve after hydrate so demo favorites and feed mentions keep working. Search prefers live coverage entities when the BFF/key is set.

@@ -311,6 +311,9 @@ describe('API-Football helpers', () => {
     expect(footballApiKeyFromEnv({ EXPO_PUBLIC_FOOTBALL_API_KEY: '   ' })).toBeUndefined();
     expect(footballBffUrlFromEnv({ EXPO_PUBLIC_FOOTBALL_BFF_URL: 'https://bff.test/' })).toBe('https://bff.test');
     expect(footballBffUrlFromEnv({ EXPO_PUBLIC_FOOTBALL_BFF_URL: '  ' })).toBeUndefined();
+    expect(
+      footballBffUrlFromEnv({ EXPO_PUBLIC_FOOTBALL_BFF_URL: 'https://kickfeed-football-bff.<account>.workers.dev' }),
+    ).toBeUndefined();
   });
 
   it('calls the BFF without sending a client API key', async () => {

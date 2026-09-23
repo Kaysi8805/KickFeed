@@ -1,8 +1,12 @@
 name = "kickfeed-football-bff"
 main = "src/worker.ts"
 compatibility_date = "2026-09-17"
+workers_dev = true
 
+# In-memory cache is per isolate (Workers free tier, ~128MB). No KV binding.
+# A cold isolate misses and calls API-Football. See bff/README.md.
+#
 # Local: copy bff/.dev.vars.example → bff/.dev.vars (gitignored)
 #   FOOTBALL_API_KEY=your_key_here
-# Deploy secret (never commit):
-#   npx wrangler secret put FOOTBALL_API_KEY --config bff/wrangler.toml
+# Deploy secret (never commit, never EXPO_PUBLIC_):
+#   npx wrangler@latest secret put FOOTBALL_API_KEY --config bff/wrangler.toml
