@@ -56,6 +56,7 @@ function RootNav() {
         <Stack.Screen name="tv" />
         <Stack.Screen name="leaderboard" />
         <Stack.Screen name="fantasy/index" />
+        <Stack.Screen name="fantasy/join" />
         <Stack.Screen name="fantasy/xi" />
         <Stack.Screen name="fantasy/[leagueId]" />
         <Stack.Screen name="about" />

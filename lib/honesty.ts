@@ -9,52 +9,59 @@ export const LIVE_MIX_DISCLAIMER = `${LIVE_GEO_SHORT} live · other leagues mock
 export const FAN_PICKS_NOT_GAMBLING =
   'Score picks and Man of the Match votes are fan opinions for a leaderboard. KickFeed is not a betting or gambling product. There are no stakes and no payouts.';
 
-/** Private fantasy mini-leagues. Free, and not a betting product. */
+/** Private fantasy mini-leagues. Free, email account only, and not a betting product. */
 export const FANTASY_NOT_GAMBLING =
   'Private mini-leagues are free to play with friends. There are no stakes, entry fees, or payouts. KickFeed is not a betting or gambling product.';
 
 export const FANTASY_SCORING_RULES =
-  'One XI per gameweek: 1 goalkeeper, 4 defenders, 4 midfielders, and 2 forwards. No budget, no bench, and no chips. A goal is 5 points in Premier League, Championship, Niké Liga, and La Liga matches. Own goals score 0. Assists, clean sheets, and appearance points are not in this version — a free-tier goal event names an assist without a player id, so v1 scores goals only.';
+  'One XI per round in the competition you picked. 1 goalkeeper, at least 3 defenders, at least 3 midfielders, and at least 1 forward — 11 players, at most 3 from one club. No budget, no bench, and no chips. A goal is 4 points and an assist is 3, after full time. Own goals score 0. An assist counts only when the event includes a player id. No clean sheets, minutes, or captain.';
 
 export const FANTASY_LOCK_RULES =
-  'The gameweek runs Friday 00:00 UTC until the next Friday. Your XI locks at the first covered kickoff in that window.';
+  'The gameweek is that competition’s round. Your XI locks at the kickoff of the earliest match in the round that has not started.';
 
-export const FANTASY_DEMO_COPY =
-  'Demo mini-league — this device and seeded fans. Points come from goals in the mock catalog. Email sign-in stores leagues and XIs in KickFeed Postgres.';
+export const FANTASY_SIGN_IN_COPY =
+  'Fantasy needs an email account. Demo profiles stay on this device and are not written into KickFeed Postgres.';
 
 export const FANTASY_LIVE_COPY =
-  'Live mini-league — KickFeed Postgres. Points are counted on this device from goals already in the catalog. There is no official season scoreboard.';
+  'Live mini-league — KickFeed Postgres. Points update after full time, counted on this device from goals and assists in the catalog. There is no official scoreboard.';
 
 export const FANTASY_GW_WINDOW_COPY =
-  'This table is the current gameweek only. The free-tier catalog is a short window, so earlier weeks are not archived here.';
+  'This round’s points come from fixtures in the catalog. Earlier rounds stay in the total after this device has stored them. The free-tier window is short, so a round that has aged out is not fetched again.';
 
 export const FANTASY_EVENTS_COPY =
-  'Goals come from match events already in the catalog. This screen may load up to eight missing event lists for clubs in these XIs, once each. It does not fetch every fixture in the window, and it does not poll them.';
+  'Points update after full time. This screen may load up to eight missing event lists for clubs in these XIs, once each. It does not fetch every fixture, and it does not poll them.';
 
 export const FANTASY_SQUAD_HINT =
-  'Players come from clubs in KickFeed’s live coverage. Pick a club to load its squad from the free-tier cache. KickFeed does not download every squad at once.';
+  'Players are clubs in this competition. Pick a club to load its squad from the free-tier cache. KickFeed does not download every squad at once.';
+
+export const FANTASY_NO_ROUND =
+  'No round for this competition is in the catalog yet. Fantasy uses the live fixtures KickFeed already loads. It does not invent a gameweek.';
 
 export const FANTASY_LIVE_ERROR_TITLE = 'Couldn’t load mini-leagues';
 
 export const FANTASY_LIVE_ERROR_BODY =
-  'Synced leagues didn’t load. Retry from here — this is the live table, not the seeded demo league.';
+  'Synced leagues didn’t load. Retry from here. Demo mode does not keep a fantasy table.';
 
 const FANTASY_ERROR_COPY: Record<string, string> = {
   invalid_name: 'Use a league name between 2 and 40 characters.',
   invalid_code: 'Invite codes are 6 letters or numbers.',
+  invalid_competition: 'Pick Premier League, Championship, Niké Liga, or La Liga.',
+  invalid_season: 'Pick a season year between 2020 and 2035.',
   league_not_found: 'No mini-league uses that invite code.',
   league_full: 'This mini-league is full (20 fans).',
   too_many_leagues: 'You can be in 10 mini-leagues.',
-  gameweek_locked: 'This gameweek is locked. The first covered kickoff has passed.',
-  invalid_gameweek: 'That gameweek is not open.',
-  invalid_xi: 'Pick 1 goalkeeper, 4 defenders, 4 midfielders, and 2 forwards. Each player once.',
-  not_authenticated: 'Sign in to play a mini-league.',
+  gameweek_locked: 'This round is locked. The first kickoff has passed.',
+  invalid_round: 'That round is not open.',
+  invalid_xi: 'Pick 11 players: 1 goalkeeper, at least 3 defenders, at least 3 midfielders, and at least 1 forward. Each player once.',
+  club_cap: 'At most 3 players from the same club.',
+  not_authenticated: 'Sign in with email to play a mini-league.',
   not_configured: 'KickFeed Postgres is not configured on this build.',
   code_exhausted: 'Couldn’t mint an invite code. Try again.',
+  invalid_points: 'Couldn’t store this round’s points.',
 };
 
-export function fantasyDisclaimer(live: boolean): string {
-  return live ? FANTASY_LIVE_COPY : FANTASY_DEMO_COPY;
+export function fantasyDisclaimer(signedIn: boolean): string {
+  return signedIn ? FANTASY_LIVE_COPY : FANTASY_SIGN_IN_COPY;
 }
 
 /** Map a known fantasy error code. Unknown upstream text stays off the screen. */

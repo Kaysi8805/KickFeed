@@ -1,18 +1,21 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
+import type { PlayerPosition } from '@/data/types';
+import { entityHref } from '@/lib/entityNav';
 import {
-  FANTASY_FORMATION,
-  fantasyClubs,
-  fantasyEligibleTeamIds,
-  playersForFantasySlot,
+  FANTASY_CLUB_CAP,
+  clubCount,
+  clubsForCompetition,
+  playersForFantasyAdd,
+  positionsStillAllowed,
   type FantasySlot,
 } from '@/lib/fantasy';
 import { FANTASY_SQUAD_HINT } from '@/lib/honesty';
 import { football } from '@/services/football';
 import { colors, radius, spacing, type } from '@/theme';
-import type { PlayerPosition } from '@/data/types';
 
 const POS_LABEL: Record<PlayerPosition, string> = {
   GK: 'GK',
@@ -22,41 +25,35 @@ const POS_LABEL: Record<PlayerPosition, string> = {
 };
 
 export function SquadPicker({
+  competitionId,
   draft,
   locked,
   busy,
   onChange,
   onSave,
 }: {
-  draft: Array<FantasySlot | null>;
+  competitionId: string;
+  draft: FantasySlot[];
   locked: boolean;
   busy: boolean;
-  onChange: (next: Array<FantasySlot | null>) => void;
+  onChange: (next: FantasySlot[]) => void;
   onSave: () => void;
 }) {
-  const [active, setActive] = useState<number | null>(locked ? null : 0);
+  const [pos, setPos] = useState<PlayerPosition | null>(null);
   const [clubQuery, setClubQuery] = useState('');
   const [playerQuery, setPlayerQuery] = useState('');
   const [teamId, setTeamId] = useState<string | null>(null);
   const [loadingSquad, setLoadingSquad] = useState(false);
-
-  const clubs = fantasyClubs((id) => football.getTeams(id));
-  const eligible = fantasyEligibleTeamIds((id) => football.getTeams(id));
-  const pos = active == null ? null : FANTASY_FORMATION[active];
-  const taken = new Set<string>();
-  draft.forEach((slot, index) => {
-    if (slot && index !== active) taken.add(slot.playerId);
-  });
-
-  const clubMatches = clubs
-    .filter((club) => club.name.toLowerCase().includes(clubQuery.trim().toLowerCase()))
-    .slice(0, 8);
-
-  const pool = teamId ? football.getSquad(teamId) : football.getPlayers();
+  const allowed = positionsStillAllowed(draft);
+  const clubs = clubsForCompetition((id) => football.getTeams(id), competitionId).filter((club) =>
+    club.name.toLowerCase().includes(clubQuery.trim().toLowerCase()),
+  );
+  const taken = new Set(draft.map((slot) => slot.playerId));
+  const clubFull = teamId != null && clubCount(draft, teamId) >= FANTASY_CLUB_CAP;
   const choices =
-    pos == null
-      ? []
-      : playersForFantasySlot(pool, teamId ? new Set([teamId]) : eligible, pos, playerQuery, taken).slice(0, 40);
+    pos && teamId && !clubFull
+      ? playersForFantasyAdd(football.getSquad(teamId), teamId, pos, taken, playerQuery).slice(0, 40)
+      : [];
 
   async function loadClub(id: string) {
     setTeamId(id);
@@ -68,55 +65,86 @@ export function SquadPicker({
     }
   }
 
-  function assign(playerId: string, playerName: string, playerTeamId: string, playerPos: PlayerPosition) {
-    if (active == null || locked) return;
-    const next = draft.slice();
-    next[active] = { pos: playerPos, playerId, playerName, teamId: playerTeamId };
-    onChange(next);
-    const following = next.findIndex((slot) => slot == null);
-    setActive(following === -1 ? active : following);
+  function add(player: { id: string; shortName: string; teamId: string; pos: PlayerPosition; number: number }) {
+    if (locked || !positionsStillAllowed(draft).includes(player.pos)) return;
+    if (clubCount(draft, player.teamId) >= FANTASY_CLUB_CAP) return;
+    onChange([
+      ...draft,
+      {
+        pos: player.pos,
+        playerId: player.id,
+        playerName: player.shortName,
+        teamId: player.teamId,
+        number: player.number,
+      },
+    ]);
     setPlayerQuery('');
   }
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.slots}>
-        {draft.map((slot, index) => {
-          const label = POS_LABEL[FANTASY_FORMATION[index]];
-          const selected = active === index;
-          return (
+      {draft.map((slot) => (
+        <View key={slot.playerId} style={styles.slot}>
+          <Text style={styles.slotPos}>{POS_LABEL[slot.pos]}</Text>
+          <Pressable
+            onPress={() => router.push(entityHref('player', slot.playerId))}
+            style={{ flex: 1 }}
+            accessibilityRole="link"
+            accessibilityLabel={`${slot.playerName}, open player`}
+          >
+            <Text style={styles.slotName} numberOfLines={1}>
+              {slot.number ? `${slot.number} ` : ''}
+              {slot.playerName}
+            </Text>
+          </Pressable>
+          {locked ? null : (
             <Pressable
-              key={`${label}-${index}`}
-              disabled={locked}
-              onPress={() => setActive(index)}
+              onPress={() => onChange(draft.filter((row) => row.playerId !== slot.playerId))}
               accessibilityRole="button"
-              accessibilityLabel={slot ? `${label} ${slot.playerName}` : `Empty ${label} slot`}
-              style={[styles.slot, selected && styles.slotOn]}
+              accessibilityLabel={`Remove ${slot.playerName}`}
             >
-              <Text style={styles.slotPos}>{label}</Text>
-              <Text style={styles.slotName} numberOfLines={1}>
-                {slot?.playerName ?? 'Empty'}
-              </Text>
+              <Text style={styles.remove}>Remove</Text>
             </Pressable>
-          );
-        })}
-      </View>
+          )}
+        </View>
+      ))}
+      <Text style={styles.hint}>
+        {draft.length}/11 · GK {draft.filter((slot) => slot.pos === 'GK').length}/1 · DEF{' '}
+        {draft.filter((slot) => slot.pos === 'DF').length} · MID {draft.filter((slot) => slot.pos === 'MF').length} · FWD{' '}
+        {draft.filter((slot) => slot.pos === 'FW').length}
+      </Text>
       {locked ? (
-        <Text style={styles.hint}>This XI is locked for the gameweek.</Text>
+        <Text style={styles.hint}>This XI is locked for the round.</Text>
       ) : (
         <>
           <Text style={styles.hint}>{FANTASY_SQUAD_HINT}</Text>
+          <View style={styles.posRow}>
+            {(['GK', 'DF', 'MF', 'FW'] as const).map((key) => {
+              const open = allowed.includes(key);
+              return (
+                <Pressable
+                  key={key}
+                  disabled={!open}
+                  onPress={() => setPos(key)}
+                  style={[styles.pos, pos === key && styles.posOn, !open && styles.posOff]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add ${POS_LABEL[key]}`}
+                >
+                  <Text style={styles.posText}>{POS_LABEL[key]}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
           <TextInput
             value={clubQuery}
             onChangeText={setClubQuery}
-            placeholder="Find a covered club"
+            placeholder="Find a club in this competition"
             placeholderTextColor={colors.textDim}
             style={styles.input}
-            autoCapitalize="words"
-            accessibilityLabel="Find a covered club"
+            accessibilityLabel="Find a club"
           />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.clubs}>
-            {clubMatches.map((club) => (
+          <View style={styles.clubs}>
+            {clubs.slice(0, 8).map((club) => (
               <Pressable
                 key={club.id}
                 onPress={() => void loadClub(club.id)}
@@ -127,37 +155,34 @@ export function SquadPicker({
                 <Text style={styles.clubText}>{club.shortName}</Text>
               </Pressable>
             ))}
-          </ScrollView>
-          <TextInput
-            value={playerQuery}
-            onChangeText={setPlayerQuery}
-            placeholder={pos ? `Search ${POS_LABEL[pos]}` : 'Pick a slot'}
-            placeholderTextColor={colors.textDim}
-            style={styles.input}
-            accessibilityLabel="Search players"
-          />
+          </View>
+          {clubFull ? <Text style={styles.hint}>3 players already from this club.</Text> : null}
           {loadingSquad ? <Text style={styles.hint}>Loading squad from the free-tier cache…</Text> : null}
-          {choices.length === 0 ? (
-            <Text style={styles.hint}>
-              {teamId ? 'No matching players in this squad.' : 'No matching players in the catalog yet.'}
-            </Text>
-          ) : (
-            choices.map((player) => (
-              <Pressable
-                key={player.id}
-                onPress={() => assign(player.id, player.shortName, player.teamId, player.pos)}
-                style={styles.player}
-                accessibilityRole="button"
-                accessibilityLabel={`Pick ${player.name}`}
-              >
-                <Text style={styles.playerPos}>{POS_LABEL[player.pos]}</Text>
-                <Text style={styles.playerName} numberOfLines={1}>
-                  {player.name}
-                </Text>
-                <Text style={styles.playerNum}>{player.number || '—'}</Text>
-              </Pressable>
-            ))
-          )}
+          {pos && teamId && !clubFull ? (
+            <TextInput
+              value={playerQuery}
+              onChangeText={setPlayerQuery}
+              placeholder={`Search ${POS_LABEL[pos]}`}
+              placeholderTextColor={colors.textDim}
+              style={styles.input}
+              accessibilityLabel="Search players"
+            />
+          ) : null}
+          {choices.map((player) => (
+            <Pressable
+              key={player.id}
+              onPress={() => add(player)}
+              style={styles.player}
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${player.name}`}
+            >
+              <Text style={styles.playerPos}>{POS_LABEL[player.pos]}</Text>
+              <Text style={styles.playerName} numberOfLines={1}>
+                {player.number ? `${player.number} ` : ''}
+                {player.name}
+              </Text>
+            </Pressable>
+          ))}
           <Button label={busy ? 'Saving…' : 'Save XI'} onPress={onSave} accessibilityLabel="Save XI" />
         </>
       )}
@@ -167,7 +192,6 @@ export function SquadPicker({
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing.sm },
-  slots: { gap: 6 },
   slot: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -179,10 +203,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
   },
-  slotOn: { borderColor: colors.accent },
   slotPos: { ...type.micro, color: colors.accent, width: 36 },
-  slotName: { ...type.body, color: colors.text, flex: 1 },
+  slotName: { ...type.body, color: colors.text },
+  remove: { ...type.caption, color: colors.danger },
   hint: { ...type.caption, color: colors.textMuted, lineHeight: 18 },
+  posRow: { flexDirection: 'row', gap: 8 },
+  pos: {
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: colors.surfaceElevated,
+  },
+  posOn: { borderColor: colors.accent },
+  posOff: { opacity: 0.4 },
+  posText: { ...type.caption, color: colors.text },
   input: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
@@ -193,7 +229,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     ...type.body,
   },
-  clubs: { gap: 8, paddingVertical: 2 },
+  clubs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   club: {
     borderRadius: radius.full,
     borderWidth: 1,
@@ -214,5 +250,4 @@ const styles = StyleSheet.create({
   },
   playerPos: { ...type.micro, color: colors.textMuted, width: 36 },
   playerName: { ...type.body, color: colors.text, flex: 1 },
-  playerNum: { ...type.caption, color: colors.textMuted },
 });

@@ -291,7 +291,26 @@ describe('football mappers', () => {
       },
       0,
     );
-    expect(ev).toMatchObject({ type: 'goal', playerId: '306', detail: 'Assist: Mac Allister' });
+    expect(ev).toMatchObject({
+      type: 'goal',
+      playerId: '306',
+      detail: 'Assist: Mac Allister',
+      assistPlayerId: '1',
+      assistPlayerName: 'Mac Allister',
+    });
+    expect(
+      mapMatchEvent(
+        {
+          time: { elapsed: 40, extra: null },
+          team: { id: 40, name: 'Liverpool' },
+          player: { id: 9, name: 'Defender' },
+          assist: { id: null, name: null },
+          type: 'Goal',
+          detail: 'Own Goal',
+        },
+        1,
+      ),
+    ).toMatchObject({ type: 'goal', playerId: '9', ownGoal: true });
   });
 
   it('aliases Premier League, Niké Liga, and La Liga mock ids and reuses mock Arsenal colors', () => {
