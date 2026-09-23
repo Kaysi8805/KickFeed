@@ -49,7 +49,7 @@ export default function FantasyXiScreen() {
     if (busy || !league || !gameweek || gameweek.locked) return;
     setBusy(true);
     setNote(null);
-    const result = await fantasy.saveXi(league.id, gameweek.roundId, draft, gameweek.locked, gameweek.deadlineAt);
+    const result = await fantasy.saveXi(league.id, gameweek.roundId, draft, gameweek.locked);
     setBusy(false);
     if (!result.ok) {
       setNote(fantasyErrorMessage(result.error));

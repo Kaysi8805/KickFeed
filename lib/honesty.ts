@@ -17,7 +17,7 @@ export const FANTASY_SCORING_RULES =
   'One XI per round in the competition you picked. 1 goalkeeper, at least 3 defenders, at least 3 midfielders, and at least 1 forward — 11 players, at most 3 from one club. No budget, no bench, and no chips. A goal is 4 points and an assist is 3, after full time. Own goals score 0. An assist counts only when the event includes a player id. No clean sheets, minutes, or captain.';
 
 export const FANTASY_LOCK_RULES =
-  'The gameweek is that competition’s round. Your XI locks at the kickoff of the earliest match in the round that has not started.';
+  'The gameweek is that competition’s round. Your XI locks at the kickoff of the earliest match in the round that has not started. KickFeed stores that kickoff. This device cannot set a later deadline.';
 
 export const FANTASY_SIGN_IN_COPY =
   'Fantasy needs an email account. Demo profiles stay on this device and are not written into KickFeed Postgres.';
@@ -51,6 +51,9 @@ const FANTASY_ERROR_COPY: Record<string, string> = {
   league_full: 'This mini-league is full (20 fans).',
   too_many_leagues: 'You can be in 10 mini-leagues.',
   gameweek_locked: 'This round is locked. The first kickoff has passed.',
+  round_unknown: 'KickFeed has not stored this round’s kickoff yet. Try again in a moment.',
+  deadline_unavailable: 'Couldn’t confirm this round’s kickoff. Try again in a moment.',
+  not_authorized: 'Couldn’t store this round’s kickoff.',
   invalid_round: 'That round is not open.',
   invalid_xi: 'Pick 11 players: 1 goalkeeper, at least 3 defenders, at least 3 midfielders, and at least 1 forward. Each player once.',
   club_cap: 'At most 3 players from the same club.',

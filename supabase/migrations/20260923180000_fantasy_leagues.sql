@@ -4,10 +4,13 @@
 -- One XI per member per round. Points rows are the device’s FT tally (goal 4, assist 3).
 -- Demo ids never pass auth.uid(), so they cannot write these tables.
 --
--- Karol: run this file after 20260923140000_push_devices.sql. Safe to re-run.
+-- Karol: run this file after 20260923140000_push_devices.sql, then immediately run
+-- 20260923193000_fantasy_server_deadline.sql. That follow-up drops the 4-argument
+-- pick RPC in this file (it trusted a client deadline) and locks saves to a
+-- server-owned kickoff. Safe to re-run this file only if the follow-up is applied after.
 -- If an earlier draft of this same file was applied (Friday-window schema, no competition_id),
 -- drop public.fantasy_points, public.fantasy_picks, public.fantasy_members, public.fantasy_leagues
--- and run this file again.
+-- and run this file again, then run the follow-up.
 --
 -- Writes: kickfeed_create_fantasy_league, kickfeed_join_fantasy_league,
 -- kickfeed_upsert_fantasy_pick, kickfeed_upsert_fantasy_points.

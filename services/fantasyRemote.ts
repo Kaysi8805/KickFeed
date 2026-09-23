@@ -174,12 +174,43 @@ export async function joinRemoteFantasyLeague(
   }
 }
 
+export type FantasySyncInvoker = {
+  functions: {
+    invoke: (
+      name: string,
+      args: { body: Record<string, unknown> },
+    ) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
+  };
+};
+
+/** Ask KickFeed to store this competition’s round kickoffs. The pick RPC does not take a deadline. */
+export async function syncFantasyDeadline(
+  client: FantasySyncInvoker | null,
+  competitionId: string,
+  season: number,
+): Promise<{ error: string | null }> {
+  if (!client) return { error: 'not_configured' };
+  if (!isFantasyCompetition(competitionId) || !isSeasonYear(season)) return { error: 'invalid_competition' };
+  try {
+    const { data, error } = await client.functions.invoke('sync-fantasy-deadlines', {
+      body: { competitionId, season },
+    });
+    if (error) return { error: 'deadline_unavailable' };
+    if (!data || typeof data !== 'object' || (data as { ok?: unknown }).ok === false) {
+      const reason = data && typeof data === 'object' ? (data as { reason?: unknown }).reason : undefined;
+      return { error: typeof reason === 'string' ? reason : 'deadline_unavailable' };
+    }
+    return { error: null };
+  } catch {
+    return { error: 'deadline_unavailable' };
+  }
+}
+
 export async function upsertRemoteFantasyPick(
   client: FantasyClient | null,
   leagueId: string,
   roundId: string,
   slots: FantasySlot[],
-  deadlineAt: string | null,
 ): Promise<{ error: string | null }> {
   if (!client) return { error: 'not_configured' };
   if (!isRoundId(roundId)) return { error: 'invalid_round' };
@@ -188,7 +219,6 @@ export async function upsertRemoteFantasyPick(
       p_league_id: leagueId,
       p_round_id: roundId,
       p_slots: slots,
-      p_deadline: deadlineAt,
     });
     return { error: error?.message ?? null };
   } catch (err) {

@@ -8,6 +8,7 @@ import {
   createRemoteFantasyLeague,
   fetchRemoteFantasy,
   joinRemoteFantasyLeague,
+  syncFantasyDeadline,
   upsertRemoteFantasyPick,
   upsertRemoteFantasyPoints,
 } from '@/services/fantasyRemote';
@@ -78,17 +79,19 @@ export function useFantasy() {
       roundId: string,
       slots: readonly FantasySlot[],
       locked: boolean,
-      deadlineAt: string | null,
     ): Promise<{ ok: true } | { ok: false; error: string }> => {
       if (!userId || !snapshot || !signedIn) return { ok: false, error: 'not_authenticated' };
+      const league = snapshot.leagues.find((row) => row.id === leagueId);
+      if (!league) return { ok: false, error: 'league_not_found' };
       const local = saveFantasyPick(snapshot, userId, leagueId, roundId, slots, locked, new Date());
       if (!local.ok) return local;
+      const synced = await syncFantasyDeadline(getSupabaseClient(), league.competitionId, league.season);
+      if (synced.error) return { ok: false, error: synced.error };
       const remote = await upsertRemoteFantasyPick(
         asFantasyClient(getSupabaseClient()),
         leagueId,
         roundId,
         [...slots],
-        deadlineAt,
       );
       if (remote.error) return { ok: false, error: remote.error };
       await refresh();

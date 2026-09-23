@@ -396,13 +396,13 @@ describe('fantasy honesty and remote rows', () => {
 
     expect(await createRemoteFantasyLeague(client, 'Pals', '999', 2026)).toEqual({ error: 'invalid_competition' });
     expect(await createRemoteFantasyLeague(client, 'Pals', '39', 2026)).toEqual({ league: { id: 'fl_new' } });
-    await upsertRemoteFantasyPick(client, 'fl_new', ROUND, slots, '2026-09-26T14:00:00.000Z');
+    await upsertRemoteFantasyPick(client, 'fl_new', ROUND, slots);
     expect(calls.find((call) => call.fn === 'kickfeed_upsert_fantasy_pick')?.args).toEqual({
       p_league_id: 'fl_new',
       p_round_id: ROUND,
       p_slots: slots,
-      p_deadline: '2026-09-26T14:00:00.000Z',
     });
+    expect(calls.find((call) => call.fn === 'kickfeed_upsert_fantasy_pick')?.args).not.toHaveProperty('p_deadline');
     await upsertRemoteFantasyPoints(client, 'fl_new', ROUND, [{ userId: MAYA, points: 7, goals: 1, assists: 1 }]);
     expect(calls.find((call) => call.fn === 'kickfeed_upsert_fantasy_points')?.args).toMatchObject({
       p_league_id: 'fl_new',
