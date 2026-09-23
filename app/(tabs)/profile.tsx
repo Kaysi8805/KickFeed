@@ -164,6 +164,14 @@ export default function ProfileScreen() {
             </Pressable>
             <Pressable
               style={styles.btn}
+              onPress={() => router.push('/fantasy')}
+              accessibilityRole="button"
+              accessibilityLabel="Fantasy mini-leagues"
+            >
+              <Text style={styles.btnText}>Fantasy</Text>
+            </Pressable>
+            <Pressable
+              style={styles.btn}
               onPress={() => router.push('/about')}
               accessibilityRole="link"
               accessibilityLabel="About, privacy, and support"

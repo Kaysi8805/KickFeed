@@ -4,6 +4,8 @@ import {
   CATALOG_ERROR_BODY,
   CATALOG_ERROR_TITLE,
   DEMO_DENSIFY_BANNER,
+  FANTASY_NOT_GAMBLING,
+  FANTASY_SCORING_RULES,
   FAN_PICKS_NOT_GAMBLING,
   STATS_UNAVAILABLE_BODY,
   STATS_UNAVAILABLE_TITLE,
@@ -93,6 +95,14 @@ describe('honesty copy', () => {
     expect(FAN_PICKS_NOT_GAMBLING).toMatch(/not a betting or gambling product/i);
     expect(FAN_PICKS_NOT_GAMBLING).toMatch(/no stakes/i);
     expect(FAN_PICKS_NOT_GAMBLING).toMatch(/Man of the Match/);
+  });
+
+  it('says fantasy mini-leagues are free and not gambling', () => {
+    expect(FANTASY_NOT_GAMBLING).toMatch(/free/i);
+    expect(FANTASY_NOT_GAMBLING).toMatch(/no stakes/i);
+    expect(FANTASY_NOT_GAMBLING).toMatch(/not a betting or gambling product/i);
+    expect(FANTASY_SCORING_RULES).toMatch(/5 points/);
+    expect(FANTASY_SCORING_RULES).toMatch(/goals only/i);
   });
 
   it('does not invent possession when stats are missing', () => {

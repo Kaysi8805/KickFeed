@@ -17,6 +17,7 @@ v1 is **local-first**: seeded fan profiles for **demo mode**, optional **Supabas
 - **Match hub** — discussion thread, participants, empty states, feed posts attached to that match id, plus **score predictions** and **Man of the Match** voting. Composer can deep-link from the match page.
 - **Predictions & MOTM** — before kickoff, pick a home/away score and see community aggregates (other demo fans are seeded). Picks lock at kickoff / once the match is live. During and after the match, vote once for MOTM from lineups (squad fallback). Not a betting product.
 - **Prediction leaderboards** — global and per-league ranks by prediction points (optional MOTM bonus). Your rank + top 10. Demo board is this device + seeded fans; email sign-in writes picks to KickFeed Postgres. Honesty banners say which table you are on.
+- **Fantasy mini-leagues** — private invite-code leagues, one 4-4-2 XI per gameweek, 5 points per goal. Free. Not betting. Demo uses a seeded Friday XI on this device; email sign-in stores leagues, memberships, and XIs in KickFeed Postgres.
 - **Notifications** — in-app center for match-chat replies, DMs, your prediction/MOTM confirmations, goals/kickoff alerts for fixtures you care about, follows, and friend posts. Device alerts are opt-in on Profile: **kickoff soon** (one reminder per favorite match) and **goals** when live scores tick up. Email sign-in stores an Expo push token so those alerts can arrive after you close the app. Without a token, the in-app center still works.
 - **Direct messages** — 1:1 text between fans (demo seeds or Supabase uuids). Inbox + thread from Home, Profile, a fan page, or search. Blocks hide the thread both ways. No group chats, no media in v1.
 - **Report, block, slow-mode** — report a post, profile, match-chat message, or **DM**. Block a fan to hide their posts, match-chat, DMs, and notifications on this account. Match hub discussion and 1:1 DMs have a 20s slow-mode (plus a short burst cap) so spam does not take over. Demo saves stay in AsyncStorage; email sessions also write `user_blocks` / `user_reports` / `direct_messages` in KickFeed Postgres. Not a moderation dashboard.
@@ -65,11 +66,11 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 ```
 
 5. Restart Expo (`npx expo start`) so the public env vars are inlined. Expo Go is supported (`@supabase/supabase-js` + AsyncStorage session).
-6. Optional: in the Supabase SQL editor, run the files in [`supabase/migrations/`](supabase/migrations/) (profiles, prediction tables, write-lock RPCs, **reports/blocks**, then **direct messages**). Profiles are the join key (`id` = `auth.users.id`). Live ranking writes go through kickoff-lock RPCs — not direct table upserts. Reports/blocks use RLS on `user_reports` / `user_blocks` (own rows + incoming blocks so DMs can hide). DMs use RLS on `direct_messages` (participants only; blocked pairs hidden). See [`supabase/README.md`](supabase/README.md).
+6. Optional: in the Supabase SQL editor, run the files in [`supabase/migrations/`](supabase/migrations/) (profiles, prediction tables, write-lock RPCs, **reports/blocks**, **direct messages**, **push devices**, then **fantasy mini-leagues**). Profiles are the join key (`id` = `auth.users.id`). Live ranking writes go through kickoff-lock RPCs — not direct table upserts. Reports/blocks use RLS on `user_reports` / `user_blocks` (own rows + incoming blocks so DMs can hide). DMs use RLS on `direct_messages` (participants only; blocked pairs hidden). Fantasy leagues, memberships, and weekly XIs use RLS; clients write through `kickfeed_create_fantasy_league`, `kickfeed_join_fantasy_league`, and `kickfeed_upsert_fantasy_pick`. See [`supabase/README.md`](supabase/README.md).
 
 Google / Apple sign-in is not in the app. Do not add those buttons until the providers actually complete a session.
 
-**Identity:** demo seeds stay `maya` / `omar` / …; real accounts use `auth.users.id` (uuid). Favorites, predictions, MOTM, leaderboard rows, **blocks**, **reports**, and **DMs** all key off that same id. Social graph stays on local AsyncStorage; live ranking additionally upserts the signed-in user’s picks to Postgres; email sessions also upsert that user’s blocks/reports/DMs.
+**Identity:** demo seeds stay `maya` / `omar` / …; real accounts use `auth.users.id` (uuid). Favorites, predictions, MOTM, leaderboard rows, **blocks**, **reports**, **DMs**, and **fantasy leagues / XIs** all key off that same id. Social graph stays on local AsyncStorage; live ranking additionally upserts the signed-in user’s picks to Postgres; email sessions also upsert that user’s blocks/reports/DMs and fantasy rows.
 
 ## EAS push (Karol)
 
@@ -243,6 +244,7 @@ app/                 Expo Router screens (tabs + stack)
   player/[id]        Player detail (stats, appearances, follow)
   match/[id]         Match hub (events, Predict, MOTM, discussion, TV)
   leaderboard        Global / per-league prediction ranking
+  fantasy            Private mini-leagues (invite code, XI, standings)
   tv                 TV schedule by country (UK / SK / US)
   search             Global search (clubs, players, leagues, fans)
   messages           DM inbox + /messages/[peerId] 1:1 thread
@@ -255,16 +257,18 @@ lib/remotePush.ts   Remote Expo push planner (shared with the Edge Function)
 lib/easProject.ts    EXPO_PUBLIC_EAS_PROJECT_ID + Constants.easConfig / extra.eas
 lib/engagement.ts    Prediction lock, MOTM ballot, community tallies
 lib/leaderboard.ts   Prediction points, MOTM bonus, top-N + current rank
+lib/fantasy.ts       Mini-league rules: 4-4-2, gameweek lock, goals-only points, demo seed
 lib/tvCountry.ts     Locale → launch geo, kickoff labels in that timezone
 lib/honesty.ts        Live-mix + TV editorial + demo/live ranking copy
 lib/footballBff.ts    Allowlisted API-Football proxy + TTL cache (Worker/Node)
 bff/                 Cloudflare Worker + local Node loopback (FOOTBALL_API_KEY server-side)
 data/types.ts        Shared domain types
 data/mocks/          Seeded users, teams, squads, leagues, fixtures, posts, TV, predictions/MOTM, DMs
-supabase/             Optional SQL for `profiles`, predictions/MOTM, `user_blocks` / `user_reports`, and `direct_messages`; not used by CI
+supabase/             Optional SQL for `profiles`, predictions/MOTM, `user_blocks` / `user_reports`, `direct_messages`, push devices, and fantasy leagues; not used by CI
 lib/userIdentity.ts  Demo id vs Supabase uuid helpers; profile → User
 services/auth.ts     Email/password AuthProvider + demo list; OAuth rejected, no buttons
 services/leaderboard.ts  Postgres fetch/upsert when Supabase is configured
+services/fantasyRemote.ts  Postgres fetch/RPC for fantasy leagues and XIs (email session only)
 services/moderation.ts   Postgres fetch/insert for blocks + reports (email session only)
 services/dms.ts          Postgres fetch/insert for 1:1 DMs (email session only)
 services/supabase.ts Expo client from EXPO_PUBLIC_SUPABASE_* (null without env)
@@ -352,6 +356,7 @@ Karol’s batches:
 - **Matchday Home — done.** Home pins live/next favorite (or featured live coverage) above the feed.
 - **EAS push — done.** Favorite kickoff-soon + goal device alerts via Expo Notifications + EAS `projectId`. No extra football polling.
 - **Pre-match lineups — done.** Match hub Lineups list for leagues 39, 40, 332, and 140. Formation, starting XI, and a collapsed bench from `GET /fixtures/lineups` through the BFF, fetched when the match screen opens (not during Matches hydrate). The same list is used before, during, and after the match. A miss says lineups usually land about 60–90 min before kickoff. No pitch diagram and no provisional/confirmed label unless a payload says so.
+- **Fantasy mini-leagues — done.** Profile and Home open a private invite-code league. One 4-4-2 XI per gameweek from covered clubs. 5 points per goal. Locks at the first covered kickoff (Friday–Friday UTC). Demo seed is Friday XI (`NEON11`) on this device. Email sign-in uses `20260923180000_fantasy_leagues.sql`. Not betting. No budget, bench, chips, or season archive.
 - **Report / block — done.** Demo = AsyncStorage; email session = Postgres RLS. Not a moderation dashboard.
 - **This PR.** 1:1 DMs. Demo = AsyncStorage (Maya↔Omar seed); email session = Postgres RLS + slow-mode trigger. Not in this PR: group chats, media DMs, push for messages, moderation dashboard, licensed TV, Apple/Google polish, more geos. Not gambling.
 
@@ -364,6 +369,8 @@ Leaderboards show **Demo ranking — this device and seeded fans** when Supabase
 Reports and blocks show the same split: **this device in demo mode** vs **KickFeed Postgres for this email account**. There is no public moderation inbox in the app.
 
 DMs use the same split: **this device in demo mode** vs **KickFeed Postgres for this email account**. Copy on the inbox says it is 1:1 text, not a group workspace.
+
+Fantasy uses the same split: **this device and seeded fans** vs **KickFeed Postgres**. The screen says the league is free and not betting, and that v1 scores goals only.
 
 ## UX polish (Batch 7)
 
@@ -410,6 +417,21 @@ Points (finished matches only; live/upcoming wait):
 Rank: points, then exacts, results, MOTM hits, scored matches, handle. Top 10 plus the current user’s rank (demo id or Supabase uuid — same key as social state). Related mock/live match ids score once.
 
 **Live** (Supabase env + email session): writes go through `kickfeed_upsert_prediction` / `kickfeed_upsert_motm_vote` (server `now()` + kickoff lock). Board reads Postgres. Direct table writes are revoked. **Demo** (env missing or Continue with demo): seeded AsyncStorage board only. Not gambling.
+
+## Fantasy mini-leagues
+
+Open **Home → Fantasy** or **Profile → Fantasy**.
+
+A private league has a 6-character invite code. Each fan sets **one XI per gameweek**, and that XI is used in every league they have joined.
+
+Rules (v1):
+
+- **4-4-2** — 1 GK, 4 DF, 4 MF, 2 FW. No budget, no bench, no chips.
+- Players are clubs in KickFeed coverage (leagues `39`, `40`, `332`, `140`, or the mock aliases `epl` / `laliga` / `nikeliga`). The picker loads a squad with the existing `GET /players/squads` cache. It does not prefetch every club.
+- **Gameweek** — Friday 00:00 UTC through the next Friday. The XI **locks at the first covered kickoff** in that window.
+- **5 points per goal** already on the fixture. Own goals score 0. Assists are not scored: the free-tier event names an assist without a player id. No clean sheets or appearance points. The table is **this gameweek only**. The league screen may request up to eight missing `/fixtures/events` lists for clubs in the XIs (once each, cached). It does not prefetch the whole window.
+
+**Demo** (no email session): AsyncStorage key `kickfeed.fantasy.v1`, plus a seeded league **Friday XI** / code **NEON11** (Maya, Jordan, Omar). Their XIs pick players who score in the mock catalog, so the table is not empty. **Live** (email session): Postgres via [`supabase/migrations/20260923180000_fantasy_leagues.sql`](supabase/migrations/20260923180000_fantasy_leagues.sql). Karol runs that file after the earlier migrations. Not gambling — no stakes and no payouts.
 
 ## Report, block, and match-chat slow-mode
 

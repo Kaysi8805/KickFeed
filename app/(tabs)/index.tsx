@@ -109,6 +109,15 @@ export default function HomeScreen() {
       <SearchBarPrompt />
       <View style={styles.statusPad}>
         <CatalogStatus />
+        <Pressable
+          onPress={() => router.push('/fantasy')}
+          style={styles.fantasy}
+          accessibilityRole="button"
+          accessibilityLabel="Fantasy mini-leagues"
+        >
+          <Text style={styles.fantasyKicker}>FANTASY</Text>
+          <Text style={styles.fantasyText}>Free private mini-league</Text>
+        </Pressable>
         <Segmented
           value={pane}
           onChange={setPane}
@@ -213,6 +222,19 @@ const styles = StyleSheet.create({
   },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: 72 },
   statusPad: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm, gap: spacing.sm },
+  fantasy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+  },
+  fantasyKicker: { ...type.micro, color: colors.accent },
+  fantasyText: { ...type.caption, color: colors.text },
   section: {
     ...type.badge,
     color: colors.textMuted,
