@@ -1,6 +1,7 @@
 /** User-facing disclaimers so live/mock mix and editorial TV are obvious in demos. */
 
 import { LIVE_GEO_LABEL, LIVE_GEO_SHORT } from '@/lib/footballCoverage';
+import { MATCHES_LOOKAHEAD_DAYS, MATCHES_LOOKBACK_DAYS, type MatchesListFilter } from '@/lib/matchesWindow';
 
 export const LIVE_MIX_DISCLAIMER = `${LIVE_GEO_SHORT} live · other leagues mock`;
 
@@ -95,7 +96,13 @@ export function rankingDisclaimer(
   return 'Demo ranking — this device and seeded fans. Not a live KickFeed table.';
 }
 
-export type MatchWindowFilter = 'live' | 'today' | 'upcoming';
+export type MatchWindowFilter = MatchesListFilter;
+
+/** Date span shown on Matches. Mock keeps the worldwide disclaimer; live does not claim other leagues. */
+export function matchesWindowCaption(source: 'live' | 'mock'): string {
+  const span = `Last ${MATCHES_LOOKBACK_DAYS} days through the next ${MATCHES_LOOKAHEAD_DAYS}`;
+  return source === 'live' ? span : `${span} worldwide (mock)`;
+}
 
 export const MATCHDAY_EMPTY_TITLE = 'Quiet matchday';
 
@@ -117,11 +124,13 @@ export function matchesEmptyBody(
   source: 'live' | 'mock',
 ): string {
   const flip =
-    filter === 'live'
-      ? 'Flip to Today or Upcoming'
-      : filter === 'today'
-        ? 'Flip to Live or Upcoming'
-        : 'Flip to Live or Today';
+    filter === 'all'
+      ? 'Flip to Live, Today, or Upcoming'
+      : filter === 'live'
+        ? 'Flip to Today or Upcoming'
+        : filter === 'today'
+          ? 'Flip to Live or Upcoming'
+          : 'Flip to Live or Today';
   if (source === 'live') {
     return `${flip} — live fixtures for ${LIVE_GEO_SHORT} land here when the API has them.`;
   }

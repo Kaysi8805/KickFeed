@@ -12,6 +12,7 @@ import {
   TV_EDITORIAL_DISCLAIMER,
   dmDisclaimer,
   matchesEmptyBody,
+  matchesWindowCaption,
   matchdayEmptyBody,
   moderationDisclaimer,
 } from '@/lib/honesty';
@@ -36,6 +37,14 @@ describe('honesty copy', () => {
     expect(matchesEmptyBody('upcoming', 'mock')).toMatch(/^Flip to Live or Today/);
     expect(matchesEmptyBody('today', 'mock')).not.toMatch(/Flip to Today/);
     expect(matchesEmptyBody('live', 'live')).toMatch(/Slovakia/);
+    expect(matchesEmptyBody('all', 'mock')).toMatch(/^Flip to Live, Today, or Upcoming/);
+    expect(matchesEmptyBody('all', 'live')).toMatch(/Slovakia/);
+  });
+
+  it('states the Matches window without calling mock scores live', () => {
+    expect(matchesWindowCaption('mock')).toBe('Last 5 days through the next 10 worldwide (mock)');
+    expect(matchesWindowCaption('live')).toBe('Last 5 days through the next 10');
+    expect(matchesWindowCaption('live')).not.toMatch(/worldwide/i);
   });
 
   it('keeps matchday empty copy honest about live coverage vs mock', () => {

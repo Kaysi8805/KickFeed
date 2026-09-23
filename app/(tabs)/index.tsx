@@ -24,14 +24,13 @@ import {
   rankHomeFeed,
   viewerFromApp,
 } from '@/lib/homeFeed';
+import { DEFAULT_HOME_PANE, HOME_PANES, type HomePane } from '@/lib/homePanes';
 import { pickMatchdayHome } from '@/lib/matchdayHome';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useLiveTick } from '@/lib/useLiveTick';
 import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, spacing, type } from '@/theme';
-
-type HomePane = 'matchday' | 'feed';
 
 export default function HomeScreen() {
   const tick = useLiveTick();
@@ -60,7 +59,7 @@ export default function HomeScreen() {
     [tick, catalog.lastSyncedAt, catalog.loading, favoriteTeamIds, favoriteLeagueIds, favoritePlayerIds],
   );
 
-  const [pane, setPane] = useState<HomePane>('matchday');
+  const [pane, setPane] = useState<HomePane>(DEFAULT_HOME_PANE);
 
   const viewer = useMemo(
     () =>
@@ -113,10 +112,7 @@ export default function HomeScreen() {
         <Segmented
           value={pane}
           onChange={setPane}
-          options={[
-            { key: 'matchday', label: 'Matchday' },
-            { key: 'feed', label: 'Feed' },
-          ]}
+          options={HOME_PANES}
         />
       </View>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
