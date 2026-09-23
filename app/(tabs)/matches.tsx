@@ -10,9 +10,9 @@ import { TvButton } from '@/components/tv/TvButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
-import { CATALOG_ERROR_BODY, CATALOG_ERROR_TITLE, matchesEmptyBody } from '@/lib/honesty';
-import { isSameDay } from '@/lib/format';
+import { CATALOG_ERROR_BODY, CATALOG_ERROR_TITLE, matchesEmptyBody, matchesWindowCaption } from '@/lib/honesty';
 import { entityHref } from '@/lib/entityNav';
+import { filterMatchesList, type MatchesListFilter } from '@/lib/matchesWindow';
 import { expandFavoriteIds } from '@/lib/favoriteIds';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import { useLiveTick } from '@/lib/useLiveTick';
@@ -20,21 +20,18 @@ import { useApp } from '@/services/AppProvider';
 import { football } from '@/services/football';
 import { colors, spacing, type } from '@/theme';
 
-type Filter = 'live' | 'today' | 'upcoming';
-
 export default function MatchesScreen() {
   const tick = useLiveTick();
   const catalog = useFootballCatalog();
   const { favoriteLeagueIds } = useApp();
-  const [filter, setFilter] = useState<Filter>('live');
+  const [filter, setFilter] = useState<MatchesListFilter>('all');
   const fixtures = useMemo(() => football.getFixtures(), [tick, catalog.lastSyncedAt, catalog.loading]);
   const favLeagues = useMemo(() => expandFavoriteIds(favoriteLeagueIds, 'league'), [favoriteLeagueIds, catalog.lastSyncedAt]);
 
-  const filtered = useMemo(() => {
-    if (filter === 'live') return fixtures.filter((f) => f.status === 'live' || f.status === 'ht');
-    if (filter === 'today') return fixtures.filter((f) => isSameDay(f.kickoff));
-    return fixtures.filter((f) => f.status === 'upcoming' && !isSameDay(f.kickoff));
-  }, [filter, fixtures]);
+  const filtered = useMemo(
+    () => filterMatchesList(fixtures, filter, new Date()),
+    [filter, fixtures, tick],
+  );
 
   const grouped = useMemo(() => {
     const map = new Map<string, typeof filtered>();
@@ -62,14 +59,13 @@ export default function MatchesScreen() {
             <SearchButton />
           </View>
         </View>
-        {catalog.source === 'live' ? null : (
-          <Text style={styles.sub}>Live, today, and what’s next worldwide (mock)</Text>
-        )}
+        <Text style={styles.sub}>{matchesWindowCaption(catalog.source)}</Text>
         <CatalogStatus />
         <Segmented
           value={filter}
           onChange={setFilter}
           options={[
+            { key: 'all', label: 'All' },
             { key: 'live', label: 'Live' },
             { key: 'today', label: 'Today' },
             { key: 'upcoming', label: 'Upcoming' },
@@ -89,11 +85,21 @@ export default function MatchesScreen() {
         ) : grouped.length === 0 ? (
           <EmptyState
             title={
-              filter === 'live' ? 'No live matches right now' : filter === 'today' ? 'No matches today' : 'Nothing upcoming'
+              filter === 'all'
+                ? 'No fixtures in this window'
+                : filter === 'live'
+                  ? 'No live matches right now'
+                  : filter === 'today'
+                    ? 'No matches today'
+                    : 'Nothing upcoming'
             }
             body={matchesEmptyBody(filter, catalog.source)}
-            actionLabel={filter === 'live' ? 'See today' : filter === 'today' ? 'See upcoming' : 'See live'}
-            onAction={() => setFilter(filter === 'live' ? 'today' : filter === 'today' ? 'upcoming' : 'live')}
+            actionLabel={
+              filter === 'all' ? 'See live' : filter === 'live' ? 'See today' : filter === 'today' ? 'See upcoming' : 'See all'
+            }
+            onAction={() =>
+              setFilter(filter === 'all' ? 'live' : filter === 'live' ? 'today' : filter === 'today' ? 'upcoming' : 'all')
+            }
           />
         ) : (
           grouped.map(({ league, fixtures: list }) => (
