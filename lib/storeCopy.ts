@@ -1,6 +1,9 @@
 import { FAN_PICKS_NOT_GAMBLING } from '@/lib/honesty';
 
-export function emailAuthHint(storeFacing: boolean): string {
+export function emailAuthHint(storeFacing: boolean, demo = true): string {
+  if (!demo) {
+    return `Sign in with email. Demo profiles are turned off on this install. ${FAN_PICKS_NOT_GAMBLING}`;
+  }
   const account = storeFacing
     ? 'Demo profiles stay on this device. Email accounts are KickFeed sign-in.'
     : 'Demo profiles stay on this device. Email accounts use your Supabase project.';

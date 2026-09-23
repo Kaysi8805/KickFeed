@@ -10,6 +10,8 @@ export type LegalDocument = {
 export const LEGAL_UPDATED = legal.updated;
 export const PRIVACY_POLICY_URL = legal.privacyPolicyUrl;
 export const TERMS_URL = legal.termsUrl;
+export const SUPPORT_URL = legal.supportUrl;
+export const SUPPORT_EMAIL = legal.supportEmail;
 
 export const PRIVACY_DOCUMENT: LegalDocument = legal.privacy;
 export const TERMS_DOCUMENT: LegalDocument = legal.terms;

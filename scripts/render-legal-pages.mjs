@@ -38,16 +38,17 @@ function page(kind, filename) {
       </a>
       <nav>
         <a href="./privacy.html">Privacy</a>
+        <a href="./support.html">Support</a>
         <a href="./terms.html">Terms</a>
       </nav>
     </header>
     <main class="legal">
       <h1>${doc.title}</h1>
-      <p class="updated">Updated ${legal.updated}. The same text is in the KickFeed app under Profile.</p>
+      <p class="updated">Updated ${legal.updated}. The KickFeed app links here from About.</p>
 ${sections}
     </main>
     <footer>
-      <p>KickFeed · <a href="./index.html">Home</a> · <a href="./privacy.html">Privacy</a> · <a href="./terms.html">Terms</a></p>
+      <p>KickFeed · <a href="./index.html">Home</a> · <a href="./privacy.html">Privacy</a> · <a href="./support.html">Support</a> · <a href="./terms.html">Terms</a></p>
     </footer>
   </body>
 </html>

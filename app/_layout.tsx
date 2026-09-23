@@ -55,8 +55,7 @@ function RootNav() {
         <Stack.Screen name="pick-favorites" />
         <Stack.Screen name="tv" />
         <Stack.Screen name="leaderboard" />
-        <Stack.Screen name="privacy" />
-        <Stack.Screen name="terms" />
+        <Stack.Screen name="about" />
       </Stack>
     </>
   );

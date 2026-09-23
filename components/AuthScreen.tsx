@@ -11,9 +11,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ExternalLinks } from '@/components/about/ExternalLinks';
 import { DemoLogin } from '@/components/DemoLogin';
-import { LegalDocumentView } from '@/components/legal/LegalDocumentView';
 import { Segmented } from '@/components/ui/Segmented';
+import { demoModeEnabled } from '@/lib/demoMode';
 import { appChannelFromEnv, isStoreFacingChannel } from '@/lib/storeChannel';
 import { emailAuthHint } from '@/lib/storeCopy';
 import { AuthError } from '@/services/auth';
@@ -25,35 +26,51 @@ type EmailMode = 'signin' | 'signup';
 
 export function AuthScreen() {
   const { supabaseConfigured } = useApp();
-  const [pane, setPane] = useState<GatePane>(supabaseConfigured ? 'email' : 'demo');
-  const [legal, setLegal] = useState<'privacy' | 'terms' | null>(null);
+  const demo = demoModeEnabled();
   const storeFacing = isStoreFacingChannel(appChannelFromEnv());
+  const [pane, setPane] = useState<GatePane>(supabaseConfigured || !demo ? 'email' : 'demo');
 
-  if (legal) {
-    return <LegalDocumentView kind={legal} onBack={() => setLegal(null)} />;
+  if (!supabaseConfigured && !demo) {
+    return <SignInUnavailable storeFacing={storeFacing} />;
   }
 
-  if (pane === 'demo') {
-    return (
-      <DemoLogin
-        storeFacing={storeFacing}
-        onOpenLegal={setLegal}
-        onBack={supabaseConfigured ? () => setPane('email') : undefined}
-      />
-    );
+  if (demo && pane === 'demo') {
+    return <DemoLogin storeFacing={storeFacing} onBack={supabaseConfigured ? () => setPane('email') : undefined} />;
   }
 
-  return <EmailAuthForm storeFacing={storeFacing} onOpenLegal={setLegal} onDemo={() => setPane('demo')} />;
+  return (
+    <EmailAuthForm
+      storeFacing={storeFacing}
+      demo={demo}
+      onDemo={() => setPane('demo')}
+    />
+  );
+}
+
+function SignInUnavailable({ storeFacing }: { storeFacing: boolean }) {
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <Text style={styles.logo}>KickFeed</Text>
+        <Text style={styles.tag}>
+          {storeFacing
+            ? 'Email sign-in is not available on this install. Demo profiles are turned off.'
+            : 'Email sign-in needs Supabase env vars, or set EXPO_PUBLIC_DEMO_MODE=1 for demo profiles.'}
+        </Text>
+        <ExternalLinks />
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
 
 function EmailAuthForm({
   onDemo,
-  onOpenLegal,
   storeFacing,
+  demo,
 }: {
   onDemo: () => void;
-  onOpenLegal: (kind: 'privacy' | 'terms') => void;
   storeFacing: boolean;
+  demo: boolean;
 }) {
   const { signInWithEmail, signUpWithEmail } = useApp();
   const [mode, setMode] = useState<EmailMode>('signin');
@@ -74,7 +91,10 @@ function EmailAuthForm({
           ? await signInWithEmail(email, password)
           : await signUpWithEmail(email, password, displayName);
       if (result.status === 'confirm_email') {
-        setNotice(`Check ${result.email} for a confirmation link, then sign in. You can turn off “Confirm email” in the Supabase Auth settings for local demos.`);
+        const localNote = storeFacing
+          ? ''
+          : ' You can turn off “Confirm email” in the Supabase Auth settings for local demos.';
+        setNotice(`Check ${result.email} for a confirmation link, then sign in.${localNote}`);
         setMode('signin');
       }
     } catch (err) {
@@ -100,7 +120,11 @@ function EmailAuthForm({
               <Text style={styles.badgeText}>EMAIL AUTH</Text>
             </View>
             <Text style={styles.logo}>KickFeed</Text>
-            <Text style={styles.tag}>Sign in with email, or keep using a demo profile on this device.</Text>
+            <Text style={styles.tag}>
+              {demo
+                ? 'Sign in with email, or keep using a demo profile on this device.'
+                : 'Sign in with email.'}
+            </Text>
           </View>
           <Segmented
             value={mode}
@@ -169,33 +193,18 @@ function EmailAuthForm({
               {busy ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}
             </Text>
           </Pressable>
-          <Pressable
-            onPress={onDemo}
-            accessibilityRole="button"
-            accessibilityLabel="Continue with demo"
-            style={styles.demoLink}
-          >
-            <Text style={styles.demoLinkText}>Continue with demo</Text>
-          </Pressable>
-          <View style={styles.legalRow}>
+          {demo ? (
             <Pressable
-              onPress={() => onOpenLegal('privacy')}
-              accessibilityRole="link"
-              accessibilityLabel="Privacy Policy"
-              style={styles.legalLink}
+              onPress={onDemo}
+              accessibilityRole="button"
+              accessibilityLabel="Continue with demo"
+              style={styles.demoLink}
             >
-              <Text style={styles.demoLinkText}>Privacy Policy</Text>
+              <Text style={styles.demoLinkText}>Continue with demo</Text>
             </Pressable>
-            <Pressable
-              onPress={() => onOpenLegal('terms')}
-              accessibilityRole="link"
-              accessibilityLabel="Terms of Use"
-              style={styles.legalLink}
-            >
-              <Text style={styles.demoLinkText}>Terms</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.hint}>{emailAuthHint(storeFacing)}</Text>
+          ) : null}
+          <ExternalLinks />
+          <Text style={styles.hint}>{emailAuthHint(storeFacing, demo)}</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

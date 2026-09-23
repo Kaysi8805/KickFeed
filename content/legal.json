@@ -1,7 +1,9 @@
 {
   "updated": "23 September 2026",
-  "privacyPolicyUrl": "https://kickfeed.polsia.app/privacy.html",
-  "termsUrl": "https://kickfeed.polsia.app/terms.html",
+  "privacyPolicyUrl": "https://kaysi8805.github.io/KickFeed/privacy.html",
+  "termsUrl": "https://kaysi8805.github.io/KickFeed/terms.html",
+  "supportUrl": "https://kaysi8805.github.io/KickFeed/support.html",
+  "supportEmail": "karolurban1@gmail.com",
   "privacy": {
     "title": "Privacy Policy",
     "sections": [

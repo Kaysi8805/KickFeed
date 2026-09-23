@@ -46,11 +46,11 @@ CI runs `npm ci` → `typecheck` → `test` on pull requests (see `.github/workf
 
 ## Store checklist
 
-Privacy Policy and Terms (in the app and on the landing site), production metadata, permission strings, and what is still manual — developer accounts, screenshots, DNS, EAS credentials — are in [`docs/store-checklist.md`](docs/store-checklist.md). This repo does not submit to the App Store or Play.
+Privacy, support, and terms links, production EAS settings, and the submit checklist are in [`docs/store-checklist.md`](docs/store-checklist.md). Listing copy and screenshots are in [`store/`](store/). This repo does not submit to the App Store or Play.
 
 ## Supabase email auth
 
-Without `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`, KickFeed stays on the **demo profile picker** (same as today). With both set, the gate is email sign-in / sign-up, and **Continue with demo** remains a staging fallback.
+Without `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`, KickFeed stays on the **demo profile picker** when demo mode is on. With both set, the gate is email sign-in / sign-up, and **Continue with demo** remains a fallback unless `EXPO_PUBLIC_DEMO_MODE=0` (the production EAS profile).
 
 Karol — create a free project and paste keys (never commit `.env`):
 
@@ -228,7 +228,7 @@ Mock club ids (`ars`, `liv`, `epl`, `slovan`, `laliga`) still resolve after hydr
 
 ## Demo mode
 
-On first launch without Supabase env, choose a demo profile. With Supabase env, email sign-in is first; **Continue with demo** still opens the picker. State (favorites including players, follows, posts, comments, **score predictions**, **MOTM votes**, **blocks**, **reports**, **direct messages**, notification read flags) is persisted with AsyncStorage under `kickfeed.v1.state` (`schemaVersion` 2). Per-user maps (favorites, predictions, MOTM, likes, following, blocks, DM reads) are keyed by `currentUserId`: seeded ids like `maya` in demo mode, or the Supabase `auth.users` uuid when signed in with email. Demo and email data can coexist on one device. Post `matchId` values are kept as stored — live remapping is display-time only. Predictions and MOTM votes use the same related-id matching as match chat, so mock ids (`fx-liv-ars`) and live England ids stay one ballot when a key is set.
+On first launch without Supabase env, choose a demo profile. With Supabase env, email sign-in is first; **Continue with demo** still opens the picker unless `EXPO_PUBLIC_DEMO_MODE=0`. Production drops a restored demo session and opens on email sign-in. State (favorites including players, follows, posts, comments, **score predictions**, **MOTM votes**, **blocks**, **reports**, **direct messages**, notification read flags) is persisted with AsyncStorage under `kickfeed.v1.state` (`schemaVersion` 2). Per-user maps (favorites, predictions, MOTM, likes, following, blocks, DM reads) are keyed by `currentUserId`: seeded ids like `maya` in demo mode, or the Supabase `auth.users` uuid when signed in with email. Demo and email data can coexist on one device. Post `matchId` values are kept as stored — live remapping is display-time only. Predictions and MOTM votes use the same related-id matching as match chat, so mock ids (`fx-liv-ars`) and live England ids stay one ballot when a key is set.
 
 Corrupt JSON is discarded. A missing or newer `schemaVersion` still keeps valid slices (signed-in demo user or uuid, follows, posts, …) and stamps the current version. Unknown `currentUserId` values (not a demo id and not a uuid) are cleared. On boot, a live Supabase session wins; if the session is gone, a leftover uuid is dropped so demo restore still works.
 

@@ -18,6 +18,7 @@ import {
   FAN_PICKS_NOT_GAMBLING,
   moderationDisclaimer,
 } from '@/lib/honesty';
+import { demoModeEnabled } from '@/lib/demoMode';
 import { appChannelFromEnv, isStoreFacingChannel } from '@/lib/storeChannel';
 import { matchAlertsIntro, profileAccountNote } from '@/lib/storeCopy';
 import { shouldPersistModeration } from '@/lib/moderation';
@@ -64,6 +65,7 @@ export default function ProfileScreen() {
   const blockedPeople = users.filter((u) => blockedUserIds.includes(u.id));
   const honesty = moderationDisclaimer(shouldPersistModeration(supabaseConfigured, authMode));
   const storeFacing = isStoreFacingChannel(appChannelFromEnv());
+  const demo = demoModeEnabled();
   const pushHint =
     pushNote ??
     deviceAlertsCopy({
@@ -162,19 +164,11 @@ export default function ProfileScreen() {
             </Pressable>
             <Pressable
               style={styles.btn}
-              onPress={() => router.push('/privacy')}
+              onPress={() => router.push('/about')}
               accessibilityRole="link"
-              accessibilityLabel="Privacy Policy"
+              accessibilityLabel="About, privacy, and support"
             >
-              <Text style={styles.btnText}>Privacy</Text>
-            </Pressable>
-            <Pressable
-              style={styles.btn}
-              onPress={() => router.push('/terms')}
-              accessibilityRole="link"
-              accessibilityLabel="Terms of Use"
-            >
-              <Text style={styles.btnText}>Terms</Text>
+              <Text style={styles.btnText}>About</Text>
             </Pressable>
           </View>
           <Text style={styles.legalNote}>{FAN_PICKS_NOT_GAMBLING}</Text>
@@ -261,15 +255,17 @@ export default function ProfileScreen() {
                   {pushPrefs.goals ? 'On' : 'Off'}
                 </Text>
               </Pressable>
-              <Pressable
-                style={styles.alertsAction}
-                onPress={() => void scheduleDemoNotification('KickFeed test', 'If you see this, device alerts work.')}
-                accessibilityRole="button"
-                accessibilityLabel="Send a test alert"
-              >
-                <Text style={styles.switcherText}>Send a test alert</Text>
-              </Pressable>
-              {authMode === 'supabase' && pushToken ? (
+              {demo ? (
+                <Pressable
+                  style={styles.alertsAction}
+                  onPress={() => void scheduleDemoNotification('KickFeed test', 'If you see this, device alerts work.')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send a test alert"
+                >
+                  <Text style={styles.switcherText}>Send a test alert</Text>
+                </Pressable>
+              ) : null}
+              {demo && authMode === 'supabase' && pushToken ? (
                 <Pressable
                   style={styles.alertsAction}
                   disabled={remoteBusy}

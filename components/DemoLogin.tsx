@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ExternalLinks } from '@/components/about/ExternalLinks';
 import { Avatar } from '@/components/ui/Avatar';
 import { demoLoginHint } from '@/lib/storeCopy';
 import { auth } from '@/services/auth';
@@ -9,11 +10,9 @@ import { colors, radius, spacing, type } from '@/theme';
 
 export function DemoLogin({
   onBack,
-  onOpenLegal,
   storeFacing = false,
 }: {
   onBack?: () => void;
-  onOpenLegal?: (kind: 'privacy' | 'terms') => void;
   storeFacing?: boolean;
 }) {
   const { signInDemo, supabaseConfigured } = useApp();
@@ -41,26 +40,7 @@ export function DemoLogin({
         ) : null}
         <Text style={styles.pick}>Pick a demo profile</Text>
         <Text style={styles.hint}>{demoLoginHint({ supabaseConfigured, storeFacing })}</Text>
-        {onOpenLegal ? (
-          <View style={styles.legalRow}>
-            <Pressable
-              onPress={() => onOpenLegal('privacy')}
-              accessibilityRole="link"
-              accessibilityLabel="Privacy Policy"
-              style={styles.legalLink}
-            >
-              <Text style={styles.legalText}>Privacy Policy</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => onOpenLegal('terms')}
-              accessibilityRole="link"
-              accessibilityLabel="Terms of Use"
-              style={styles.legalLink}
-            >
-              <Text style={styles.legalText}>Terms</Text>
-            </Pressable>
-          </View>
-        ) : null}
+        <ExternalLinks />
         {users.map((u) => (
           <Pressable
             key={u.id}

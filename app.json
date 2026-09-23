@@ -3,6 +3,7 @@
     "name": "KickFeed",
     "slug": "kickfeed",
     "version": "1.0.0",
+    "runtimeVersion": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "kickfeed",
@@ -74,8 +75,10 @@
       "eas": {
         "projectId": "52a1ee7a-e7db-49c4-bc11-419d316ebd44"
       },
-      "privacyPolicyUrl": "https://kickfeed.polsia.app/privacy.html",
-      "termsUrl": "https://kickfeed.polsia.app/terms.html"
+      "privacyPolicyUrl": "https://kaysi8805.github.io/KickFeed/privacy.html",
+      "termsUrl": "https://kaysi8805.github.io/KickFeed/terms.html",
+      "supportUrl": "https://kaysi8805.github.io/KickFeed/support.html",
+      "supportEmail": "karolurban1@gmail.com"
     }
   }
 }
