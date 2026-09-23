@@ -12,7 +12,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DemoLogin } from '@/components/DemoLogin';
+import { LegalDocumentView } from '@/components/legal/LegalDocumentView';
 import { Segmented } from '@/components/ui/Segmented';
+import { appChannelFromEnv, isStoreFacingChannel } from '@/lib/storeChannel';
+import { emailAuthHint } from '@/lib/storeCopy';
 import { AuthError } from '@/services/auth';
 import { useApp } from '@/services/AppProvider';
 import { colors, radius, spacing, type } from '@/theme';
@@ -23,15 +26,35 @@ type EmailMode = 'signin' | 'signup';
 export function AuthScreen() {
   const { supabaseConfigured } = useApp();
   const [pane, setPane] = useState<GatePane>(supabaseConfigured ? 'email' : 'demo');
+  const [legal, setLegal] = useState<'privacy' | 'terms' | null>(null);
+  const storeFacing = isStoreFacingChannel(appChannelFromEnv());
 
-  if (pane === 'demo') {
-    return <DemoLogin onBack={supabaseConfigured ? () => setPane('email') : undefined} />;
+  if (legal) {
+    return <LegalDocumentView kind={legal} onBack={() => setLegal(null)} />;
   }
 
-  return <EmailAuthForm onDemo={() => setPane('demo')} />;
+  if (pane === 'demo') {
+    return (
+      <DemoLogin
+        storeFacing={storeFacing}
+        onOpenLegal={setLegal}
+        onBack={supabaseConfigured ? () => setPane('email') : undefined}
+      />
+    );
+  }
+
+  return <EmailAuthForm storeFacing={storeFacing} onOpenLegal={setLegal} onDemo={() => setPane('demo')} />;
 }
 
-function EmailAuthForm({ onDemo }: { onDemo: () => void }) {
+function EmailAuthForm({
+  onDemo,
+  onOpenLegal,
+  storeFacing,
+}: {
+  onDemo: () => void;
+  onOpenLegal: (kind: 'privacy' | 'terms') => void;
+  storeFacing: boolean;
+}) {
   const { signInWithEmail, signUpWithEmail } = useApp();
   const [mode, setMode] = useState<EmailMode>('signin');
   const [email, setEmail] = useState('');
@@ -154,10 +177,25 @@ function EmailAuthForm({ onDemo }: { onDemo: () => void }) {
           >
             <Text style={styles.demoLinkText}>Continue with demo</Text>
           </Pressable>
-          <Text style={styles.hint}>
-            Demo profiles stay on this device. Email accounts use your Supabase project; prediction
-            leaderboards in the next batch will attach to that user id.
-          </Text>
+          <View style={styles.legalRow}>
+            <Pressable
+              onPress={() => onOpenLegal('privacy')}
+              accessibilityRole="link"
+              accessibilityLabel="Privacy Policy"
+              style={styles.legalLink}
+            >
+              <Text style={styles.demoLinkText}>Privacy Policy</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onOpenLegal('terms')}
+              accessibilityRole="link"
+              accessibilityLabel="Terms of Use"
+              style={styles.legalLink}
+            >
+              <Text style={styles.demoLinkText}>Terms</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.hint}>{emailAuthHint(storeFacing)}</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -204,5 +242,7 @@ const styles = StyleSheet.create({
   submitText: { ...type.subtitle, color: colors.bg },
   demoLink: { marginTop: spacing.lg, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
   demoLinkText: { ...type.caption, color: colors.lime },
+  legalRow: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: spacing.md },
+  legalLink: { minHeight: 44, justifyContent: 'center' },
   hint: { ...type.caption, color: colors.textDim, fontWeight: '500', marginTop: spacing.md, lineHeight: 18 },
 });

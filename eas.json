@@ -9,6 +9,7 @@
       "distribution": "internal",
       "environment": "development",
       "env": {
+        "EXPO_PUBLIC_APP_CHANNEL": "development",
         "EXPO_PUBLIC_FOOTBALL_BFF_URL": "http://127.0.0.1:8787"
       }
     },
@@ -16,13 +17,15 @@
       "distribution": "internal",
       "environment": "preview",
       "env": {
-        "EXPO_PUBLIC_FOOTBALL_BFF_URL": "https://kickfeed-football-bff.<account>.workers.dev"
+        "EXPO_PUBLIC_APP_CHANNEL": "preview",
+        "EXPO_PUBLIC_FOOTBALL_BFF_URL": "https://kickfeed-football-bff.kaysi8805.workers.dev"
       }
     },
     "production": {
       "environment": "production",
       "env": {
-        "EXPO_PUBLIC_FOOTBALL_BFF_URL": "https://kickfeed-football-bff.<account>.workers.dev"
+        "EXPO_PUBLIC_APP_CHANNEL": "production",
+        "EXPO_PUBLIC_FOOTBALL_BFF_URL": "https://kickfeed-football-bff.kaysi8805.workers.dev"
       }
     }
   },

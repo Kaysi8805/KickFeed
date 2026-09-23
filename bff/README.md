@@ -100,13 +100,13 @@ npx wrangler@latest secret put FOOTBALL_API_KEY --config bff/wrangler.toml
 npx wrangler@latest deploy --config bff/wrangler.toml
 ```
 
-Deploy prints the origin. Paste it with no trailing slash (replace `<account>`):
+Deploy prints the origin. The release origin (no trailing slash) is:
 
 ```text
-https://kickfeed-football-bff.<account>.workers.dev
+https://kickfeed-football-bff.kaysi8805.workers.dev
 ```
 
-Release builds read that URL from EAS, not from a client API key. Full paste commands, curl, and the Matches check are in the root README under **Batch 1 prod checklist**. `eas.json` already points preview/production at the `<account>` placeholder; an EAS plaintext env var with the same name overrides it. The app treats the unreplaced placeholder as unset and stays on mocks.
+Release builds read that URL from EAS, not from a client API key. Full paste commands, curl, and the Matches check are in the root README under **Batch 1 prod checklist**. `eas.json` preview/production already use that origin; an EAS plaintext env var with the same name overrides it. The app treats an unreplaced `<account>` placeholder as unset and stays on mocks.
 
 Local Wrangler (uses `bff/.dev.vars`, gitignored):
 

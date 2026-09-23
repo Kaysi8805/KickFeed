@@ -4,6 +4,9 @@ import {
   CATALOG_ERROR_BODY,
   CATALOG_ERROR_TITLE,
   DEMO_DENSIFY_BANNER,
+  FAN_PICKS_NOT_GAMBLING,
+  STATS_UNAVAILABLE_BODY,
+  STATS_UNAVAILABLE_TITLE,
   LINEUPS_CACHE_MISS_BODY,
   LINEUPS_CACHE_MISS_TITLE,
   LIVE_MIX_DISCLAIMER,
@@ -84,6 +87,18 @@ describe('honesty copy', () => {
   it('tells the truth when a lineup sheet is not cached yet', () => {
     expect(LINEUPS_CACHE_MISS_TITLE).toMatch(/60–90 min before kickoff/);
     expect(LINEUPS_CACHE_MISS_BODY).toMatch(/will not invent a lineup/i);
+  });
+
+  it('says predictions and MOTM are not gambling', () => {
+    expect(FAN_PICKS_NOT_GAMBLING).toMatch(/not a betting or gambling product/i);
+    expect(FAN_PICKS_NOT_GAMBLING).toMatch(/no stakes/i);
+    expect(FAN_PICKS_NOT_GAMBLING).toMatch(/Man of the Match/);
+  });
+
+  it('does not invent possession when stats are missing', () => {
+    expect(STATS_UNAVAILABLE_TITLE).toMatch(/possession/i);
+    expect(STATS_UNAVAILABLE_BODY).toMatch(/does not invent/i);
+    expect(STATS_UNAVAILABLE_BODY).not.toMatch(/placeholder|TODO/i);
   });
 
   it('marks Overview densify as demo, not live free-tier', () => {

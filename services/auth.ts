@@ -60,6 +60,10 @@ export type AuthClient = {
   };
 };
 
+/** Fail closed. The sign-in screen does not show Apple or Google buttons. */
+export const OAUTH_UNAVAILABLE_MESSAGE =
+  'Sign in with Apple or Google is not available. Use email, or continue with a demo profile.';
+
 export class AuthError extends Error {
   constructor(
     message: string,
@@ -238,7 +242,7 @@ export interface AuthProvider {
   signInWithEmail(email: string, password: string): Promise<EmailAuthResult>;
   signUpWithEmail(email: string, password: string, displayName?: string): Promise<EmailAuthResult>;
   signOut(): Promise<void>;
-  /** Stub — Expo redirect / native Google-Apple polish is a later batch. */
+  /** Always rejects. There is no Apple, Google, or Facebook button in the app. */
   signInWithOAuth(_provider: 'apple' | 'google' | 'facebook'): Promise<never>;
 }
 
@@ -252,7 +256,7 @@ export function createAuthProvider(client: AuthClient | null): AuthProvider {
     signUpWithEmail: (email, password, displayName) => signUpWithEmailOn(client, email, password, displayName),
     signOut: () => signOutOn(client),
     signInWithOAuth: async () => {
-      throw new AuthError('Apple/Google sign-in is not in this batch. Use email or demo mode.', 'oauth_stub');
+      throw new AuthError(OAUTH_UNAVAILABLE_MESSAGE, 'oauth_stub');
     },
   };
 }
@@ -270,6 +274,6 @@ export const auth: AuthProvider = {
   signUpWithEmail: (email, password, displayName) => signUpWithEmailOn(liveClient(), email, password, displayName),
   signOut: () => signOutOn(liveClient()),
   signInWithOAuth: async () => {
-    throw new AuthError('Apple/Google sign-in is not in this batch. Use email or demo mode.', 'oauth_stub');
+    throw new AuthError(OAUTH_UNAVAILABLE_MESSAGE, 'oauth_stub');
   },
 };

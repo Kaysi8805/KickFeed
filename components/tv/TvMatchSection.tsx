@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChannelChips, CountryChips } from '@/components/tv/ChannelChips';
 import { TvDisclaimer } from '@/components/tv/TvDisclaimer';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TV_UNAVAILABLE_BODY, TV_UNAVAILABLE_TITLE } from '@/lib/honesty';
 import { resolveTvCountryId } from '@/lib/tvCountry';
 import { useApp } from '@/services/AppProvider';
 import { tv } from '@/services/tv';
@@ -15,12 +16,22 @@ export function TvMatchSection({ matchId }: { matchId: string }) {
   const countries = tv.getCountries();
   const [countryId, setCountryId] = useState(() => resolveTvCountryId(currentUser?.tvCountryId));
   const country = tv.getCountry(countryId) ?? countries[0];
-  const airings = useMemo(
-    () => tv.getBroadcastsByMatch(matchId, countryId)[0]?.airings ?? [],
-    [matchId, countryId],
-  );
+  const airings = useMemo(() => {
+    try {
+      return tv.getBroadcastsByMatch(matchId, countryId)[0]?.airings ?? [];
+    } catch {
+      return null;
+    }
+  }, [matchId, countryId]);
 
-  if (!country) return null;
+  if (!country || airings == null) {
+    return (
+      <View style={styles.card}>
+        <EmptyState compact title={TV_UNAVAILABLE_TITLE} body={TV_UNAVAILABLE_BODY} />
+        <TvDisclaimer compact />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.card}>

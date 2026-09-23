@@ -2,11 +2,20 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/Avatar';
+import { demoLoginHint } from '@/lib/storeCopy';
 import { auth } from '@/services/auth';
 import { useApp } from '@/services/AppProvider';
 import { colors, radius, spacing, type } from '@/theme';
 
-export function DemoLogin({ onBack }: { onBack?: () => void }) {
+export function DemoLogin({
+  onBack,
+  onOpenLegal,
+  storeFacing = false,
+}: {
+  onBack?: () => void;
+  onOpenLegal?: (kind: 'privacy' | 'terms') => void;
+  storeFacing?: boolean;
+}) {
   const { signInDemo, supabaseConfigured } = useApp();
   const users = auth.listDemoUsers();
 
@@ -31,11 +40,27 @@ export function DemoLogin({ onBack }: { onBack?: () => void }) {
           </Pressable>
         ) : null}
         <Text style={styles.pick}>Pick a demo profile</Text>
-        <Text style={styles.hint}>
-          {supabaseConfigured
-            ? 'Staging fallback — seeded fans, local AsyncStorage. Email accounts stay on your Supabase project.'
-            : 'No Supabase keys in env, so demo is the only sign-in. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for email auth.'}
-        </Text>
+        <Text style={styles.hint}>{demoLoginHint({ supabaseConfigured, storeFacing })}</Text>
+        {onOpenLegal ? (
+          <View style={styles.legalRow}>
+            <Pressable
+              onPress={() => onOpenLegal('privacy')}
+              accessibilityRole="link"
+              accessibilityLabel="Privacy Policy"
+              style={styles.legalLink}
+            >
+              <Text style={styles.legalText}>Privacy Policy</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onOpenLegal('terms')}
+              accessibilityRole="link"
+              accessibilityLabel="Terms of Use"
+              style={styles.legalLink}
+            >
+              <Text style={styles.legalText}>Terms</Text>
+            </Pressable>
+          </View>
+        ) : null}
         {users.map((u) => (
           <Pressable
             key={u.id}
@@ -78,7 +103,10 @@ const styles = StyleSheet.create({
   back: { minHeight: 44, justifyContent: 'center', marginBottom: spacing.md },
   backText: { ...type.caption, color: colors.lime },
   pick: { ...type.subtitle, color: colors.text, marginBottom: 4 },
-  hint: { ...type.caption, color: colors.textDim, fontWeight: '500', marginBottom: spacing.lg, lineHeight: 18 },
+  hint: { ...type.caption, color: colors.textDim, fontWeight: '500', marginBottom: spacing.sm, lineHeight: 18 },
+  legalRow: { flexDirection: 'row', gap: 20, marginBottom: spacing.lg },
+  legalLink: { minHeight: 44, justifyContent: 'center' },
+  legalText: { ...type.caption, color: colors.lime },
   card: {
     flexDirection: 'row',
     gap: 12,

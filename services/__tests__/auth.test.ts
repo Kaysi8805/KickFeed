@@ -195,6 +195,9 @@ describe('AuthProvider mode switching', () => {
     expect(provider.isConfigured()).toBe(false);
     expect(provider.listDemoUsers().length).toBeGreaterThan(3);
     await expect(provider.getSession()).resolves.toBeNull();
-    await expect(provider.signInWithOAuth('google')).rejects.toMatchObject({ code: 'oauth_stub' });
+    await expect(provider.signInWithOAuth('google')).rejects.toMatchObject({
+      code: 'oauth_stub',
+      message: 'Sign in with Apple or Google is not available. Use email, or continue with a demo profile.',
+    });
   });
 });

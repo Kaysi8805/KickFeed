@@ -2,8 +2,14 @@
 export const LOCAL_FOOTBALL_BFF_URL = 'http://127.0.0.1:8787';
 
 /**
- * Committed stand-in for `eas.json` preview/production.
- * Not a live host — replace `<account>` with the subdomain `wrangler deploy` prints.
+ * Live Worker used by EAS preview and production.
+ * Not a secret. An EAS plaintext env var with the same name still overrides it.
+ */
+export const RELEASE_FOOTBALL_BFF_URL = 'https://kickfeed-football-bff.kaysi8805.workers.dev';
+
+/**
+ * Unreplaced stand-in. If this string is still in an env var, treat the BFF as unset
+ * so the app stays on mocks instead of calling a host that does not exist.
  */
 export const PROD_FOOTBALL_BFF_URL_PLACEHOLDER = 'https://kickfeed-football-bff.<account>.workers.dev';
 

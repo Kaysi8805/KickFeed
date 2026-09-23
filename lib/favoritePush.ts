@@ -120,11 +120,14 @@ export type DeviceAlertsCopyInput = {
   platform: 'web' | 'native';
   /** Set once we know whether the Expo token was saved for remote delivery. */
   remote?: 'synced' | 'error' | 'demo' | 'unconfigured' | 'pending';
+  /** Preview/production copy omits EAS, Expo Go, and env-var instructions. */
+  audience?: 'dev' | 'store';
 };
 
 export function deviceAlertsCopy(input: DeviceAlertsCopyInput): string {
+  const store = input.audience === 'store';
   if (input.platform === 'web') {
-    return 'Device alerts aren’t available in the web preview. Use Expo Go or a native build on a phone.';
+    return 'Device alerts are not available in the web preview. Use a phone build for kickoff and goal banners.';
   }
   if (input.permission === 'denied') {
     return 'Notifications are off in system settings. KickFeed still keeps an in-app notification center.';
@@ -133,6 +136,9 @@ export function deviceAlertsCopy(input: DeviceAlertsCopyInput): string {
     return 'Couldn’t enable device alerts on this install. In-app notifications still work.';
   }
   if (!input.optedIn) {
+    if (store) {
+      return 'Opt in for kickoff and goal alerts for clubs you favorite. KickFeed asks only after you tap Enable. The in-app notification center works either way.';
+    }
     return input.projectId
       ? 'Opt in for kickoff-soon and goal alerts for your clubs. Expo push is configured (EAS projectId).'
       : 'Opt in for on-device kickoff-soon and goal alerts. Remote Expo push needs an EAS projectId (see README). In-app notifications still work.';
@@ -141,17 +147,28 @@ export function deviceAlertsCopy(input: DeviceAlertsCopyInput): string {
     if (input.remote === 'synced') {
       return 'Device alerts on. Kickoff and goals can reach this phone with KickFeed closed. Tap a banner to open the match. Closed-app goals can take a few minutes.';
     }
-    if (input.remote === 'pending') return 'Saving this phone for remote Expo push…';
+    if (input.remote === 'pending') {
+      return store ? 'Saving this phone for match alerts…' : 'Saving this phone for remote Expo push…';
+    }
     if (input.remote === 'error') {
-      return 'Local match alerts on. Couldn’t save this phone for remote Expo push. In-app notifications still work.';
+      return store
+        ? 'Match alerts are on for this device. KickFeed could not register this phone for alerts after you close the app. The in-app center still works.'
+        : 'Local match alerts on. Couldn’t save this phone for remote Expo push. In-app notifications still work.';
     }
     if (input.remote === 'demo') {
-      return 'Local match alerts on. Remote Expo push is tied to email sign-in so KickFeed can reach you after you close the app.';
+      return store
+        ? 'Match alerts are on for this device. Sign in with email if you want them after you close KickFeed.'
+        : 'Local match alerts on. Remote Expo push is tied to email sign-in so KickFeed can reach you after you close the app.';
     }
     if (input.remote === 'unconfigured') {
-      return 'Local match alerts on. Add Supabase env to store this Expo token for alerts after you close the app. In-app notifications still work.';
+      return store
+        ? 'Match alerts are on for this device. Alerts after you close the app need an email account. The in-app center still works.'
+        : 'Local match alerts on. Add Supabase env to store this Expo token for alerts after you close the app. In-app notifications still work.';
     }
     return 'Device alerts on. Kickoff reminders are scheduled on this device; goals fire when live scores refresh (same cache as Matches).';
+  }
+  if (store) {
+    return 'Match alerts are on for this device. This install could not register for alerts after you close the app. The in-app center still works.';
   }
   if (input.projectId) {
     return 'Local match alerts on. Expo has a projectId but no push token yet (Android Expo Go often needs a dev build). In-app notifications still work.';

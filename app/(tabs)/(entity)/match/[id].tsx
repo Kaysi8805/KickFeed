@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { PostCard } from '@/components/feed/PostCard';
@@ -13,9 +13,11 @@ import { SafetyMenu } from '@/components/moderation/SafetyMenu';
 import { Avatar } from '@/components/ui/Avatar';
 import { Crest } from '@/components/ui/Crest';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SafeBoundary } from '@/components/ui/SafeBoundary';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
+import type { Lineup } from '@/data/types';
 import { entityBackHref, entityHref } from '@/lib/entityNav';
 import { defaultEntitySegment } from '@/lib/entityTabs';
 import { isPostVisibleToViewer } from '@/lib/homeFeed';
@@ -33,6 +35,14 @@ import {
 import { routeId } from '@/lib/routeParams';
 import { matchChatSlowMode, slowModeComposerCopy } from '@/lib/moderation';
 import { useLiveTick } from '@/lib/useLiveTick';
+import {
+  MATCH_SECTION_ERROR_BODY,
+  MATCH_SECTION_ERROR_TITLE,
+  STATS_UNAVAILABLE_BODY,
+  STATS_UNAVAILABLE_TITLE,
+  TV_UNAVAILABLE_BODY,
+  TV_UNAVAILABLE_TITLE,
+} from '@/lib/honesty';
 import { useFootballCatalog } from '@/lib/useFootballCatalog';
 import {
   hubEngageState,
@@ -121,6 +131,9 @@ export default function MatchDetailScreen() {
         id: requestId,
         phase: result === 'error' ? 'error' : result === 'empty' ? 'empty' : 'ready',
       });
+    }).catch(() => {
+      if (cancel) return;
+      setLineupState({ id: requestId, phase: 'error' });
     });
     return () => {
       cancel = true;
@@ -139,10 +152,6 @@ export default function MatchDetailScreen() {
 
   const home = fixture ? football.getTeam(fixture.homeTeamId) : undefined;
   const away = fixture ? football.getTeam(fixture.awayTeamId) : undefined;
-  const possession = useMemo(() => {
-    const h = 48 + ((home?.id.length ?? 0) % 10);
-    return { home: h, away: 100 - h };
-  }, [home?.id]);
 
   if (!id || !fixture || !home || !away) {
     return (
@@ -162,7 +171,16 @@ export default function MatchDetailScreen() {
 
   const league = football.getLeague(fixture.leagueId);
   const live = fixture.status === 'live' || fixture.status === 'ht';
-  const lineups = football.getLineups(fixture);
+  const blankLineup: Lineup = { formation: '—', players: [] };
+  let lineups = { home: blankLineup, away: blankLineup };
+  let lineupsBroken = false;
+  try {
+    const got = football.getLineups(fixture);
+    if (got?.home?.players && got?.away?.players) lineups = got;
+    else lineupsBroken = true;
+  } catch {
+    lineupsBroken = true;
+  }
   const thread = commentsForMatch(comments, fixture.id, football);
   const roots = thread.filter((c) => !c.parentId);
   const replyTarget = thread.find((c) => c.id === replyTo);
@@ -180,7 +198,12 @@ export default function MatchDetailScreen() {
   const matchMotmVotes = rowsForMatch(motmVotes, relatedIds);
   const myPrediction = predictionForUser(matchPredictions, currentUser?.id, relatedIds);
   const myMotm = motmVoteForUser(matchMotmVotes, currentUser?.id, relatedIds);
-  const ballot = motmCandidates(football, fixture);
+  let ballot: ReturnType<typeof motmCandidates> = [];
+  try {
+    ballot = motmCandidates(football, fixture);
+  } catch {
+    ballot = [];
+  }
   const hubEngage = hubEngageState(fixture.status, !!myPrediction, !!myMotm);
   const slowMode = matchChatSlowMode(comments, currentUser?.id, chatNow, relatedIds);
   const slowCopy = slowModeComposerCopy(slowMode);
@@ -271,7 +294,9 @@ export default function MatchDetailScreen() {
           </Pressable>
         </View>
 
-        <TvMatchSection matchId={fixture.id} />
+        <SafeBoundary title={TV_UNAVAILABLE_TITLE} body={TV_UNAVAILABLE_BODY}>
+          <TvMatchSection matchId={fixture.id} />
+        </SafeBoundary>
 
         <Segmented
           value={tab}
@@ -286,6 +311,7 @@ export default function MatchDetailScreen() {
           ]}
         />
 
+        <SafeBoundary key={tab} title={MATCH_SECTION_ERROR_TITLE} body={MATCH_SECTION_ERROR_BODY}>
         {tab === 'events' ? (
           <View style={styles.block}>
             {fixture.events.length === 0 ? (
@@ -324,7 +350,13 @@ export default function MatchDetailScreen() {
             home={home}
             away={away}
             lineups={lineups}
-            phase={lineupState?.id === deepLink.catalogId ? lineupState.phase : 'idle'}
+            phase={
+              lineupsBroken
+                ? 'error'
+                : lineupState?.id === deepLink.catalogId
+                  ? lineupState.phase
+                  : 'idle'
+            }
             liveCatalog={catalog.source === 'live'}
             onRetry={() => {
               setLineupState({ id: fixture.id, phase: 'loading' });
@@ -333,26 +365,15 @@ export default function MatchDetailScreen() {
                   id: fixture.id,
                   phase: result === 'error' ? 'error' : result === 'empty' ? 'empty' : 'ready',
                 });
+              }).catch(() => {
+                setLineupState({ id: fixture.id, phase: 'error' });
               });
             }}
           />
         ) : null}
 
         {tab === 'stats' ? (
-          <View style={styles.block}>
-            <Text style={styles.statLabel}>Possession (placeholder)</Text>
-            <View style={styles.barTrack}>
-              <View style={[styles.barHome, { flex: possession.home }]} />
-              <View style={[styles.barAway, { flex: possession.away }]} />
-            </View>
-            <View style={styles.statRow}>
-              <Text style={styles.statN}>{possession.home}%</Text>
-              <Text style={styles.statN}>{possession.away}%</Text>
-            </View>
-            <Text style={styles.hint}>
-              Shot maps and xG are still later. Live scores for England, Slovakia, and La Liga come from API-Football when a BFF URL or key is set.
-            </Text>
-          </View>
+          <EmptyState compact title={STATS_UNAVAILABLE_TITLE} body={STATS_UNAVAILABLE_BODY} />
         ) : null}
 
         {tab === 'predict' ? (
@@ -507,6 +528,7 @@ export default function MatchDetailScreen() {
             )}
           </View>
         ) : null}
+        </SafeBoundary>
       </ScrollView>
 
       {tab === 'chat' ? (
@@ -599,13 +621,6 @@ const styles = StyleSheet.create({
   eicon: { fontSize: 16, width: 22 },
   ename: { ...type.subtitle, fontSize: 14, color: colors.text },
   edetail: { ...type.caption, color: colors.textMuted, fontWeight: '500' },
-  statLabel: { ...type.caption, color: colors.textMuted, marginBottom: 8 },
-  barTrack: { flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden' },
-  barHome: { backgroundColor: colors.pitchBright },
-  barAway: { backgroundColor: colors.gold },
-  statRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  statN: { ...type.subtitle, color: colors.text },
-  hint: { ...type.caption, color: colors.textDim, fontWeight: '500', marginTop: spacing.md, lineHeight: 18 },
   people: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.sm },
   avatars: { flexDirection: 'row' },
   avatarHit: { marginRight: -8, borderWidth: 2, borderColor: colors.bg, borderRadius: 16 },

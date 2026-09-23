@@ -8,6 +8,7 @@ import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { Segmented } from '@/components/ui/Segmented';
 import {
+  FAN_PICKS_NOT_GAMBLING,
   LIVE_RANKING_ERROR_BODY,
   LIVE_RANKING_ERROR_TITLE,
   rankingDisclaimer,
@@ -228,7 +229,7 @@ export default function LeaderboardScreen() {
 
             <Text style={styles.rules}>
               Scoring (full time only): exact scoreline 5 pts · correct 1X2 2 pts · unique community MOTM +2.
-              {` ${LEADERBOARD_TIEBREAK_COPY}`} Not a betting product.
+              {` ${LEADERBOARD_TIEBREAK_COPY}`} {FAN_PICKS_NOT_GAMBLING}
             </Text>
             {selectedLeague ? (
               <Pressable
