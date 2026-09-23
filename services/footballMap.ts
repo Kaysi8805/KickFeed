@@ -41,7 +41,6 @@ import {
   isEnglandLiveLeagueId,
   isLiveLeagueId,
 } from '@/lib/footballCoverage';
-import { parseLineupGrid } from '@/lib/lineupPitch';
 
 const liveLeagueSeed: League[] = [
   {
@@ -309,13 +308,11 @@ export function mapMatchEvent(row: ApiEvent, index: number): MatchEvent | undefi
 }
 
 function mapLineupPlayer(slot: ApiLineupPlayer): LineupPlayer {
-  const grid = parseLineupGrid(slot.player.grid);
   return {
     name: slot.player.name,
     number: slot.player.number ?? 0,
     pos: mapPosition(slot.player.pos),
-    playerId: String(slot.player.id),
-    ...(grid ? { grid } : {}),
+    playerId: slot.player.id != null ? String(slot.player.id) : undefined,
   };
 }
 

@@ -492,8 +492,9 @@ export function createLiveFootballProvider(opts: {
         }
         if (!rows) return 'error';
         const hasSheet = rows.some((row) => (row.startXI?.length ?? 0) > 0);
-        // Upgrade only the fetch that just landed. A later tab open must not slide the TTL.
-        if (!fromCache && hasSheet) cache.set(key, rows, FOOTBALL_TTL.lineupsSheetMs, now());
+        const sheetTtl = fixture.status === 'finished' ? FOOTBALL_TTL.lineupsFinalMs : FOOTBALL_TTL.lineupsSheetMs;
+        // Upgrade only the fetch that just landed. A later open must not slide the TTL.
+        if (!fromCache && hasSheet) cache.set(key, rows, sheetTtl, now());
         const result = apply(rows);
         emit();
         return result;

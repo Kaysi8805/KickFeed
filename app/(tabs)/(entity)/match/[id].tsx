@@ -91,7 +91,6 @@ export default function MatchDetailScreen() {
   const [lineupState, setLineupState] = useState<{ id: string; phase: 'loading' | 'ready' | 'empty' | 'error' } | null>(
     null,
   );
-  const [squadTick, setSquadTick] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -109,23 +108,10 @@ export default function MatchDetailScreen() {
   const fixture = deepLink?.fixture;
 
   useEffect(() => {
-    if (deepLink?.fixture) void football.ensureMatchDetail(deepLink.catalogId);
-  }, [deepLink?.catalogId, deepLink?.fixture]);
-
-  const lineupFixtureId = deepLink?.catalogId;
-  const lineupStatus = deepLink?.fixture?.status;
-  const lineupHomeId = deepLink?.fixture?.homeTeamId;
-  const lineupAwayId = deepLink?.fixture?.awayTeamId;
-
-  useEffect(() => {
-    if (!lineupFixtureId || !lineupHomeId || !lineupAwayId) return;
-    const motmNeedsSheet = tab === 'motm' && isMotmOpen(lineupStatus);
-    if (tab !== 'lineups' && !motmNeedsSheet) return;
-    const requestId = lineupFixtureId;
+    const requestId = deepLink?.catalogId;
+    if (!requestId) return;
+    void football.ensureMatchDetail(requestId);
     let cancel = false;
-    void Promise.all([football.ensureSquad(lineupHomeId), football.ensureSquad(lineupAwayId)]).finally(() => {
-      if (!cancel) setSquadTick((n) => n + 1);
-    });
     setLineupState((prev) =>
       prev?.id === requestId && (prev.phase === 'ready' || prev.phase === 'empty') ? prev : { id: requestId, phase: 'loading' },
     );
@@ -139,7 +125,17 @@ export default function MatchDetailScreen() {
     return () => {
       cancel = true;
     };
-  }, [lineupAwayId, lineupFixtureId, lineupHomeId, lineupStatus, tab]);
+  }, [deepLink?.catalogId]);
+
+  const lineupStatus = deepLink?.fixture?.status;
+  const lineupHomeId = deepLink?.fixture?.homeTeamId;
+  const lineupAwayId = deepLink?.fixture?.awayTeamId;
+
+  useEffect(() => {
+    if (tab !== 'motm' || !isMotmOpen(lineupStatus) || !lineupHomeId || !lineupAwayId) return;
+    void football.ensureSquad(lineupHomeId);
+    void football.ensureSquad(lineupAwayId);
+  }, [lineupAwayId, lineupHomeId, lineupStatus, tab]);
 
   const home = fixture ? football.getTeam(fixture.homeTeamId) : undefined;
   const away = fixture ? football.getTeam(fixture.awayTeamId) : undefined;
@@ -328,12 +324,8 @@ export default function MatchDetailScreen() {
             home={home}
             away={away}
             lineups={lineups}
-            phase={lineupState?.id === fixture.id ? lineupState.phase : 'idle'}
+            phase={lineupState?.id === deepLink.catalogId ? lineupState.phase : 'idle'}
             liveCatalog={catalog.source === 'live'}
-            resolvePlayer={(playerId) => {
-              void squadTick;
-              return football.getPlayer(playerId);
-            }}
             onRetry={() => {
               setLineupState({ id: fixture.id, phase: 'loading' });
               void football.ensureLineups(deepLink.catalogId).then((result) => {

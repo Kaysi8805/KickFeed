@@ -347,7 +347,7 @@ Karol’s batches:
 - **Live geos — done.** Slovakia Niké Liga + La Liga on the existing BFF allowlist + quota TTLs.
 - **Matchday Home — done.** Home pins live/next favorite (or featured live coverage) above the feed.
 - **EAS push — done.** Favorite kickoff-soon + goal device alerts via Expo Notifications + EAS `projectId`. No extra football polling.
-- **Pre-match lineups — done.** Match hub Lineups tab for leagues 39, 40, 332, and 140. Formation, starting XI, and bench from `GET /fixtures/lineups` through the existing BFF. Fetched when Lineups opens (and when MOTM voting is open), not during Matches hydrate. Demo catalog still shows a seeded XI and bench. The free tier publishes official sheets, not probable XIs — a miss stays “Not in free-tier cache yet”.
+- **Pre-match lineups — done.** Match hub Lineups list for leagues 39, 40, 332, and 140. Formation, starting XI, and a collapsed bench from `GET /fixtures/lineups` through the BFF, fetched when the match screen opens (not during Matches hydrate). The same list is used before, during, and after the match. A miss says lineups usually land about 60–90 min before kickoff. No pitch diagram and no provisional/confirmed label unless a payload says so.
 - **Report / block — done.** Demo = AsyncStorage; email session = Postgres RLS. Not a moderation dashboard.
 - **This PR.** 1:1 DMs. Demo = AsyncStorage (Maya↔Omar seed); email session = Postgres RLS + slow-mode trigger. Not in this PR: group chats, media DMs, push for messages, moderation dashboard, licensed TV, Apple/Google polish, more geos. Not gambling.
 
@@ -375,21 +375,22 @@ Match hub tabs **Predict** and **MOTM** sit next to Events / Lineups / Stats / H
 
 ## Pre-match lineups
 
-The match hub **Lineups** tab shows both clubs’ formation, starting XI, and bench. Live coverage uses the free API-Football path the app already has: `GET /fixtures/lineups?fixture=` through the in-repo BFF (`EXPO_PUBLIC_FOOTBALL_BFF_URL`). Leagues stay **39, 40, 332, and 140**. There is no probable-XI product, no odds endpoint, and no extra sports-data vendor.
+The match hub **Lineups** tab is one list for upcoming, live, and full-time matches. Each club shows its formation when the payload has one, then shirt number, name, and position. The bench starts collapsed. A coach name is shown only when that same payload included one. The match screen does not call API-Football itself: `GET /fixtures/lineups?fixture=` goes through the in-repo BFF (`EXPO_PUBLIC_FOOTBALL_BFF_URL`). Leave `EXPO_PUBLIC_FOOTBALL_API_KEY` empty. Leagues stay **39, 40, 332, and 140**.
 
-The free tier returns an official team sheet (usually close to kickoff), including `startXI`, `substitutes`, `formation`, and `grid` when the competition sends them. KickFeed labels that **Confirmed**. It does not invent a probable XI, shots, possession, or xG. If the cache has no sheet, the tab says **Not in free-tier cache yet**.
+The free-tier body does not say provisional versus confirmed, so the list does not add that label. It also does not draw a pitch. If `startXI` is missing, the tab says **Lineups usually ~60–90 min before kickoff** and does not invent an XI, shots, possession, or xG.
 
-Demo mode (no BFF URL and no client key) still draws a seeded 4-3-3 plus the rest of the mock squad on the bench, with player links into the mock catalog. MOTM still ballots from the starting XI when a sheet or demo XI is present, and falls back to both squads when the XI is empty.
+Demo mode (no BFF URL and no client key) still shows a seeded 4-3-3 plus the rest of the mock squad on the bench. A row opens the player page only when the lineup player has an id. MOTM still ballots from the starting XI when one is present, and from both squads when it is empty.
 
-**Quota.** Opening Matches does not call `/fixtures/lineups`. The call happens when you open Lineups, or MOTM once voting is open (live / half-time / full time). The app and the BFF cache an empty answer for about **10 minutes** and a published sheet for about **30 minutes**, so sitting on the tab or reopening it does not spend another origin request. Cold Matches hydrate is unchanged (fixtures, standings, Premier League scorers only).
+**Quota.** Matches hydrate does not call `/fixtures/lineups`. Opening a match does, once per fixture. The BFF coalesces concurrent clients on that fixture. An empty answer is cached about **10 minutes**. A sheet is cached about **15 minutes** on the BFF (pre-match and live). The app keeps a full-time sheet for about **6 hours**. Opening five different matches is five reads, not a prefetch of every upcoming fixture. Cold hydrate is unchanged (fixtures, standings, Premier League scorers only).
 
 **Try on a device**
 
 1. In `.env` (never commit it), set `EXPO_PUBLIC_FOOTBALL_BFF_URL=https://kickfeed-football-bff.kaysi8805.workers.dev` and leave `EXPO_PUBLIC_FOOTBALL_API_KEY` empty.
 2. `npx expo start` and open an upcoming Premier League, Championship, Niké Liga, or La Liga match.
-3. Open **Lineups**. A cached sheet shows both formations, the XIs on the pitch, and the benches. Tap a player whose squad id resolved to open the player page.
-4. If the sheet is not published yet, you get **Not in free-tier cache yet** — not a guessed XI.
-5. Unset the BFF URL and restart Expo. The same tab shows the demo XI and bench with no key.
+3. Open **Lineups**. If the free tier has a sheet: formation, XI (`number · name · position`), coach when present, bench collapsed until you expand it. Tap a row that has a player id.
+4. Open another covered match whose sheet is not out yet. You should see **Lineups usually ~60–90 min before kickoff**, not a guessed XI.
+5. The same list is what you see if that match is live or full time and the payload exists.
+6. Unset the BFF URL and restart Expo. The same tab shows the demo XI and bench with no key.
 
 ## Prediction leaderboards
 

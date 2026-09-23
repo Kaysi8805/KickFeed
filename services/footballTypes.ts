@@ -65,8 +65,9 @@ export interface FootballProvider {
   ensureSquad(teamId: string): Promise<void>;
   ensureMatchDetail(fixtureId: string): Promise<void>;
   /**
-   * One `GET /fixtures/lineups?fixture=` for a live-coverage match.
-   * Call when Lineups opens, or when MOTM voting is open — not during catalog hydrate.
+   * One `GET /fixtures/lineups?fixture=` for a live-coverage match, via the same HTTP
+   * client as the rest of the catalog (the BFF when `EXPO_PUBLIC_FOOTBALL_BFF_URL` is set).
+   * Call when the match screen opens — not during catalog hydrate, and not once per player.
    * `empty` means the free tier returned no starting XI. `ready` includes demo lineups.
    */
   ensureLineups(fixtureId: string): Promise<'ready' | 'empty' | 'error'>;

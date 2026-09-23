@@ -4,6 +4,8 @@ import {
   CATALOG_ERROR_BODY,
   CATALOG_ERROR_TITLE,
   DEMO_DENSIFY_BANNER,
+  LINEUPS_CACHE_MISS_BODY,
+  LINEUPS_CACHE_MISS_TITLE,
   LIVE_MIX_DISCLAIMER,
   DM_DEMO_COPY,
   DM_LIVE_COPY,
@@ -77,6 +79,11 @@ describe('honesty copy', () => {
     expect(DM_LIVE_COPY).toMatch(/Postgres/i);
     expect(DM_LIVE_COPY).toMatch(/group/i);
     expect(DM_DEMO_COPY).toMatch(/Slack/i);
+  });
+
+  it('tells the truth when a lineup sheet is not cached yet', () => {
+    expect(LINEUPS_CACHE_MISS_TITLE).toMatch(/60–90 min before kickoff/);
+    expect(LINEUPS_CACHE_MISS_BODY).toMatch(/will not invent a lineup/i);
   });
 
   it('marks Overview densify as demo, not live free-tier', () => {

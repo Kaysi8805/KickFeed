@@ -55,18 +55,6 @@ function takePos(squad: Player[], pos: PlayerPosition, n: number, used: Set<stri
   return picked;
 }
 
-/** 4-3-3 grid: goalkeeper, then each outfield row. Index follows `demoLineup` order. */
-function demoGrid(index: number): { row: number; col: number } {
-  const rows = [1, 4, 3, 3];
-  let cursor = index;
-  for (let row = 0; row < rows.length; row += 1) {
-    const size = rows[row]!;
-    if (cursor < size) return { row: row + 1, col: cursor + 1 };
-    cursor -= size;
-  }
-  return { row: 1, col: 1 };
-}
-
 function demoLineup(teamId: string): Lineup {
   const squad = squadFor(teamId);
   const used = new Set<string>();
@@ -87,12 +75,11 @@ function demoLineup(teamId: string): Lineup {
   return {
     formation: '4-3-3',
     source: 'demo',
-    players: xi.map((p, index) => ({
+    players: xi.map((p) => ({
       name: p.name,
       number: p.number,
       pos: p.pos,
       playerId: p.id,
-      grid: demoGrid(index),
     })),
     bench: bench.map((p) => ({ name: p.name, number: p.number, pos: p.pos, playerId: p.id })),
   };

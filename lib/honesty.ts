@@ -28,9 +28,11 @@ export const LINEUPS_LOADING_TITLE = 'Loading lineups';
 
 export const LINEUPS_LOADING_BODY = 'Checking the free-tier cache for this fixture.';
 
-/** Official sheets only. The free tier does not return a probable XI. */
+/** Shown when `/fixtures/lineups` has no starting XI yet. Do not pair this with a guessed XI. */
+export const LINEUPS_CACHE_MISS_TITLE = 'Lineups usually ~60–90 min before kickoff';
+
 export const LINEUPS_CACHE_MISS_BODY =
-  'Official team sheets usually land close to kickoff. KickFeed does not guess a probable XI.';
+  'Nothing is in the free-tier cache for this match yet. KickFeed will not invent a lineup.';
 
 export const LINEUPS_ERROR_TITLE = 'Couldn’t load lineups';
 

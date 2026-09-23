@@ -38,8 +38,8 @@ export const BFF_TTL_MS = {
   events: 60_000,
   /** `/fixtures/lineups` before a team sheet is in the body. */
   lineups: 10 * 60_000,
-  /** Published `startXI`. Official sheets are not polled every minute. */
-  lineupsSheet: 30 * 60_000,
+  /** Body includes a `startXI`. Pre-match window; the app holds a full-time sheet longer. */
+  lineupsSheet: 15 * 60_000,
   /** `GET /players?id=&season=` — long TTL so a player open does not burn the daily quota. */
   players: 12 * 60 * 60_000,
   /** `GET /teams/statistics?league=&season=&team=` — one origin read per club per day. */
@@ -296,7 +296,7 @@ function healthBody(cacheSize: number, keyConfigured: boolean, quota: BffQuotaSn
       perMinuteLimit: quota.perMinuteLimit,
       perMinuteRemaining: quota.perMinuteRemaining,
       observedAt: quota.observedAt,
-      note: 'Allowlisted leagues only. Fixtures 45s if any row is live, else 5 min. Standings 15 min. Player season 12h (id + season only). Team statistics 24h (league + season + team only, one club per day). Lineups 10 min until a starting XI is cached, then 30 min. Events 60s. 429/5xx reuse stale cache within 6h. limit/remaining are the last API-Football rate-limit headers seen by this isolate, not a global counter. Never put FOOTBALL_API_KEY in Expo or CI.',
+      note: 'Allowlisted leagues only. Fixtures 45s if any row is live, else 5 min. Standings 15 min. Player season 12h (id + season only). Team statistics 24h (league + season + team only, one club per day). Lineups 10 min until a starting XI is cached, then 15 min. Events 60s. In-flight lineup requests for the same fixture coalesce. 429/5xx reuse stale cache within 6h. limit/remaining are the last API-Football rate-limit headers seen by this isolate, not a global counter. Never put FOOTBALL_API_KEY in Expo or CI.',
     },
   };
 }

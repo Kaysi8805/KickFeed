@@ -206,7 +206,8 @@ describe('live football provider', () => {
     expect(live.getLineups(live.getFixture('9001')!).home.players).toEqual([]);
     expect(await live.ensureLineups('9001')).toBe('ready');
     const sheet = live.getLineups(live.getFixture('9001')!);
-    expect(sheet.home.players[0]).toMatchObject({ playerId: '306', grid: { row: 4, col: 3 } });
+    expect(sheet.home.players[0]).toMatchObject({ playerId: '306', pos: 'FW' });
+    expect(sheet.home.players[0]).not.toHaveProperty('grid');
     expect(sheet.home.bench?.[0]?.playerId).toBe('999');
     expect(sheet.home.source).toBe('sheet');
     expect(sheet.home.coach).toBe('Arne Slot');
@@ -242,6 +243,40 @@ describe('live football provider', () => {
     t += 10 * 60_000;
     expect(await live.ensureLineups('9201')).toBe('empty');
     expect(calls()).toHaveLength(2);
+  });
+
+  it('coalesces one fixture and keeps a full-time sheet longer than a pre-match sheet', async () => {
+    const base = fakeHttp();
+    const http = vi.fn(async (path: string, params?: Record<string, string | number | undefined>) => {
+      if (path === '/fixtures/lineups' && String(params?.fixture) === '9201') {
+        return [{
+          team: { id: 541, name: 'Real Madrid' },
+          formation: '4-3-3',
+          startXI: [{ player: { id: 278, name: 'Vinicius', number: 7, pos: 'F' } }],
+        }];
+      }
+      return base(path, params);
+    });
+    let t = Date.parse('2026-09-16T12:00:00.000Z');
+    const live = createLiveFootballProvider({
+      fallback: mockFootballProvider,
+      http,
+      season: 2026,
+      now: () => t,
+    });
+    await live.hydrate();
+    const calls = () => (http as ReturnType<typeof vi.fn>).mock.calls.filter((call) => call[0] === '/fixtures/lineups');
+    await Promise.all([
+      live.ensureLineups('9001'),
+      live.ensureLineups('9001'),
+      live.ensureLineups('9201'),
+    ]);
+    expect(calls()).toHaveLength(2);
+    t += 20 * 60_000;
+    await live.ensureLineups('9001');
+    expect(calls()).toHaveLength(2);
+    expect(await live.ensureLineups('9201')).toBe('ready');
+    expect(calls()).toHaveLength(3);
   });
 
   it('returns an error when lineups fail and leaves the cache empty', async () => {

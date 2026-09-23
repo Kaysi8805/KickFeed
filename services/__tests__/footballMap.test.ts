@@ -269,10 +269,10 @@ describe('football mappers', () => {
     expect(sheet).toMatchObject({
       formation: '4-3-3',
       source: 'sheet',
-      players: [{ playerId: '306', grid: { row: 4, col: 2 }, pos: 'FW' }],
+      players: [{ playerId: '306', pos: 'FW' }],
       bench: [{ playerId: '999', pos: 'MF' }],
     });
-    expect(sheet.bench?.[0]?.grid).toBeUndefined();
+    expect(sheet.players[0]).not.toHaveProperty('grid');
     expect(mapLineup({ team: { id: 40, name: 'Liverpool' }, startXI: [{ player: { id: 1, name: 'A', number: 1, pos: 'G' } }] }).formation).toBe('—');
   });
 

@@ -335,7 +335,7 @@ export default function TeamDetailScreen() {
             ) : (
               <Text style={styles.muted}>
                 {catalog.source === 'live'
-                  ? `${FREE_TIER_CACHE_MISS}. Open Lineups on a finished match to keep the XI.`
+                  ? `${FREE_TIER_CACHE_MISS}. Open a finished match to keep the lineup.`
                   : 'No finished mock match to build an XI from.'}
               </Text>
             )}

@@ -69,7 +69,7 @@ describe('football BFF allowlist and ttls', () => {
     expect(BFF_TTL_MS.fixturesLive).toBeLessThan(BFF_TTL_MS.fixturesIdle);
     expect(BFF_TTL_MS.fixturesIdle).toBeLessThan(BFF_TTL_MS.standings);
     expect(bffTtlMsForPath('/fixtures/lineups')).toBe(10 * 60_000);
-    expect(BFF_TTL_MS.lineupsSheet).toBe(30 * 60_000);
+    expect(BFF_TTL_MS.lineupsSheet).toBe(15 * 60_000);
     expect(bffFixtureDetailQueryError('fixtures/lineups', new URLSearchParams('fixture=9001'))).toBeNull();
     expect(bffFixtureDetailQueryError('fixtures/lineups', new URLSearchParams(''))).toMatch(/fixture/);
     expect(bffFixtureDetailQueryError('fixtures/events', new URLSearchParams('fixture=9001&team=40'))).toMatch(
@@ -412,7 +412,7 @@ describe('handleFootballBffRequest', () => {
     });
     expect(res.status).toBe(200);
     expect(res.headers.get('X-KickFeed-Cache')).toBe('MISS');
-    expect(res.headers.get('Cache-Control')).toBe('public, max-age=1800');
+    expect(res.headers.get('Cache-Control')).toBe('public, max-age=900');
 
     const emptyFetch = vi.fn(async () => new Response(JSON.stringify({ response: [] }), { status: 200 }));
     const empty = await handleFootballBffRequest(req('/fixtures/lineups?fixture=9002'), {
