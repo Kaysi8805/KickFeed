@@ -232,6 +232,8 @@ export function mapFixture(row: ApiFixture): Fixture | undefined {
   if (status === 'skip') return undefined;
   const venue = [row.fixture.venue?.name, row.fixture.venue?.city].filter(Boolean).join(', ');
   const live = status === 'live' || status === 'ht';
+  const round = row.league.round?.trim();
+  const season = typeof row.league.season === 'number' ? row.league.season : undefined;
   return {
     id: String(row.fixture.id),
     leagueId: String(row.league.id),
@@ -244,6 +246,8 @@ export function mapFixture(row: ApiFixture): Fixture | undefined {
     awayScore: row.goals.away ?? 0,
     events: [],
     venue: venue || 'TBD',
+    ...(round ? { round } : {}),
+    ...(season != null ? { season } : {}),
   };
 }
 
@@ -290,9 +294,12 @@ export function mapMatchEvent(row: ApiEvent, index: number): MatchEvent | undefi
   if (!kind) return undefined;
   const minute = (row.time.elapsed ?? 0) + (row.time.extra ?? 0);
   const name = row.player.name || row.assist?.name || 'Unknown';
+  const ownGoal = kind === 'goal' && /own\s*goal/i.test(row.detail ?? '');
+  const assistId = !ownGoal && row.assist?.id != null ? String(row.assist.id) : undefined;
+  const assistName = !ownGoal && row.assist?.name?.trim() ? row.assist.name.trim() : undefined;
   const detail =
-    kind === 'goal' && row.assist?.name
-      ? `Assist: ${row.assist.name}`
+    kind === 'goal' && assistName
+      ? `Assist: ${assistName}`
       : kind === 'sub' && row.assist?.name
         ? `On for ${row.assist.name}`
         : (row.detail ?? undefined);
@@ -304,6 +311,9 @@ export function mapMatchEvent(row: ApiEvent, index: number): MatchEvent | undefi
     playerName: name,
     playerId: row.player.id != null ? String(row.player.id) : undefined,
     detail,
+    ...(ownGoal ? { ownGoal: true } : {}),
+    ...(assistId ? { assistPlayerId: assistId } : {}),
+    ...(assistName ? { assistPlayerName: assistName } : {}),
   };
 }
 

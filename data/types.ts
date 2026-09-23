@@ -92,6 +92,11 @@ export interface MatchEvent {
   playerName: string;
   playerId?: string;
   detail?: string;
+  /** Set when the goal detail is an own goal. That player does not score fantasy points. */
+  ownGoal?: boolean;
+  /** Assist player id from the same goal event, when the payload includes one. */
+  assistPlayerId?: string;
+  assistPlayerName?: string;
 }
 
 export interface SeedFixture {
@@ -118,6 +123,10 @@ export interface Fixture {
   awayScore: number;
   events: MatchEvent[];
   venue: string;
+  /** API-Football `league.round`, e.g. `Regular Season - 8`. Absent on the mock catalog. */
+  round?: string;
+  /** API-Football season start year. Absent on the mock catalog. */
+  season?: number;
 }
 
 export interface StandingRow {
