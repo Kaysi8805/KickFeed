@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { demoUsers } from '@/data/mocks/social';
+import { seedFixtures } from '@/data/mocks/fixtures';
+import { hydrateFixture } from '@/services/football';
 import {
   DEMO_FANTASY_CODE,
   DEMO_FANTASY_NAME,
@@ -218,6 +220,19 @@ describe('fantasy scoring', () => {
     expect(table[1].name).toBe('Jordan Blake');
     expect(table[3].hasXi).toBe(false);
     expect(table[3].isCurrentUser).toBe(true);
+  });
+
+  it('scores the seeded XIs from the mock catalog, not an empty table', () => {
+    const now = new Date('2026-09-23T15:00:00.000Z');
+    const gw = gameweekContaining(now);
+    const fixtures = seedFixtures.map((seed) => hydrateFixture(seed, now.getTime()));
+    const snapshot = demoFantasySeed(now);
+    const points = Object.fromEntries(
+      snapshot.picks.map((pick) => [pick.userId, scoreFantasyXi(pick.slots, fixtures, gw).points]),
+    );
+    expect(points.maya + points.jordan + points.omar).toBeGreaterThan(0);
+    expect(points.jordan).toBeGreaterThan(0);
+    expect(points.omar).toBeGreaterThan(0);
   });
 });
 
