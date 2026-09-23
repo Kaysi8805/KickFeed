@@ -1,5 +1,7 @@
 /** API-Football (api-sports.io) v3 shapes used by the live adapter. */
 
+import { normalizeFootballBffUrl } from '@/lib/footballBffUrl';
+
 export const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
 export const API_FOOTBALL_SIGNUP = 'https://dashboard.api-football.com/register';
 export const API_FOOTBALL_DOCS = 'https://www.api-football.com/documentation-v3';
@@ -189,13 +191,15 @@ export function footballApiKeyFromEnv(
   return key || undefined;
 }
 
-/** Optional BFF base URL (no trailing slash). When set, the live adapter talks here instead of API-Football. */
+/**
+ * Optional BFF base URL (no trailing slash). When set, the live adapter talks here
+ * instead of API-Football and does not send `EXPO_PUBLIC_FOOTBALL_API_KEY`.
+ * The unreplaced `eas.json` workers.dev placeholder is treated as unset (mock catalog).
+ */
 export function footballBffUrlFromEnv(
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
 ): string | undefined {
-  const raw = env.EXPO_PUBLIC_FOOTBALL_BFF_URL?.trim();
-  if (!raw) return undefined;
-  return raw.replace(/\/+$/, '');
+  return normalizeFootballBffUrl(env.EXPO_PUBLIC_FOOTBALL_BFF_URL);
 }
 
 export type FootballHttpOptions = {

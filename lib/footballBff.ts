@@ -43,6 +43,44 @@ export const BFF_TTL_MS = {
   teamStats: 24 * 60 * 60_000,
 } as const;
 
+/**
+ * Per-isolate cap. Cloudflare Workers free tier is ~128MB and this map is not
+ * shared across isolates (no KV). Eviction prefers stale rows, then long-lived
+ * fresh rows, so live fixture TTLs survive a full player/stats browse.
+ */
+export const BFF_CACHE_LIMITS = {
+  maxEntries: 128,
+  /** How long a 429/5xx may still reuse a body after its TTL. */
+  maxStaleMs: 6 * 60 * 60_000,
+} as const;
+
+export type BffQuotaSnapshot = {
+  /** Last `x-ratelimit-requests-limit` seen by this isolate. */
+  limit: number | null;
+  /** Last `x-ratelimit-requests-remaining` (daily) seen by this isolate. */
+  remaining: number | null;
+  perMinuteLimit: number | null;
+  perMinuteRemaining: number | null;
+  observedAt: number | null;
+};
+
+export function emptyBffQuota(): BffQuotaSnapshot {
+  return {
+    limit: null,
+    remaining: null,
+    perMinuteLimit: null,
+    perMinuteRemaining: null,
+    observedAt: null,
+  };
+}
+
+export function createFootballBffCache(): TtlCache<string> {
+  return new TtlCache<string>({
+    maxEntries: BFF_CACHE_LIMITS.maxEntries,
+    maxStaleMs: BFF_CACHE_LIMITS.maxStaleMs,
+  });
+}
+
 const LIVE_FIXTURE_SHORT = new Set(['1H', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP', 'HT']);
 
 export type FootballBffEnv = {
@@ -52,12 +90,21 @@ export type FootballBffEnv = {
   now?: () => number;
   origin?: string;
   inflight?: Map<string, Promise<UpstreamFetch>>;
+  /** Mutable. Defaults to this isolate’s snapshot. Tests can pass their own. */
+  quota?: BffQuotaSnapshot;
 };
 
+/**
+ * Public read API: no cookies, no client API key.
+ * `*` is safe only because `Access-Control-Allow-Credentials` is never set.
+ * `x-apisports-key` is intentionally not an allowed request header.
+ */
 const CORS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Accept, Content-Type',
+  'Access-Control-Max-Age': '86400',
+  'Access-Control-Expose-Headers': 'X-KickFeed-Cache, Cache-Control',
 };
 
 type UpstreamFetch = { ok: true; status: number; text: string } | { ok: false; status: number; message: string };
@@ -159,20 +206,25 @@ function jsonResponse(status: number, body: unknown, extra?: Record<string, stri
     status,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
       ...CORS,
       ...extra,
     },
   });
 }
 
+function cacheControlFor(ttlMs: number, hit: 'HIT' | 'MISS' | 'BYPASS' | 'STALE'): string {
+  if (hit === 'BYPASS' || hit === 'STALE') return 'no-store';
+  return `public, max-age=${Math.max(1, Math.floor(ttlMs / 1000))}`;
+}
+
 function cacheHeaders(ttlMs: number, hit: 'HIT' | 'MISS' | 'BYPASS' | 'STALE'): Record<string, string> {
-  const headers: Record<string, string> = {
+  return {
     'X-KickFeed-Cache': hit,
+    'Cache-Control': cacheControlFor(ttlMs, hit),
+    'X-Content-Type-Options': 'nosniff',
   };
-  if (hit !== 'BYPASS') {
-    headers['Cache-Control'] = `public, max-age=${Math.max(1, Math.floor(ttlMs / 1000))}`;
-  }
-  return headers;
 }
 
 function envelopeResponse(text: string, ttlMs: number, hit: 'HIT' | 'MISS' | 'STALE'): Response {
@@ -186,10 +238,11 @@ function envelopeResponse(text: string, ttlMs: number, hit: 'HIT' | 'MISS' | 'ST
   });
 }
 
-function healthBody(cacheSize: number) {
+function healthBody(cacheSize: number, keyConfigured: boolean, quota: BffQuotaSnapshot) {
   return {
     ok: true,
     service: 'kickfeed-football-bff',
+    keyConfigured,
     coverage: {
       leagues: LIVE_LEAGUE_META.map((row) => ({
         id: row.id,
@@ -199,11 +252,49 @@ function healthBody(cacheSize: number) {
     },
     ttlMs: BFF_TTL_MS,
     cacheEntries: cacheSize,
+    cache: {
+      entries: cacheSize,
+      maxEntries: BFF_CACHE_LIMITS.maxEntries,
+      maxStaleMs: BFF_CACHE_LIMITS.maxStaleMs,
+      scope: 'isolate',
+      note: 'In-memory only, per Cloudflare isolate (one Node process locally). Isolates do not share this map. A cold isolate misses and calls API-Football. KV is not used.',
+    },
     quota: {
       dailyLimit: API_FOOTBALL_DAILY_LIMIT,
-      note: 'Allowlisted leagues only. Fixtures 45s if any row is live, else 5 min. Standings 15 min. Player season 12h (id + season only). Team statistics 24h (league + season + team only, one club per day). 429/5xx reuse stale cache. Never put FOOTBALL_API_KEY in Expo or CI.',
+      limit: quota.limit,
+      remaining: quota.remaining,
+      perMinuteLimit: quota.perMinuteLimit,
+      perMinuteRemaining: quota.perMinuteRemaining,
+      observedAt: quota.observedAt,
+      note: 'Allowlisted leagues only. Fixtures 45s if any row is live, else 5 min. Standings 15 min. Player season 12h (id + season only). Team statistics 24h (league + season + team only, one club per day). 429/5xx reuse stale cache within 6h. limit/remaining are the last API-Football rate-limit headers seen by this isolate, not a global counter. Never put FOOTBALL_API_KEY in Expo or CI.',
     },
   };
+}
+
+/** Stable cache key so `league`/`season` order cannot double-spend the daily quota. */
+export function canonicalBffSearch(params: URLSearchParams): string {
+  const entries = [...params.entries()].filter(([, value]) => value !== '');
+  entries.sort((a, b) => (a[0] === b[0] ? a[1].localeCompare(b[1]) : a[0].localeCompare(b[0])));
+  return new URLSearchParams(entries).toString();
+}
+
+function headerInt(headers: Headers, name: string): number | null {
+  const raw = headers.get(name)?.trim() ?? '';
+  if (!/^\d+$/.test(raw)) return null;
+  return Number(raw);
+}
+
+function noteQuota(headers: Headers, quota: BffQuotaSnapshot, now: number): void {
+  const limit = headerInt(headers, 'x-ratelimit-requests-limit');
+  const remaining = headerInt(headers, 'x-ratelimit-requests-remaining');
+  const perMinuteLimit = headerInt(headers, 'x-ratelimit-limit');
+  const perMinuteRemaining = headerInt(headers, 'x-ratelimit-remaining');
+  if (limit == null && remaining == null && perMinuteLimit == null && perMinuteRemaining == null) return;
+  if (limit != null) quota.limit = limit;
+  if (remaining != null) quota.remaining = remaining;
+  if (perMinuteLimit != null) quota.perMinuteLimit = perMinuteLimit;
+  if (perMinuteRemaining != null) quota.perMinuteRemaining = perMinuteRemaining;
+  quota.observedAt = now;
 }
 
 async function fetchUpstream(
@@ -235,9 +326,12 @@ export async function handleFootballBffRequest(
   const path = normalizeBffPath(url.pathname);
   const cache = env.cache ?? sharedBffCache();
   const now = env.now ?? Date.now;
+  const quota = env.quota ?? sharedBffQuota();
+  const keyConfigured = env.apiKey.trim().length > 0;
 
   if (path === '/' || path === '/health') {
-    return jsonResponse(200, healthBody(cache.size));
+    cache.prune(now());
+    return jsonResponse(200, healthBody(cache.size, keyConfigured, quota));
   }
 
   if (!isAllowedBffPath(path)) {
@@ -272,17 +366,17 @@ export async function handleFootballBffRequest(
   }
 
   const defaultTtl = bffTtlMsForPath(path);
-  const cacheKey = `${path}?${url.searchParams.toString()}`;
+  const search = canonicalBffSearch(url.searchParams);
+  const cacheKey = search ? `${path}?${search}` : path;
   const cached = cache.get(cacheKey, now());
   if (cached !== undefined) {
-    return envelopeResponse(cached, bffTtlMsForResponse(path, cached), 'HIT');
+    const remaining = cache.remainingMs(cacheKey, now());
+    return envelopeResponse(cached, remaining > 0 ? remaining : defaultTtl, 'HIT');
   }
 
   const origin = (env.origin ?? API_FOOTBALL_ORIGIN).replace(/\/$/, '');
   const upstream = new URL(`${origin}${path}`);
-  url.searchParams.forEach((value, key) => {
-    if (value) upstream.searchParams.set(key, value);
-  });
+  if (search) upstream.search = `?${search}`;
 
   const doFetch = env.fetchImpl ?? fetch;
   const inflight = env.inflight ?? sharedBffInflight();
@@ -295,6 +389,7 @@ export async function handleFootballBffRequest(
           'x-apisports-key': apiKey,
         },
       });
+      noteQuota(res.headers, quota, now());
       const text = await res.text();
       if (res.status === 401 || res.status === 403) {
         return { ok: false, status: 502, message: 'API-Football rejected the server key' };
@@ -312,7 +407,7 @@ export async function handleFootballBffRequest(
   if (!fetched.ok) {
     const stale = cache.peek(cacheKey);
     const retryable = fetched.status === 429 || fetched.status >= 500;
-    if (stale !== undefined && retryable) {
+    if (stale !== undefined && retryable && cache.isWithinStaleWindow(cacheKey, now())) {
       return envelopeResponse(stale, defaultTtl, 'STALE');
     }
     if (fetched.status === 502 && fetched.message === 'API-Football rejected the server key') {
@@ -328,10 +423,20 @@ export async function handleFootballBffRequest(
 
 let defaultCache: TtlCache<string> | undefined;
 let defaultInflight: Map<string, Promise<UpstreamFetch>> | undefined;
+let defaultQuota: BffQuotaSnapshot | undefined;
 
+/**
+ * Module state is one Cloudflare isolate (or one local Node process).
+ * A second isolate has its own empty cache and will miss until it fetches.
+ */
 function sharedBffCache(): TtlCache<string> {
-  defaultCache ??= new TtlCache<string>();
+  defaultCache ??= createFootballBffCache();
   return defaultCache;
+}
+
+function sharedBffQuota(): BffQuotaSnapshot {
+  defaultQuota ??= emptyBffQuota();
+  return defaultQuota;
 }
 
 function sharedBffInflight(): Map<string, Promise<UpstreamFetch>> {

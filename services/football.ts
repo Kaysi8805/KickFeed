@@ -286,6 +286,7 @@ export function selectFootballProvider(
   bffUrl = footballBffUrlFromEnv(),
 ): FootballProvider {
   if (bffUrl) {
+    // BFF owns the key. A client EXPO_PUBLIC_FOOTBALL_API_KEY is ignored and not sent.
     return createLiveFootballProvider({ http: createApiFootballHttp({ bffUrl }), fallback });
   }
   if (!apiKey) return fallback;

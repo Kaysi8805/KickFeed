@@ -2,7 +2,9 @@
 
 Thin GET proxy in front of [API-Football](https://www.api-football.com/documentation-v3) so Expo clients (and multi-device demos) share one **100 req/day** budget.
 
-The worker keeps the key on the server (`FOOTBALL_API_KEY`), allowlists the paths KickFeed already calls, **allowlists live coverage leagues**, and caches fixtures / standings / scorers / squads / events / lineups in memory with a quota-aware TTL. 429 / 5xx responses reuse **stale cache** when one exists.
+The worker keeps the key on the server (`FOOTBALL_API_KEY`), allowlists the paths KickFeed already calls, **allowlists live coverage leagues**, and caches fixtures / standings / scorers / squads / events / lineups in memory with a quota-aware TTL. 429 / 5xx responses reuse **stale cache** when one exists (up to 6 hours after expiry).
+
+The cache is **in-memory per Cloudflare isolate** (one Node process when you run `npm run bff`). Isolates do not share it. There is no KV namespace — a cold isolate is a cache miss and spends origin quota. The map is capped (128 entries) so a long-lived isolate stays inside the free-tier memory limit. Eviction drops stale rows first, then long-lived fresh rows, so a 45s live fixtures entry outranks a 24h team-stats blob.
 
 The Expo app does **not** need this running for CI or mock-catalog demos. Point the client at it only when you want live England / Slovakia / La Liga scores without putting the key in `EXPO_PUBLIC_*`.
 
@@ -25,7 +27,7 @@ The Expo app does **not** need this running for CI or mock-catalog demos. Point 
 
 | Path | Upstream | Origin TTL |
 | --- | --- | --- |
-| `GET /health` | none | — (lists coverage, TTLs, cache size, quota note) |
+| `GET /health` | none | — (`no-store`; `keyConfigured`, coverage, TTLs, per-isolate cache size, last rate-limit headers) |
 | `GET /fixtures?league=` | `/fixtures` | **45s if any row is live, else 5 min** |
 | `GET /standings?league=` | `/standings` | 15 min |
 | `GET /players/topscorers?league=` | `/players/topscorers` | 30 min |
@@ -35,13 +37,23 @@ The Expo app does **not** need this running for CI or mock-catalog demos. Point 
 | `GET /fixtures/events` | `/fixtures/events` | 60s |
 | `GET /fixtures/lineups` | `/fixtures/lineups` | 60s |
 
-Anything else is `404`. `POST` is `405`. CORS is `*` for Expo web. Responses are the **API-Football JSON envelope** (same as talking to `v3.football.api-sports.io` directly). Cache status is `X-KickFeed-Cache: HIT \| MISS \| STALE \| BYPASS`.
+Anything else is `404`. `POST` is `405`. CORS is `*` for Expo web: GET and OPTIONS only, allowed request headers are `Accept` and `Content-Type` (not `x-apisports-key`), and `Access-Control-Allow-Credentials` is never set. Responses are the **API-Football JSON envelope** (same as talking to `v3.football.api-sports.io` directly).
+
+Cache headers:
+
+| `X-KickFeed-Cache` | `Cache-Control` |
+| --- | --- |
+| `HIT` / `MISS` | `public, max-age=` remaining freshness in seconds |
+| `STALE` | `no-store` (browser must come back; the worker may still be serving a 429 fallback) |
+| `BYPASS` | `no-store` |
+
+`/health` is `Cache-Control: no-store`. `quota.remaining` is the last `x-ratelimit-requests-remaining` **this isolate** saw. It stays `null` until that isolate has called API-Football. It is not a global counter.
 
 ### Quota math (~100 req/day)
 
 Cold hydrate from the app is **9 origin calls** when the BFF cache is empty: 4 leagues × (fixtures + standings) + Premier League scorers. Squads, events, lineups, player seasons, and team statistics stay lazy. Opening a club Overview adds **at most one** `/teams/statistics` origin call for that club’s primary covered league, then the BFF and the app cache it for 24 hours and coalesce in-flight misses. Another device the same day is a HIT. Shots and possession are not on that payload; KickFeed does not fan out `/fixtures/statistics` to fill them. A coach name is mapped when the statistics body includes one, and Overview can also show a coach already stored on a cached lineup. `/coachs` stays off the allowlist.
 
-If a league window has a live match, that fixtures key refreshes every 45s **per BFF process**, not per device. Idle leagues stay at 5 minutes. Do not poll extra competitions — the allowlist is the budget.
+If a league window has a live match, that fixtures key refreshes every 45s **per isolate**, not per device. Idle leagues stay at 5 minutes. Do not poll extra competitions — the allowlist is the budget. Two isolates can both miss and both spend a request.
 
 ## Env (never commit secrets)
 
@@ -80,18 +92,21 @@ Uncovered leagues should 400 without an origin call: `curl http://127.0.0.1:8787
 
 ## Deploy (Cloudflare Worker, free tier)
 
+From the **repo root** (do not commit the key):
+
 ```bash
-cd bff
 npx wrangler@latest login
-npx wrangler@latest secret put FOOTBALL_API_KEY --config wrangler.toml
-npx wrangler@latest deploy --config wrangler.toml
+npx wrangler@latest secret put FOOTBALL_API_KEY --config bff/wrangler.toml
+npx wrangler@latest deploy --config bff/wrangler.toml
 ```
 
-Then set the client to the `*.workers.dev` URL (no trailing slash):
+Deploy prints the origin. Paste it with no trailing slash (replace `<account>`):
 
+```text
+https://kickfeed-football-bff.<account>.workers.dev
 ```
-EXPO_PUBLIC_FOOTBALL_BFF_URL=https://kickfeed-football-bff.<account>.workers.dev
-```
+
+Release builds read that URL from EAS, not from a client API key. Full paste commands, curl, and the Matches check are in the root README under **Batch 1 prod checklist**. `eas.json` already points preview/production at the `<account>` placeholder; an EAS plaintext env var with the same name overrides it. The app treats the unreplaced placeholder as unset and stays on mocks.
 
 Local Wrangler (uses `bff/.dev.vars`, gitignored):
 
