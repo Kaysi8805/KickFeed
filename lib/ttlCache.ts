@@ -102,6 +102,12 @@ export const FOOTBALL_TTL = {
   squadMs: 30 * 60_000,
   matchLiveMs: 30_000,
   matchDoneMs: 30 * 60_000,
+  /** `/fixtures/lineups` with no starting XI. Inside the 5–15 min pre-match window. */
+  lineupsMissMs: 10 * 60_000,
+  /** Pre-match or live sheet. Short enough that a later update can replace it. */
+  lineupsSheetMs: 15 * 60_000,
+  /** Full-time sheet. The published XI does not change after the match. */
+  lineupsFinalMs: 6 * 60 * 60_000,
   /** Player season block. Kept inside the 6–24h window so one open does not refetch all day. */
   playerSeasonMs: 12 * 60 * 60_000,
   /** Team season block. One origin read per club per day when Overview opens. */

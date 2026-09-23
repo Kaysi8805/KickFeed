@@ -34,8 +34,8 @@ The Expo app does **not** need this running for CI or mock-catalog demos. Point 
 | `GET /players?id=&season=` | `/players` | 12 h |
 | `GET /players/squads` | `/players/squads` | 30 min |
 | `GET /teams/statistics?league=&season=&team=` | `/teams/statistics` | **24 h** |
-| `GET /fixtures/events` | `/fixtures/events` | 60s |
-| `GET /fixtures/lineups` | `/fixtures/lineups` | 60s |
+| `GET /fixtures/events?fixture=` | `/fixtures/events` | 60s |
+| `GET /fixtures/lineups?fixture=` | `/fixtures/lineups` | **10 min if no starting XI, else 15 min** |
 
 Anything else is `404`. `POST` is `405`. CORS is `*` for Expo web: GET and OPTIONS only, allowed request headers are `Accept` and `Content-Type` (not `x-apisports-key`), and `Access-Control-Allow-Credentials` is never set. Responses are the **API-Football JSON envelope** (same as talking to `v3.football.api-sports.io` directly).
 
@@ -51,7 +51,7 @@ Cache headers:
 
 ### Quota math (~100 req/day)
 
-Cold hydrate from the app is **9 origin calls** when the BFF cache is empty: 4 leagues × (fixtures + standings) + Premier League scorers. Squads, events, lineups, player seasons, and team statistics stay lazy. Opening a club Overview adds **at most one** `/teams/statistics` origin call for that club’s primary covered league, then the BFF and the app cache it for 24 hours and coalesce in-flight misses. Another device the same day is a HIT. Shots and possession are not on that payload; KickFeed does not fan out `/fixtures/statistics` to fill them. A coach name is mapped when the statistics body includes one, and Overview can also show a coach already stored on a cached lineup. `/coachs` stays off the allowlist.
+Cold hydrate from the app is **9 origin calls** when the BFF cache is empty: 4 leagues × (fixtures + standings) + Premier League scorers. Squads, events, lineups, player seasons, and team statistics stay lazy. Lineups are not part of that hydrate: the app requests `GET /fixtures/lineups?fixture=` when a match screen opens. A numeric `fixture` is required; extra query keys are `400` and never hit origin. Concurrent requests for the same fixture coalesce in flight. An empty lineup body is cached **10 minutes**. A body that includes a `startXI` is cached **15 minutes** (the app keeps a full-time sheet longer on the device). Opening five different matches is five fixture reads, not a list-wide prefetch. Opening a club Overview adds **at most one** `/teams/statistics` origin call for that club’s primary covered league, then the BFF and the app cache it for 24 hours and coalesce in-flight misses. Another device the same day is a HIT. Shots and possession are not on that payload; KickFeed does not fan out `/fixtures/statistics` to fill them. A coach name is mapped when the statistics body includes one, and Overview can also show a coach already stored on a cached lineup. `/coachs` stays off the allowlist. The Lineups tab does not invent an XI when the sheet is missing.
 
 If a league window has a live match, that fixtures key refreshes every 45s **per isolate**, not per device. Idle leagues stay at 5 minutes. Do not poll extra competitions — the allowlist is the budget. Two isolates can both miss and both spend a request.
 

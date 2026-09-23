@@ -24,6 +24,21 @@ export const LIVE_LEAGUE_UNKNOWN =
 /** Shown when a free-tier response is missing. Never pair this with a grid of invented zeros. */
 export const FREE_TIER_CACHE_MISS = 'Not in free-tier cache yet';
 
+export const LINEUPS_LOADING_TITLE = 'Loading lineups';
+
+export const LINEUPS_LOADING_BODY = 'Checking the free-tier cache for this fixture.';
+
+/** Shown when `/fixtures/lineups` has no starting XI yet. Do not pair this with a guessed XI. */
+export const LINEUPS_CACHE_MISS_TITLE = 'Lineups usually ~60–90 min before kickoff';
+
+export const LINEUPS_CACHE_MISS_BODY =
+  'Nothing is in the free-tier cache for this match yet. KickFeed will not invent a lineup.';
+
+export const LINEUPS_ERROR_TITLE = 'Couldn’t load lineups';
+
+export const LINEUPS_ERROR_BODY =
+  'The free-tier lineup request failed. Score and events are unchanged — this tab will not invent an XI.';
+
 /**
  * Overview densify for aliased coverage clubs after a live miss.
  * Prefer live `/teams/statistics`, standings, scorers, and fixtures whenever they exist.

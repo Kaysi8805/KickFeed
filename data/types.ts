@@ -150,9 +150,21 @@ export interface LineupPlayer {
 
 export interface Lineup {
   formation: string;
+  /** Starting XI. MOTM ballots from this list, not the bench. */
   players: LineupPlayer[];
+  /**
+   * Substitutes from the same payload.
+   * Omitted when the payload did not include a bench — never a guessed list.
+   */
+  bench?: LineupPlayer[];
   /** Head coach when a lineup payload already included one. */
   coach?: string;
+  /**
+   * `sheet` — XI returned by `/fixtures/lineups`.
+   * `demo` — seeded mock catalog.
+   * The payload does not say provisional vs confirmed, so the match UI does not label either.
+   */
+  source?: 'sheet' | 'demo';
 }
 
 /** Home / away / total counts. Missing sides stay absent — never filled with a guessed 0. */

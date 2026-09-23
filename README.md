@@ -10,7 +10,7 @@ v1 is **local-first**: seeded fan profiles for **demo mode**, optional **Supabas
 - **Profiles & favorites** — name, photo initials, bio, favorite clubs, competitions, and players. **TV country** (UK / SK / US) defaults from the device locale, else Slovakia. Favorites drive Home live scores and Following.
 - **Social feed & follows** — follow demo users, post text (optional photo), optionally **attach a live/today/upcoming fixture**, like posts, see friends + own posts. Home and Following highlight match-attached posts and live matches for clubs/players you follow.
 - **Global search** — dedicated Search screen from the Feed bar and tab headers. Query clubs, players, competitions, and demo fans; results open the existing entity pages.
-- **Live scores & fixtures** — Live / Today / Upcoming. With a BFF URL or key, **England (PL + Championship), Slovakia Niké Liga, and Spain La Liga** from API-Football; without either, the mock worldwide catalog. Match pages with score, events, lineups (when the free tier returns them), stats stubs, and **TV channels for the user’s country**.
+- **Live scores & fixtures** — Live / Today / Upcoming. With a BFF URL or key, **England (PL + Championship), Slovakia Niké Liga, and Spain La Liga** from API-Football; without either, the mock worldwide catalog. Match pages with score, events, **lineups** (formation, XI, and bench when the free tier returns a team sheet), stats stubs, and **TV channels for the user’s country**.
 - **TV / broadcast schedule** — FotMob-style listings for launch geos (**UK, Slovakia, United States**). Browse today’s and upcoming England kickoffs with channel chips; tap through to the match. Editorial/mock data — not a licensed rights guide.
 - **Clubs & players** — Team pages (crest, league table context, fixtures, clickable squad, favorite) and player pages (mock season stats, recent appearances, follow/favorite, link back to club).
 - **Worldwide leagues** — continents → countries → competitions. Live standings/scorers are England + Slovakia + La Liga; other geos stay on the mock tree. Featured PL, Championship, Niké Liga, and La Liga when live.
@@ -347,6 +347,7 @@ Karol’s batches:
 - **Live geos — done.** Slovakia Niké Liga + La Liga on the existing BFF allowlist + quota TTLs.
 - **Matchday Home — done.** Home pins live/next favorite (or featured live coverage) above the feed.
 - **EAS push — done.** Favorite kickoff-soon + goal device alerts via Expo Notifications + EAS `projectId`. No extra football polling.
+- **Pre-match lineups — done.** Match hub Lineups list for leagues 39, 40, 332, and 140. Formation, starting XI, and a collapsed bench from `GET /fixtures/lineups` through the BFF, fetched when the match screen opens (not during Matches hydrate). The same list is used before, during, and after the match. A miss says lineups usually land about 60–90 min before kickoff. No pitch diagram and no provisional/confirmed label unless a payload says so.
 - **Report / block — done.** Demo = AsyncStorage; email session = Postgres RLS. Not a moderation dashboard.
 - **This PR.** 1:1 DMs. Demo = AsyncStorage (Maya↔Omar seed); email session = Postgres RLS + slow-mode trigger. Not in this PR: group chats, media DMs, push for messages, moderation dashboard, licensed TV, Apple/Google polish, more geos. Not gambling.
 
@@ -371,6 +372,25 @@ Match hub tabs **Predict** and **MOTM** sit next to Events / Lineups / Stats / H
 - **Predict** — upcoming fixtures only. Stepper for home/away (0–9). Upsert until kickoff; live / HT / FT (or kickoff time reached) lock the pick. Community average, most-common scoreline, and home/draw/away counts include other demo users (seeded mocks).
 - **MOTM** — live, half-time, and finished. Ballot is `FootballProvider.getLineups`; if XIs are empty (free-tier skip), `getSquad` for both clubs. One vote per user per match (demo id or Supabase uuid; related mock/live ids count as one). Tallies persist with the rest of app state.
 - Confirmations land in Notifications (“You predicted 2–1”, “You voted for Salah”). No odds, stakes, or third-party betting APIs.
+
+## Pre-match lineups
+
+The match hub **Lineups** tab is one list for upcoming, live, and full-time matches. Each club shows its formation when the payload has one, then shirt number, name, and position. The bench starts collapsed. A coach name is shown only when that same payload included one. The match screen does not call API-Football itself: `GET /fixtures/lineups?fixture=` goes through the in-repo BFF (`EXPO_PUBLIC_FOOTBALL_BFF_URL`). Leave `EXPO_PUBLIC_FOOTBALL_API_KEY` empty. Leagues stay **39, 40, 332, and 140**.
+
+The free-tier body does not say provisional versus confirmed, so the list does not add that label. It also does not draw a pitch. If `startXI` is missing, the tab says **Lineups usually ~60–90 min before kickoff** and does not invent an XI, shots, possession, or xG.
+
+Demo mode (no BFF URL and no client key) still shows a seeded 4-3-3 plus the rest of the mock squad on the bench. A row opens the player page only when the lineup player has an id. MOTM still ballots from the starting XI when one is present, and from both squads when it is empty.
+
+**Quota.** Matches hydrate does not call `/fixtures/lineups`. Opening a match does, once per fixture. The BFF coalesces concurrent clients on that fixture. An empty answer is cached about **10 minutes**. A sheet is cached about **15 minutes** on the BFF (pre-match and live). The app keeps a full-time sheet for about **6 hours**. Opening five different matches is five reads, not a prefetch of every upcoming fixture. Cold hydrate is unchanged (fixtures, standings, Premier League scorers only).
+
+**Try on a device**
+
+1. In `.env` (never commit it), set `EXPO_PUBLIC_FOOTBALL_BFF_URL=https://kickfeed-football-bff.kaysi8805.workers.dev` and leave `EXPO_PUBLIC_FOOTBALL_API_KEY` empty.
+2. `npx expo start` and open an upcoming Premier League, Championship, Niké Liga, or La Liga match.
+3. Open **Lineups**. If the free tier has a sheet: formation, XI (`number · name · position`), coach when present, bench collapsed until you expand it. Tap a row that has a player id.
+4. Open another covered match whose sheet is not out yet. You should see **Lineups usually ~60–90 min before kickoff**, not a guessed XI.
+5. The same list is what you see if that match is live or full time and the payload exists.
+6. Unset the BFF URL and restart Expo. The same tab shows the demo XI and bench with no key.
 
 ## Prediction leaderboards
 

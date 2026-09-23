@@ -109,7 +109,14 @@ export interface ApiEvent {
 }
 
 export interface ApiLineupPlayer {
-  player: { id: number; name: string; number?: number | null; pos?: string | null };
+  player: {
+    id: number;
+    name: string;
+    number?: number | null;
+    pos?: string | null;
+    /** `row:col`. Row 1 is the goalkeeper. Null on most substitutes. */
+    grid?: string | null;
+  };
 }
 
 export interface ApiLineup {

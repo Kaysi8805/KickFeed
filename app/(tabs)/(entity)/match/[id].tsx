@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { PostCard } from '@/components/feed/PostCard';
+import { LineupsSection } from '@/components/match/LineupsSection';
 import { LiveBadge } from '@/components/match/LiveBadge';
 import { MotmSection } from '@/components/match/MotmSection';
 import { PredictSection } from '@/components/match/PredictSection';
@@ -87,6 +88,9 @@ export default function MatchDetailScreen() {
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<string | undefined>();
   const [chatNow, setChatNow] = useState(() => Date.now());
+  const [lineupState, setLineupState] = useState<{ id: string; phase: 'loading' | 'ready' | 'empty' | 'error' } | null>(
+    null,
+  );
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -104,15 +108,34 @@ export default function MatchDetailScreen() {
   const fixture = deepLink?.fixture;
 
   useEffect(() => {
-    if (deepLink?.fixture) void football.ensureMatchDetail(deepLink.catalogId);
-  }, [deepLink?.catalogId, deepLink?.fixture]);
+    const requestId = deepLink?.catalogId;
+    if (!requestId) return;
+    void football.ensureMatchDetail(requestId);
+    let cancel = false;
+    setLineupState((prev) =>
+      prev?.id === requestId && (prev.phase === 'ready' || prev.phase === 'empty') ? prev : { id: requestId, phase: 'loading' },
+    );
+    void football.ensureLineups(requestId).then((result) => {
+      if (cancel) return;
+      setLineupState({
+        id: requestId,
+        phase: result === 'error' ? 'error' : result === 'empty' ? 'empty' : 'ready',
+      });
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [deepLink?.catalogId]);
+
+  const lineupStatus = deepLink?.fixture?.status;
+  const lineupHomeId = deepLink?.fixture?.homeTeamId;
+  const lineupAwayId = deepLink?.fixture?.awayTeamId;
 
   useEffect(() => {
-    if (!deepLink?.fixture) return;
-    if (tab !== 'motm' && tab !== 'lineups') return;
-    void football.ensureSquad(deepLink.fixture.homeTeamId);
-    void football.ensureSquad(deepLink.fixture.awayTeamId);
-  }, [deepLink?.catalogId, deepLink?.fixture, tab]);
+    if (tab !== 'motm' || !isMotmOpen(lineupStatus) || !lineupHomeId || !lineupAwayId) return;
+    void football.ensureSquad(lineupHomeId);
+    void football.ensureSquad(lineupAwayId);
+  }, [lineupAwayId, lineupHomeId, lineupStatus, tab]);
 
   const home = fixture ? football.getTeam(fixture.homeTeamId) : undefined;
   const away = fixture ? football.getTeam(fixture.awayTeamId) : undefined;
@@ -297,52 +320,22 @@ export default function MatchDetailScreen() {
         ) : null}
 
         {tab === 'lineups' ? (
-          lineups.home.players.length === 0 && lineups.away.players.length === 0 ? (
-            <EmptyState
-              compact
-              title="Lineups not cached"
-              body="Free-tier quota may skip lineups. Events and the score still come from the fixture payload when available."
-            />
-          ) : (
-          <View style={styles.lineWrap}>
-            <View style={{ flex: 1 }}>
-              <View style={styles.lineHead}>
-                <Crest team={home} size={20} />
-                <Text style={styles.lineTitle}>{home.code} · {lineups.home.formation}</Text>
-              </View>
-              {lineups.home.players.map((p) => (
-                <Pressable
-                  key={`h-${p.number}`}
-                  disabled={!p.playerId}
-                  onPress={() => p.playerId && router.push(entityHref('player', p.playerId))}
-                >
-                  <Text style={[styles.player, p.playerId ? styles.link : null]}>
-                    {p.number}  {p.name}
-                    <Text style={styles.pos}>  {p.pos}</Text>
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={styles.lineHead}>
-                <Crest team={away} size={20} />
-                <Text style={styles.lineTitle}>{away.code} · {lineups.away.formation}</Text>
-              </View>
-              {lineups.away.players.map((p) => (
-                <Pressable
-                  key={`a-${p.number}`}
-                  disabled={!p.playerId}
-                  onPress={() => p.playerId && router.push(entityHref('player', p.playerId))}
-                >
-                  <Text style={[styles.player, p.playerId ? styles.link : null]}>
-                    {p.number}  {p.name}
-                    <Text style={styles.pos}>  {p.pos}</Text>
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-          )
+          <LineupsSection
+            home={home}
+            away={away}
+            lineups={lineups}
+            phase={lineupState?.id === deepLink.catalogId ? lineupState.phase : 'idle'}
+            liveCatalog={catalog.source === 'live'}
+            onRetry={() => {
+              setLineupState({ id: fixture.id, phase: 'loading' });
+              void football.ensureLineups(deepLink.catalogId).then((result) => {
+                setLineupState({
+                  id: fixture.id,
+                  phase: result === 'error' ? 'error' : result === 'empty' ? 'empty' : 'ready',
+                });
+              });
+            }}
+          />
         ) : null}
 
         {tab === 'stats' ? (
@@ -606,11 +599,6 @@ const styles = StyleSheet.create({
   eicon: { fontSize: 16, width: 22 },
   ename: { ...type.subtitle, fontSize: 14, color: colors.text },
   edetail: { ...type.caption, color: colors.textMuted, fontWeight: '500' },
-  lineWrap: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
-  lineHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm },
-  lineTitle: { ...type.micro, color: colors.limeMuted },
-  player: { ...type.caption, color: colors.text, marginBottom: 6 },
-  pos: { color: colors.textDim },
   statLabel: { ...type.caption, color: colors.textMuted, marginBottom: 8 },
   barTrack: { flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden' },
   barHome: { backgroundColor: colors.pitchBright },

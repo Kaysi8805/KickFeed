@@ -3,10 +3,12 @@ import {
   BFF_CACHE_LIMITS,
   BFF_TTL_MS,
   bffAllowsLeagueParam,
+  bffFixtureDetailQueryError,
   bffPlayerSeasonQueryError,
   bffTeamStatisticsQueryError,
   bffTtlMsForPath,
   bffTtlMsForResponse,
+  lineupsEnvelopeHasSheet,
   createFootballBffCache,
   emptyBffQuota,
   handleFootballBffRequest,
@@ -66,6 +68,18 @@ describe('football BFF allowlist and ttls', () => {
     expect(bffPlayerSeasonQueryError(new URLSearchParams('id=306&season=2026&league=39'))).toMatch(/id and season/);
     expect(BFF_TTL_MS.fixturesLive).toBeLessThan(BFF_TTL_MS.fixturesIdle);
     expect(BFF_TTL_MS.fixturesIdle).toBeLessThan(BFF_TTL_MS.standings);
+    expect(bffTtlMsForPath('/fixtures/lineups')).toBe(10 * 60_000);
+    expect(BFF_TTL_MS.lineupsSheet).toBe(15 * 60_000);
+    expect(bffFixtureDetailQueryError('fixtures/lineups', new URLSearchParams('fixture=9001'))).toBeNull();
+    expect(bffFixtureDetailQueryError('fixtures/lineups', new URLSearchParams(''))).toMatch(/fixture/);
+    expect(bffFixtureDetailQueryError('fixtures/events', new URLSearchParams('fixture=9001&team=40'))).toMatch(
+      /only allows fixture/,
+    );
+    const sheet = JSON.stringify({ response: [{ startXI: [{ player: { id: 1 } }] }] });
+    expect(lineupsEnvelopeHasSheet(sheet)).toBe(true);
+    expect(lineupsEnvelopeHasSheet(JSON.stringify({ response: [] }))).toBe(false);
+    expect(bffTtlMsForResponse('/fixtures/lineups', sheet)).toBe(BFF_TTL_MS.lineupsSheet);
+    expect(bffTtlMsForResponse('/fixtures/lineups', '{"response":[]}')).toBe(BFF_TTL_MS.lineups);
   });
 });
 
@@ -368,6 +382,48 @@ describe('handleFootballBffRequest', () => {
     expect(body.quota.observedAt).toBe(5_000);
     expect(JSON.stringify(body)).not.toContain('server-secret');
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects lineup and event queries that are not one numeric fixture', async () => {
+    const fetchImpl = vi.fn();
+    const missing = await handleFootballBffRequest(req('/fixtures/lineups'), { apiKey: 'secret', fetchImpl });
+    const extra = await handleFootballBffRequest(req('/fixtures/lineups?fixture=9001&type=startXI'), {
+      apiKey: 'secret',
+      fetchImpl,
+    });
+    const events = await handleFootballBffRequest(req('/fixtures/events?fixture=abc'), { apiKey: 'secret', fetchImpl });
+    expect(missing.status).toBe(400);
+    expect(extra.status).toBe(400);
+    expect(events.status).toBe(400);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('caches a published lineup sheet longer than an empty response', async () => {
+    const sheet = JSON.stringify({
+      response: [{ startXI: [{ player: { id: 1, name: 'A' } }], substitutes: [] }],
+    });
+    const fetchImpl = vi.fn(async () => new Response(sheet, { status: 200 }));
+    const res = await handleFootballBffRequest(req('/fixtures/lineups?fixture=9001'), {
+      apiKey: 'secret',
+      fetchImpl,
+      cache: new TtlCache<string>(),
+      now: () => 1_000,
+      origin: 'https://upstream.test',
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-KickFeed-Cache')).toBe('MISS');
+    expect(res.headers.get('Cache-Control')).toBe('public, max-age=900');
+
+    const emptyFetch = vi.fn(async () => new Response(JSON.stringify({ response: [] }), { status: 200 }));
+    const empty = await handleFootballBffRequest(req('/fixtures/lineups?fixture=9002'), {
+      apiKey: 'secret',
+      fetchImpl: emptyFetch,
+      cache: new TtlCache<string>(),
+      now: () => 1_000,
+      origin: 'https://upstream.test',
+    });
+    expect(empty.headers.get('Cache-Control')).toBe('public, max-age=600');
+    expect(emptyFetch).toHaveBeenCalledTimes(1);
   });
 
   it('caps the shared isolate cache', () => {
