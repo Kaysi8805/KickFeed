@@ -11,8 +11,8 @@ import {
   MODERATION_LIVE_COPY,
   TV_EDITORIAL_DISCLAIMER,
   dmDisclaimer,
+  matchesDayCaption,
   matchesEmptyBody,
-  matchesWindowCaption,
   matchdayEmptyBody,
   moderationDisclaimer,
 } from '@/lib/honesty';
@@ -31,20 +31,22 @@ describe('honesty copy', () => {
     expect(TV_EDITORIAL_DISCLAIMER).toMatch(/FotMob/i);
   });
 
-  it('keeps Matches empty-body copy aligned with the active filter', () => {
-    expect(matchesEmptyBody('live', 'mock')).toMatch(/^Flip to Today or Upcoming/);
-    expect(matchesEmptyBody('today', 'live')).toMatch(/^Flip to Live or Upcoming/);
-    expect(matchesEmptyBody('upcoming', 'mock')).toMatch(/^Flip to Live or Today/);
-    expect(matchesEmptyBody('today', 'mock')).not.toMatch(/Flip to Today/);
-    expect(matchesEmptyBody('live', 'live')).toMatch(/Slovakia/);
-    expect(matchesEmptyBody('all', 'mock')).toMatch(/^Flip to Live, Today, or Upcoming/);
-    expect(matchesEmptyBody('all', 'live')).toMatch(/Slovakia/);
+  it('keeps Matches empty-body copy on the selected day', () => {
+    expect(matchesEmptyBody('today', 'mock')).toMatch(/yesterday or tomorrow/i);
+    expect(matchesEmptyBody('today', 'mock')).not.toMatch(/Flip to/);
+    expect(matchesEmptyBody('yesterday', 'mock')).toMatch(/this day/i);
+    expect(matchesEmptyBody('tomorrow', 'live')).toMatch(/Slovakia/);
+    expect(matchesEmptyBody('other', 'live')).toMatch(/this day/i);
+    expect(matchesEmptyBody('today', 'live')).toMatch(/other leagues stay mock/i);
   });
 
-  it('states the Matches window without calling mock scores live', () => {
-    expect(matchesWindowCaption('mock')).toBe('Last 5 days through the next 10 worldwide (mock)');
-    expect(matchesWindowCaption('live')).toBe('Last 5 days through the next 10');
-    expect(matchesWindowCaption('live')).not.toMatch(/worldwide/i);
+  it('names the selected Matches day without calling mock scores live', () => {
+    const now = new Date(2026, 8, 16, 12, 0, 0);
+    expect(matchesDayCaption('2026-09-16', 'mock', now)).toBe('Today · Wednesday 16 September · worldwide (mock)');
+    expect(matchesDayCaption('2026-09-15', 'live', now)).toBe('Yesterday · Tuesday 15 September');
+    expect(matchesDayCaption('2026-09-17', 'mock', now)).toMatch(/^Tomorrow · /);
+    expect(matchesDayCaption('2026-09-17', 'live', now)).not.toMatch(/worldwide/i);
+    expect(matchesDayCaption('2026-09-16', 'live', now)).not.toMatch(/Last 5 days/);
   });
 
   it('keeps matchday empty copy honest about live coverage vs mock', () => {

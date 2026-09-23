@@ -1,7 +1,7 @@
 /** User-facing disclaimers so live/mock mix and editorial TV are obvious in demos. */
 
 import { LIVE_GEO_LABEL, LIVE_GEO_SHORT } from '@/lib/footballCoverage';
-import { MATCHES_LOOKAHEAD_DAYS, MATCHES_LOOKBACK_DAYS, type MatchesListFilter } from '@/lib/matchesWindow';
+import { matchDayHeading, type MatchDayRelation } from '@/lib/matchesWindow';
 
 export const LIVE_MIX_DISCLAIMER = `${LIVE_GEO_SHORT} live · other leagues mock`;
 
@@ -96,12 +96,10 @@ export function rankingDisclaimer(
   return 'Demo ranking — this device and seeded fans. Not a live KickFeed table.';
 }
 
-export type MatchWindowFilter = MatchesListFilter;
-
-/** Date span shown on Matches. Mock keeps the worldwide disclaimer; live does not claim other leagues. */
-export function matchesWindowCaption(source: 'live' | 'mock'): string {
-  const span = `Last ${MATCHES_LOOKBACK_DAYS} days through the next ${MATCHES_LOOKAHEAD_DAYS}`;
-  return source === 'live' ? span : `${span} worldwide (mock)`;
+/** Selected day on Matches. Mock keeps the worldwide disclaimer; live does not claim other leagues. */
+export function matchesDayCaption(dayIso: string, source: 'live' | 'mock', now = new Date()): string {
+  const heading = matchDayHeading(dayIso, now);
+  return source === 'live' ? heading : `${heading} · worldwide (mock)`;
 }
 
 export const MATCHDAY_EMPTY_TITLE = 'Quiet matchday';
@@ -119,20 +117,13 @@ export function matchdayEmptyBody(hasFavorites: boolean, source: 'live' | 'mock'
     : 'Nothing kicking off soon, live, or just finished for your clubs and leagues. Feed is one tap away.';
 }
 
-export function matchesEmptyBody(
-  filter: MatchWindowFilter,
-  source: 'live' | 'mock',
-): string {
-  const flip =
-    filter === 'all'
-      ? 'Flip to Live, Today, or Upcoming'
-      : filter === 'live'
-        ? 'Flip to Today or Upcoming'
-        : filter === 'today'
-          ? 'Flip to Live or Upcoming'
-          : 'Flip to Live or Today';
+export function matchesEmptyBody(relation: MatchDayRelation, source: 'live' | 'mock'): string {
   if (source === 'live') {
-    return `${flip} — live fixtures for ${LIVE_GEO_SHORT} land here when the API has them.`;
+    return relation === 'today'
+      ? `No fixtures for ${LIVE_GEO_SHORT} on this day. Pick another day — other leagues stay mock.`
+      : `Nothing on this day. Live fixtures for ${LIVE_GEO_SHORT} show here when the API has them.`;
   }
-  return `${flip} — the mock clock always has fixtures around now.`;
+  return relation === 'today'
+    ? 'The mock clock has no fixtures on this calendar day. Pick yesterday or tomorrow in the strip.'
+    : 'No mock fixtures kick off on this day. Pick another day — scores stay whatever the catalog already has.';
 }
