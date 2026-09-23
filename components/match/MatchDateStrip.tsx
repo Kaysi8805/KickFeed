@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { MatchDay } from '@/lib/matchesWindow';
 import { colors, radius, spacing, type } from '@/theme';
@@ -32,37 +32,38 @@ export function MatchDateStrip({
   }, [days, selected, viewport]);
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={styles.scroller}
-      contentContainerStyle={styles.row}
-      onLayout={(event) => {
-        const width = event.nativeEvent.layout.width;
-        setViewport((prev) => (Math.abs(prev - width) < 1 ? prev : width));
-      }}
-    >
-      {days.map((day) => {
-        const active = day.iso === selected;
-        const today = day.relation === 'today';
-        return (
-          <Pressable
-            key={day.iso}
-            onPress={() => onSelect(day.iso)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={day.accessibilityLabel}
-            style={[styles.chip, active && styles.chipActive, today && styles.chipToday]}
-          >
-            <Text style={[styles.weekday, (today || active) && styles.weekdayOn]}>
-              {day.weekday}
-            </Text>
-            <Text style={styles.num}>{day.dayNum}</Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+    <View accessibilityRole="tablist" accessibilityLabel="Match days">
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.scroller}
+        contentContainerStyle={styles.row}
+        onLayout={(event) => {
+          const width = event.nativeEvent.layout.width;
+          setViewport((prev) => (Math.abs(prev - width) < 1 ? prev : width));
+        }}
+      >
+        {days.map((day) => {
+          const active = day.iso === selected;
+          const today = day.relation === 'today';
+          return (
+            <Pressable
+              key={day.iso}
+              onPress={() => onSelect(day.iso)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              aria-selected={active}
+              accessibilityLabel={day.accessibilityLabel}
+              style={[styles.chip, active && styles.chipActive, today && styles.chipToday]}
+            >
+              <Text style={[styles.weekday, (today || active) && styles.weekdayOn]}>{day.weekday}</Text>
+              <Text style={styles.num}>{day.dayNum}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 }
 
