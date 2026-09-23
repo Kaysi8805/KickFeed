@@ -17,6 +17,7 @@ const icons: Record<string, string> = {
   prediction: '🔢',
   motm: '⭐',
   dm: '✉️',
+  live_circle: '🟢',
 };
 
 export default function NotificationsScreen() {
@@ -37,7 +38,7 @@ export default function NotificationsScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         {notifications.length === 0 ? (
-          <EmptyState title="All quiet" body="Match chat, DMs, predictions, MOTM, goals, kickoffs, and friend posts will land here." />
+          <EmptyState title="All quiet" body="Match chat, DMs, predictions, MOTM, goals, kickoffs, friend posts, and Live Circle will land here." />
         ) : (
           notifications.map((n) => (
             <Pressable

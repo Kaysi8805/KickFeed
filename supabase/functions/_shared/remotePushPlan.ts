@@ -101,7 +101,7 @@ export type ExpoPushMessage = {
   ttl: number;
   data: {
     matchId?: string;
-    type: 'kickoff' | 'goal' | 'test';
+    type: 'kickoff' | 'goal' | 'test' | 'live_circle';
     fingerprint?: string;
   };
 };

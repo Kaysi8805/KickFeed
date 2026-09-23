@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { PostCard } from '@/components/feed/PostCard';
+import { LiveCircleRow } from '@/components/match/LiveCircleRow';
 import { LineupsSection } from '@/components/match/LineupsSection';
 import { LiveBadge } from '@/components/match/LiveBadge';
 import { MotmSection } from '@/components/match/MotmSection';
@@ -293,6 +294,14 @@ export default function MatchDetailScreen() {
             <Text style={styles.team}>{away.shortName}</Text>
           </Pressable>
         </View>
+
+        <LiveCircleRow
+          fixtureId={deepLink.catalogId}
+          homeName={home.name}
+          awayName={away.name}
+          homeTeamId={home.id}
+          awayTeamId={away.id}
+        />
 
         <SafeBoundary title={TV_UNAVAILABLE_TITLE} body={TV_UNAVAILABLE_BODY}>
           <TvMatchSection matchId={fixture.id} />
