@@ -49,6 +49,8 @@ function RootNav() {
         <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
         <Stack.Screen name="search" />
         <Stack.Screen name="messages/index" />
+        <Stack.Screen name="messages/new" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="messages/group/[groupId]" />
         <Stack.Screen name="messages/[peerId]" />
         <Stack.Screen name="pick-favorites" />
         <Stack.Screen name="tv" />

@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import type { AppNotification, Comment, DirectMessage, Fixture, MotmVote, Post, PostAudience, ReportTargetType, ScorePrediction, User } from '@/data/types';
+import type { AppNotification, Comment, DirectMessage, DmGroup, Fixture, GroupMessage, MotmVote, Post, PostAudience, ReportTargetType, ScorePrediction, SharedPostPayload, User } from '@/data/types';
 import { motmVoteForUser, predictionForUser, type MotmCandidate } from '@/lib/engagement';
 import { shouldPersistLeaderboard } from '@/lib/leaderboard';
 import { defaultPushPrefs, emptyPushSnapshot, planFavoriteDeviceAlerts, type PushPrefs, type PushSnapshot } from '@/lib/favoritePush';
@@ -19,11 +19,20 @@ import {
   inboxThreads,
   messagesForThread,
   shouldPersistDms,
-  unreadDmCount,
   visibleDirectMessages,
   type DmThread,
   type SendDmResult,
 } from '@/lib/dms';
+import {
+  conversationInbox,
+  groupSendBlockReason,
+  groupSlowMode,
+  isGroupMember,
+  visibleGroupMessages,
+  type InboxEntry,
+  type SendGroupResult,
+} from '@/lib/groups';
+import { sharedPostBody } from '@/lib/shareToChat';
 import {
   applyDeviceAlerts,
   cancelAllDeviceAlerts,
@@ -44,18 +53,24 @@ import {
   blockedIdsFor,
   cannotDmPeerIds,
   defaults,
+  createDmGroup as createDmGroupState,
   dmReadsFor,
   follow as followState,
+  groupReadsFor,
+  leaveDmGroup as leaveDmGroupState,
   hydratePersisted,
   markDmThreadRead as markDmThreadReadState,
   markNotificationsRead as markNotificationsReadState,
   mergeMatchAlerts,
+  markGroupRead as markGroupReadState,
   mergeRemoteDirectMessages,
+  mergeRemoteGroupChats,
   mergeRemoteModeration,
   notificationsFor,
   rememberProfiles as rememberProfilesState,
   Persisted,
   sendDirectMessage as sendDirectMessageState,
+  sendGroupMessage as sendGroupMessageState,
   setMotmVote as setMotmVoteState,
   setPrediction as setPredictionState,
   signInAccount,
@@ -86,7 +101,15 @@ import {
   insertRemoteReport,
   syncRemoteModeration,
 } from '@/services/moderation';
-import { asDmsClient, insertRemoteDirectMessage, syncRemoteDirectMessages } from '@/services/dms';
+import {
+  asDmsClient,
+  deleteRemoteGroupMember,
+  insertRemoteDirectMessage,
+  insertRemoteDmGroup,
+  insertRemoteGroupMessage,
+  syncRemoteDirectMessages,
+  syncRemoteGroupChats,
+} from '@/services/dms';
 
 const STORAGE_KEY = 'kickfeed.v1.state';
 
@@ -124,11 +147,27 @@ interface AppContextValue {
   hasReported: (targetType: ReportTargetType, targetId: string) => boolean;
   directMessages: DirectMessage[];
   dmThreads: DmThread[];
+  inbox: InboxEntry[];
   unreadDmCount: number;
   threadMessages: (peerId: string) => DirectMessage[];
   sendDirectMessage: (peerId: string, text: string) => SendDmResult;
   markDmThreadRead: (peerId: string) => void;
   dmSlowModeFor: (peerId: string, now?: number) => ReturnType<typeof dmSlowMode>;
+  dmGroups: DmGroup[];
+  createDmGroup: (
+    pickedIds: string[],
+    title?: string | null,
+  ) => { ok: true; group: DmGroup } | { ok: false; error: string };
+  leaveDmGroup: (groupId: string) => void;
+  groupThreadMessages: (groupId: string) => GroupMessage[];
+  sendGroupMessage: (groupId: string, text: string) => SendGroupResult;
+  sendPostToChat: (
+    target: { kind: 'direct'; peerId: string } | { kind: 'group'; groupId: string },
+    share: SharedPostPayload,
+  ) => SendDmResult | SendGroupResult;
+  markGroupRead: (groupId: string) => void;
+  groupSlowModeFor: (groupId: string, now?: number) => ReturnType<typeof groupSlowMode>;
+  groupBlockReason: (groupId: string) => string | null;
   signInDemo: (userId: string) => void;
   signInWithEmail: (email: string, password: string) => Promise<EmailAuthResult>;
   signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<EmailAuthResult>;
@@ -318,11 +357,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!userId || !shouldPersistDms(supabaseConfigured, state.authMode)) return;
     let cancelled = false;
     void (async () => {
-      const remote = await syncRemoteDirectMessages(userId);
-      if (cancelled || 'error' in remote) return;
+      const [remote, groups] = await Promise.all([
+        syncRemoteDirectMessages(userId),
+        syncRemoteGroupChats(userId),
+      ]);
+      if (cancelled) return;
       setState((prev) => {
         if (prev.currentUserId !== userId) return prev;
-        return mergeRemoteDirectMessages(prev, userId, remote.messages);
+        let next = prev;
+        if (!('error' in remote)) next = mergeRemoteDirectMessages(next, userId, remote.messages);
+        if (!('error' in groups)) next = mergeRemoteGroupChats(next, userId, groups.groups, groups.messages);
+        return next;
       });
     })();
     return () => {
@@ -336,9 +381,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const blockedUserIds = blockedIdsFor(state, currentUser?.id ?? null);
   const cannotDmUserIds = cannotDmPeerIds(state, currentUser?.id ?? null);
   const dmReadMap = dmReadsFor(state, currentUser?.id ?? null);
+  const groupReadMap = groupReadsFor(state, currentUser?.id ?? null);
   const visibleDms = visibleDirectMessages(state.directMessages, currentUser?.id ?? null, cannotDmUserIds);
   const dmThreadList = inboxThreads(state.directMessages, currentUser?.id ?? null, cannotDmUserIds, dmReadMap);
-  const dmUnread = unreadDmCount(state.directMessages, currentUser?.id ?? null, cannotDmUserIds, dmReadMap);
+  const myGroups = currentUser ? state.dmGroups.filter((group) => isGroupMember(group, currentUser.id)) : [];
+  const inbox = conversationInbox({
+    directs: dmThreadList,
+    groups: myGroups,
+    groupMessages: state.groupMessages,
+    userId: currentUser?.id ?? null,
+    hiddenIds: cannotDmUserIds,
+    groupReads: groupReadMap,
+    nameOf: (id) => users.find((user) => user.id === id)?.name,
+  });
+  const dmUnread = inbox.reduce((sum, row) => sum + row.unreadCount, 0);
   const followingIds = currentUser
     ? (state.following[currentUser.id] ?? []).filter((id) => !blockedUserIds.includes(id))
     : [];
@@ -466,6 +522,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ),
       directMessages: visibleDms,
       dmThreads: dmThreadList,
+      inbox,
       unreadDmCount: dmUnread,
       threadMessages: (peerId) =>
         currentUser ? messagesForThread(visibleDms, currentUser.id, peerId) : [],
@@ -486,7 +543,86 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return result;
       },
       markDmThreadRead: (peerId) => patch((p) => markDmThreadReadState(p, peerId)),
-      dmSlowModeFor: (peerId, now = Date.now()) => dmSlowMode(state.directMessages, currentUser?.id, peerId, now),
+      dmSlowModeFor: (peerId, now = Date.now()) =>
+        dmSlowMode(
+          state.directMessages,
+          currentUser?.id,
+          peerId,
+          now,
+          state.groupMessages.filter((row) => row.senderId === currentUser?.id),
+        ),
+      dmGroups: myGroups,
+      createDmGroup: (pickedIds, title) => {
+        let result: { ok: true; group: DmGroup } | { ok: false; error: string } = {
+          ok: false,
+          error: 'Couldn’t create that group.',
+        };
+        patch((p) => {
+          const next = createDmGroupState(p, pickedIds, title, Date.now());
+          result = next.result;
+          if (next.result.ok && shouldPersistDms(supabaseConfigured, next.state.authMode)) {
+            void insertRemoteDmGroup(asDmsClient(getSupabaseClient()), next.result.group);
+          }
+          return next.state;
+        });
+        return result;
+      },
+      leaveDmGroup: (groupId) =>
+        patch((p) => {
+          const userId = p.currentUserId;
+          const next = leaveDmGroupState(p, groupId);
+          if (userId && next !== p && shouldPersistDms(supabaseConfigured, next.authMode)) {
+            void deleteRemoteGroupMember(asDmsClient(getSupabaseClient()), groupId, userId);
+          }
+          return next;
+        }),
+      groupThreadMessages: (groupId) =>
+        visibleGroupMessages(state.groupMessages, groupId, cannotDmUserIds),
+      sendGroupMessage: (groupId, text) => {
+        let result: SendGroupResult = { ok: false, error: 'Couldn’t send this message.' };
+        patch((p) => {
+          const next = sendGroupMessageState(p, groupId, text, Date.now());
+          result = next.result;
+          if (next.result.ok && shouldPersistDms(supabaseConfigured, next.state.authMode)) {
+            void insertRemoteGroupMessage(asDmsClient(getSupabaseClient()), next.result.message);
+          }
+          return next.state;
+        });
+        return result;
+      },
+      sendPostToChat: (target, share) => {
+        const text = sharedPostBody(share);
+        if (target.kind === 'direct') {
+          let result: SendDmResult = { ok: false, error: 'Couldn’t share that post.' };
+          patch((p) => {
+            const next = sendDirectMessageState(p, target.peerId, text, Date.now(), share);
+            result = next.result;
+            if (next.result.ok && shouldPersistDms(supabaseConfigured, next.state.authMode)) {
+              void insertRemoteDirectMessage(asDmsClient(getSupabaseClient()), next.result.message);
+            }
+            return next.state;
+          });
+          return result;
+        }
+        let result: SendGroupResult = { ok: false, error: 'Couldn’t share that post.' };
+        patch((p) => {
+          const next = sendGroupMessageState(p, target.groupId, text, Date.now(), share);
+          result = next.result;
+          if (next.result.ok && shouldPersistDms(supabaseConfigured, next.state.authMode)) {
+            void insertRemoteGroupMessage(asDmsClient(getSupabaseClient()), next.result.message);
+          }
+          return next.state;
+        });
+        return result;
+      },
+      markGroupRead: (groupId) => patch((p) => markGroupReadState(p, groupId)),
+      groupSlowModeFor: (groupId, now = Date.now()) =>
+        groupSlowMode(state.groupMessages, state.directMessages, currentUser?.id, groupId, now),
+      groupBlockReason: (groupId) => {
+        const group = myGroups.find((row) => row.id === groupId);
+        if (!group) return 'This group isn’t on KickFeed.';
+        return groupSendBlockReason(group, currentUser?.id, cannotDmUserIds);
+      },
       signInDemo: (userId) => {
         void (async () => {
           try {
@@ -613,6 +749,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       currentUser,
       dmThreadList,
       dmUnread,
+      inbox,
+      myGroups,
       easProjectId,
       enableDeviceAlerts,
       favoriteLeagueIds,

@@ -1,4 +1,4 @@
-import type { AppNotification, Comment, DirectMessage, Fixture, MatchStatus, MotmVote, Post, PostAudience, ScorePrediction, User, UserReport } from '@/data/types';
+import type { AppNotification, Comment, DirectMessage, DmGroup, Fixture, GroupMessage, MatchStatus, MotmVote, Post, PostAudience, ScorePrediction, SharedPostPayload, User, UserReport } from '@/data/types';
 import { seedMotmVotes, seedPredictions } from '@/data/mocks/engagement';
 import { demoUsers, seedComments, seedDirectMessages, seedFollowing, seedNotifications, seedPosts } from '@/data/mocks/social';
 import {
@@ -11,6 +11,20 @@ import {
   parseDirectMessage,
   type SendDmResult,
 } from '@/lib/dms';
+import {
+  buildDmGroup,
+  buildGroupMessage,
+  displayGroupTitle,
+  groupSendBlockReason,
+  groupSlowMode,
+  isGroupId,
+  isGroupMember,
+  parseDmGroup,
+  parseGroupMessage,
+  planDmGroup,
+  type SendGroupResult,
+} from '@/lib/groups';
+import { chatPreview, parseSharedPost } from '@/lib/shareToChat';
 import { clampScore, isMotmOpen, isPredictionOpen, motmVoteForUser, predictionForUser } from '@/lib/engagement';
 import type { MatchAlertDraft } from '@/lib/matchSocial';
 import {
@@ -65,6 +79,10 @@ export interface Persisted {
   directMessages: DirectMessage[];
   /** userId → peerId → last-read ISO. Unread is this device. */
   dmReads: Record<string, Record<string, string>>;
+  dmGroups: DmGroup[];
+  groupMessages: GroupMessage[];
+  /** userId → groupId → last-read ISO. Unread is this device. */
+  groupReads: Record<string, Record<string, string>>;
 }
 
 export function defaults(): Persisted {
@@ -90,6 +108,9 @@ export function defaults(): Persisted {
     reports: [],
     directMessages: seedDirectMessages,
     dmReads: {},
+    dmGroups: [],
+    groupMessages: [],
+    groupReads: {},
   };
 }
 
@@ -191,6 +212,22 @@ function pickBlocks(value: unknown, fallback: Persisted['blocks']): Persisted['b
   return out;
 }
 
+function pickGroupReads(value: unknown, fallback: Persisted['groupReads']): Persisted['groupReads'] {
+  if (!isPlainObject(value)) return fallback;
+  const out: Persisted['groupReads'] = { ...fallback };
+  for (const [userId, groups] of Object.entries(value)) {
+    if (!isPersistedUserId(userId) || !isPlainObject(groups)) continue;
+    const slice: Record<string, string> = {};
+    for (const [groupId, stamp] of Object.entries(groups)) {
+      if (!isGroupId(groupId)) continue;
+      if (typeof stamp !== 'string' || !Number.isFinite(Date.parse(stamp))) continue;
+      slice[groupId] = stamp;
+    }
+    out[userId] = slice;
+  }
+  return out;
+}
+
 function pickDmReads(value: unknown, fallback: Persisted['dmReads']): Persisted['dmReads'] {
   if (!isPlainObject(value)) return fallback;
   const out: Persisted['dmReads'] = { ...fallback };
@@ -244,6 +281,9 @@ export function hydratePersisted(raw: string | null): Persisted {
     reports: pickParsedRows(parsed.reports, base.reports, parseUserReport),
     directMessages: pickParsedRows(parsed.directMessages, base.directMessages, parseDirectMessage),
     dmReads: pickDmReads(parsed.dmReads, base.dmReads),
+    dmGroups: pickParsedRows(parsed.dmGroups, base.dmGroups, parseDmGroup),
+    groupMessages: pickParsedRows(parsed.groupMessages, base.groupMessages, parseGroupMessage),
+    groupReads: pickGroupReads(parsed.groupReads, base.groupReads),
   };
 }
 
@@ -279,6 +319,8 @@ export function usersFromState(state: Persisted): User[] {
     ...Object.keys(state.favorites),
     ...(state.currentUserId ? [state.currentUserId] : []),
     ...state.directMessages.flatMap((row) => [row.senderId, row.recipientId]),
+    ...state.dmGroups.flatMap((group) => [group.createdBy, ...group.memberIds]),
+    ...state.groupMessages.map((row) => row.senderId),
   ]);
   for (const id of extraIds) {
     if (byId.has(id) || !isPersistedUserId(id) || isDemoUserId(id)) continue;
@@ -395,6 +437,22 @@ export function canMessagePeer(state: Persisted, peerId: string | null | undefin
 export function dmReadsFor(state: Persisted, userId: string | null): Record<string, string> {
   if (!userId) return {};
   return state.dmReads[userId] ?? {};
+}
+
+export function groupReadsFor(state: Persisted, userId: string | null): Record<string, string> {
+  if (!userId) return {};
+  return state.groupReads[userId] ?? {};
+}
+
+function mutualFriendIds(state: Persisted, userId: string): string[] {
+  const following = state.following[userId] ?? [];
+  return following.filter(
+    (id) => isPersistedUserId(id) && id !== userId && (state.following[id] ?? []).includes(userId),
+  );
+}
+
+function fanName(state: Persisted, userId: string): string {
+  return state.profiles[userId]?.name ?? demoUsers.find((user) => user.id === userId)?.name ?? 'A fan';
 }
 
 export function notificationsFor(state: Persisted, userId: string | null): AppNotification[] {
@@ -904,22 +962,25 @@ export function sendDirectMessage(
   recipientId: string,
   text: string,
   now = Date.now(),
+  share?: SharedPostPayload,
 ): { state: Persisted; result: SendDmResult } {
   const senderId = state.currentUserId;
   if (!senderId) return { state, result: { ok: false, error: 'Sign in to send a message.' } };
   if (!canMessagePeer(state, recipientId)) {
     return { state, result: { ok: false, error: 'You can’t message this fan.' } };
   }
-  const slow = dmSlowMode(state.directMessages, senderId, recipientId, now);
+  const parsedShare = share ? (parseSharedPost(share) ?? undefined) : undefined;
+  if (share && !parsedShare) return { state, result: { ok: false, error: 'Couldn’t share that post.' } };
+  const otherSends = state.groupMessages.filter((row) => row.senderId === senderId);
+  const slow = dmSlowMode(state.directMessages, senderId, recipientId, now, otherSends);
   if (!slow.ok) {
     return { state, result: { ok: false, error: 'Slow mode — wait before sending.', slow } };
   }
-  const message = buildDirectMessage({ senderId, recipientId, text }, now);
+  const message = buildDirectMessage({ senderId, recipientId, text, share: parsedShare }, now);
   if (!message) {
     return { state, result: { ok: false, error: 'Write a short message (1–1000 characters).' } };
   }
-  const senderName =
-    state.profiles[senderId]?.name ?? demoUsers.find((u) => u.id === senderId)?.name ?? 'A fan';
+  const senderName = fanName(state, senderId);
   const notification = dmNotification(message, { name: senderName }, now);
   return {
     state: {
@@ -929,6 +990,158 @@ export function sendDirectMessage(
     },
     result: { ok: true, message },
   };
+}
+
+export function createDmGroup(
+  state: Persisted,
+  pickedIds: readonly string[],
+  title: string | null | undefined,
+  now = Date.now(),
+): { state: Persisted; result: { ok: true; group: DmGroup } | { ok: false; error: string } } {
+  const creatorId = state.currentUserId;
+  if (!creatorId) return { state, result: { ok: false, error: 'Sign in to start a group.' } };
+  const plan = planDmGroup({
+    creatorId,
+    pickedIds,
+    mutualFriendIds: mutualFriendIds(state, creatorId),
+    hiddenIds: cannotDmPeerIds(state, creatorId),
+    blocks: state.blocks,
+    title,
+  });
+  if (!plan.ok) return { state, result: plan };
+  const group = buildDmGroup(creatorId, plan.memberIds, plan.title, now);
+  if (!group) return { state, result: { ok: false, error: 'Couldn’t create that group.' } };
+  return {
+    state: { ...state, dmGroups: [group, ...state.dmGroups] },
+    result: { ok: true, group },
+  };
+}
+
+export function leaveDmGroup(state: Persisted, groupId: string): Persisted {
+  const userId = state.currentUserId;
+  if (!userId) return state;
+  const group = state.dmGroups.find((row) => row.id === groupId);
+  if (!group || !isGroupMember(group, userId)) return state;
+  return {
+    ...state,
+    dmGroups: state.dmGroups.map((row) =>
+      row.id === groupId ? { ...row, memberIds: row.memberIds.filter((id) => id !== userId) } : row,
+    ),
+  };
+}
+
+export function sendGroupMessage(
+  state: Persisted,
+  groupId: string,
+  text: string,
+  now = Date.now(),
+  share?: SharedPostPayload,
+): { state: Persisted; result: SendGroupResult } {
+  const senderId = state.currentUserId;
+  if (!senderId) return { state, result: { ok: false, error: 'Sign in to send a message.' } };
+  const group = state.dmGroups.find((row) => row.id === groupId);
+  if (!group) return { state, result: { ok: false, error: 'This group isn’t on KickFeed.' } };
+  const blocked = groupSendBlockReason(group, senderId, cannotDmPeerIds(state, senderId));
+  if (blocked) return { state, result: { ok: false, error: blocked } };
+  const parsedShare = share ? (parseSharedPost(share) ?? undefined) : undefined;
+  if (share && !parsedShare) return { state, result: { ok: false, error: 'Couldn’t share that post.' } };
+  const slow = groupSlowMode(state.groupMessages, state.directMessages, senderId, groupId, now);
+  if (!slow.ok) {
+    return { state, result: { ok: false, error: 'Slow mode — wait before sending.', slow } };
+  }
+  const message = buildGroupMessage({
+    groupId,
+    senderId,
+    text,
+    share: parsedShare,
+    now,
+  });
+  if (!message) {
+    return { state, result: { ok: false, error: 'Write a short message (1–1000 characters).' } };
+  }
+  const senderName = fanName(state, senderId);
+  const notifications: AppNotification[] = group.memberIds
+    .filter((id) => id !== senderId)
+    .map((recipientId) => ({
+      id: `n-gm-${message.id}-${recipientId}`,
+      type: 'dm',
+      title: `${senderName} in ${displayGroupTitle(group, recipientId, (id) => fanName(state, id))}`,
+      body: chatPreview(message.text, message.share).slice(0, 80),
+      createdAt: new Date(now).toISOString(),
+      read: false,
+      recipientId,
+      userId: senderId,
+      groupId: group.id,
+    }));
+  return {
+    state: {
+      ...state,
+      groupMessages: [...state.groupMessages, message],
+      notifications: [...notifications, ...state.notifications],
+    },
+    result: { ok: true, message },
+  };
+}
+
+export function markGroupRead(state: Persisted, groupId: string, now = Date.now()): Persisted {
+  const userId = state.currentUserId;
+  if (!userId || !isGroupId(groupId)) return state;
+  const group = state.dmGroups.find((row) => row.id === groupId);
+  if (!group || !isGroupMember(group, userId)) return state;
+  const latestIncoming = state.groupMessages.reduce((max, row) => {
+    if (row.groupId !== groupId || row.senderId === userId) return max;
+    const stamp = Date.parse(row.createdAt);
+    return Number.isFinite(stamp) && stamp > max ? stamp : max;
+  }, 0);
+  const mine = state.groupReads[userId] ?? {};
+  const already = Date.parse(mine[groupId] ?? '');
+  const targetMs = latestIncoming > 0 ? latestIncoming : Number.isFinite(already) ? already : now;
+  if (Number.isFinite(already) && already >= targetMs) return state;
+  const stamp = new Date(targetMs).toISOString();
+  return {
+    ...state,
+    groupReads: {
+      ...state.groupReads,
+      [userId]: { ...mine, [groupId]: stamp },
+    },
+    notifications: state.notifications.map((note) =>
+      note.type === 'dm' && note.recipientId === userId && note.groupId === groupId ? { ...note, read: true } : note,
+    ),
+  };
+}
+
+/**
+ * Union remote groups and group messages for this identity.
+ * Local rows win on duplicate ids. Demo groups for other people stay put.
+ */
+export function mergeRemoteGroupChats(
+  state: Persisted,
+  userId: string,
+  remoteGroups: DmGroup[],
+  remoteMessages: GroupMessage[],
+): Persisted {
+  if (!isPersistedUserId(userId)) return state;
+  const byGroup = new Map(state.dmGroups.map((row) => [row.id, row]));
+  for (const group of remoteGroups) {
+    if (!group.memberIds.includes(userId)) continue;
+    if (!byGroup.has(group.id)) byGroup.set(group.id, group);
+  }
+  const nextGroups = [...byGroup.values()];
+  const memberGroupIds = new Set(nextGroups.filter((group) => group.memberIds.includes(userId)).map((group) => group.id));
+  const byMessage = new Map(state.groupMessages.map((row) => [row.id, row]));
+  for (const row of remoteMessages) {
+    if (!memberGroupIds.has(row.groupId)) continue;
+    if (!byMessage.has(row.id)) byMessage.set(row.id, row);
+  }
+  const nextMessages = [...byMessage.values()];
+  const sameGroups =
+    nextGroups.length === state.dmGroups.length &&
+    nextGroups.every((row) => state.dmGroups.some((local) => local.id === row.id));
+  const sameMessages =
+    nextMessages.length === state.groupMessages.length &&
+    nextMessages.every((row) => state.groupMessages.some((local) => local.id === row.id));
+  if (sameGroups && sameMessages) return state;
+  return { ...state, dmGroups: nextGroups, groupMessages: nextMessages };
 }
 
 export function markDmThreadRead(state: Persisted, peerId: string, now = Date.now()): Persisted {

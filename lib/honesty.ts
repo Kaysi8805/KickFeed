@@ -48,10 +48,10 @@ export const DM_SLOW_MODE_HINT =
   'Slow mode — 20s between messages so DMs stay readable.';
 
 export const DM_LIVE_COPY =
-  '1:1 DMs sync to KickFeed Postgres for this email account. Text only — not a group inbox. Blocks hide the thread.';
+  '1:1 and group chats sync to KickFeed Postgres for this email account. Text and shared posts. Blocks stop new members and shares.';
 
 export const DM_DEMO_COPY =
-  'Direct messages stay on this device in demo mode. Email sign-in stores 1:1 chats in KickFeed Postgres. Not a Slack-style workspace.';
+  'Direct and group messages stay on this device in demo mode. Email sign-in stores them in KickFeed Postgres. Not a Slack-style workspace.';
 
 export const DM_BLOCKED_COPY =
   'You can’t message this fan. KickFeed hides threads when either of you has blocked the other.';
@@ -59,7 +59,7 @@ export const DM_BLOCKED_COPY =
 export const DM_INBOX_EMPTY_TITLE = 'No messages yet';
 
 export const DM_INBOX_EMPTY_BODY =
-  'Open a fan profile or search results and tap Message. 1:1 text only — no group chats.';
+  'Message a friend from their profile, or start a group. Share a post from Home into that chat.';
 
 export function dmDisclaimer(live: boolean): string {
   return live ? DM_LIVE_COPY : DM_DEMO_COPY;

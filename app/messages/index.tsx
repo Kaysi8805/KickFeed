@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -14,31 +15,74 @@ import { useApp } from '@/services/AppProvider';
 import { colors, radius, spacing, type } from '@/theme';
 
 export default function MessagesInboxScreen() {
-  const { dmThreads, users, authMode, supabaseConfigured } = useApp();
+  const { inbox, users, authMode, supabaseConfigured } = useApp();
   const honesty = dmDisclaimer(shouldPersistDms(supabaseConfigured, authMode));
 
   return (
     <Screen padded={false}>
       <View style={styles.pad}>
-        <HeaderBar title="Messages" onBack={() => safeBack('/')} />
+        <HeaderBar
+          title="Messages"
+          onBack={() => safeBack('/')}
+          right={
+            <Pressable
+              onPress={() => router.push('/messages/new')}
+              accessibilityRole="button"
+              accessibilityLabel="New group"
+              style={styles.newGroup}
+            >
+              <Ionicons name="people" size={14} color={colors.onCta} />
+              <Text style={styles.newGroupText}>New group</Text>
+            </Pressable>
+          }
+        />
       </View>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.honesty}>{honesty}</Text>
-        {dmThreads.length === 0 ? (
+        {inbox.length === 0 ? (
           <EmptyState
             title={DM_INBOX_EMPTY_TITLE}
             body={DM_INBOX_EMPTY_BODY}
-            actionLabel="Find a fan"
-            onAction={() => router.push('/search')}
+            actionLabel="New group"
+            onAction={() => router.push('/messages/new')}
           />
         ) : (
-          dmThreads.map((thread) => {
-            const peer = users.find((u) => u.id === thread.peerId) ?? userFromProfile(thread.peerId, undefined);
-            const unread = thread.unreadCount > 0;
+          inbox.map((row) => {
+            if (row.kind === 'group') {
+              const unread = row.unreadCount > 0;
+              return (
+                <Pressable
+                  key={row.id}
+                  onPress={() => router.push(`/messages/group/${row.id}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Group ${row.title}, ${row.memberCount} members`}
+                  style={[styles.row, unread && styles.unread]}
+                >
+                  <View style={styles.groupMark}>
+                    <Ionicons name="people" size={20} color={colors.onCta} />
+                  </View>
+                  <View style={styles.meta}>
+                    <View style={styles.head}>
+                      <Text style={styles.name} numberOfLines={1}>
+                        {row.title}
+                      </Text>
+                      <Text style={styles.time}>{timeAgo(row.sortAt)}</Text>
+                    </View>
+                    <Text style={styles.handle}>GROUP · {row.memberCount}</Text>
+                    <Text style={[styles.preview, unread && styles.previewUnread]} numberOfLines={2}>
+                      {row.preview}
+                    </Text>
+                  </View>
+                  {unread ? <UnreadDot count={row.unreadCount} /> : null}
+                </Pressable>
+              );
+            }
+            const peer = users.find((u) => u.id === row.peerId) ?? userFromProfile(row.peerId, undefined);
+            const unread = row.unreadCount > 0;
             return (
               <Pressable
-                key={thread.id}
-                onPress={() => router.push(`/messages/${thread.peerId}`)}
+                key={row.id}
+                onPress={() => router.push(`/messages/${row.peerId}`)}
                 accessibilityRole="button"
                 accessibilityLabel={`Message ${peer.name}`}
                 style={[styles.row, unread && styles.unread]}
@@ -49,18 +93,14 @@ export default function MessagesInboxScreen() {
                     <Text style={styles.name} numberOfLines={1}>
                       {peer.name}
                     </Text>
-                    <Text style={styles.time}>{timeAgo(thread.lastMessage.createdAt)}</Text>
+                    <Text style={styles.time}>{timeAgo(row.sortAt)}</Text>
                   </View>
                   <Text style={styles.handle}>@{peer.handle}</Text>
                   <Text style={[styles.preview, unread && styles.previewUnread]} numberOfLines={2}>
-                    {thread.lastMessage.text}
+                    {row.preview}
                   </Text>
                 </View>
-                {unread ? (
-                  <View style={styles.dot}>
-                    <Text style={styles.dotText}>{thread.unreadCount > 9 ? '9+' : thread.unreadCount}</Text>
-                  </View>
-                ) : null}
+                {unread ? <UnreadDot count={row.unreadCount} /> : null}
               </Pressable>
             );
           })
@@ -70,9 +110,35 @@ export default function MessagesInboxScreen() {
   );
 }
 
+function UnreadDot({ count }: { count: number }) {
+  return (
+    <View style={styles.dot}>
+      <Text style={styles.dotText}>{count > 9 ? '9+' : count}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   pad: { paddingHorizontal: spacing.lg },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: 40 },
+  newGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.accent,
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    minHeight: 32,
+  },
+  newGroupText: { ...type.micro, color: colors.onCta, letterSpacing: 0 },
+  groupMark: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   honesty: {
     ...type.caption,
     color: colors.textDim,

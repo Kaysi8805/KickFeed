@@ -1,8 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ChatBubble } from '@/components/dm/ChatBubble';
+import { ThreadComposer } from '@/components/dm/ThreadComposer';
 import { SafetyMenu } from '@/components/moderation/SafetyMenu';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -10,13 +11,12 @@ import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Screen } from '@/components/ui/Screen';
 import { DM_BLOCKED_COPY, dmDisclaimer } from '@/lib/honesty';
 import { dmSlowModeComposerCopy, shouldPersistDms } from '@/lib/dms';
-import { timeAgo } from '@/lib/format';
 import { entityHref } from '@/lib/entityNav';
 import { safeBack } from '@/lib/navBack';
 import { routeId } from '@/lib/routeParams';
 import { isPersistedUserId, userFromProfile } from '@/lib/userIdentity';
 import { useApp } from '@/services/AppProvider';
-import { colors, radius, spacing, type } from '@/theme';
+import { colors, spacing, type } from '@/theme';
 
 export default function MessageThreadScreen() {
   const { peerId: rawId } = useLocalSearchParams<{ peerId: string | string[] }>();
@@ -114,63 +114,40 @@ export default function MessageThreadScreen() {
           <EmptyState
             compact
             title={`Message ${peer.name}`}
-            body="1:1 text only. Say hi — this is not a group chat."
+            body="Say hi. Share a post from Home if you want it in this chat."
           />
         ) : (
           messages.map((row) => {
             const mine = row.senderId === currentUser.id;
+            const sender = mine ? currentUser : peer;
             return (
-              <View key={row.id} style={[styles.bubbleRow, mine && styles.bubbleRowMine]}>
-                {mine ? null : <Avatar initials={peer.initials} color={peer.avatarColor} size={28} />}
-                <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                  <View style={styles.bubbleHead}>
-                    <Text style={[styles.bubbleTime, mine && styles.bubbleTimeMine]}>{timeAgo(row.createdAt)}</Text>
-                    {mine ? null : (
-                      <SafetyMenu
-                        targetType="dm"
-                        targetId={row.id}
-                        targetUserId={row.senderId}
-                        targetName={peer.name}
-                        compact
-                      />
-                    )}
-                  </View>
-                  <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{row.text}</Text>
-                </View>
-              </View>
+              <ChatBubble
+                key={row.id}
+                messageId={row.id}
+                mine={mine}
+                text={row.text}
+                createdAt={row.createdAt}
+                share={row.share}
+                sender={sender}
+              />
             );
           })
         )}
       </ScrollView>
       {allowed ? (
-        <View style={styles.composer}>
-          <Text style={styles.composerHint}>{note ?? slowCopy}</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.input}
-              placeholder={!slow.ok ? slowCopy : `Message ${peer.name}…`}
-              placeholderTextColor={colors.textDim}
-              value={draft}
-              editable={slow.ok}
-              onChangeText={(value) => {
-                setDraft(value);
-                setNote(null);
-              }}
-              accessibilityLabel="Direct message"
-              multiline
-            />
-            <Pressable
-              onPress={send}
-              disabled={!canSend}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canSend }}
-              accessibilityLabel="Send message"
-              style={[styles.send, !canSend && styles.sendOff]}
-            >
-              <Ionicons name="send" size={16} color={!canSend ? colors.textDim : colors.bg} />
-            </Pressable>
-          </View>
-        </View>
+        <ThreadComposer
+          draft={draft}
+          onChange={(value) => {
+            setDraft(value);
+            setNote(null);
+          }}
+          onSend={send}
+          canSend={canSend}
+          editable={slow.ok}
+          placeholder={!slow.ok ? slowCopy : `Message ${peer.name}…`}
+          hint={note ?? slowCopy}
+          inputLabel="Direct message"
+        />
       ) : null}
     </Screen>
   );
@@ -188,51 +165,4 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     lineHeight: 18,
   },
-  bubbleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 10, maxWidth: '92%' },
-  bubbleRowMine: { alignSelf: 'flex-end', flexDirection: 'row-reverse' },
-  bubble: {
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    maxWidth: '84%',
-    borderWidth: 1,
-  },
-  bubbleTheirs: { backgroundColor: colors.surface, borderColor: colors.border },
-  bubbleMine: { backgroundColor: colors.lime, borderColor: colors.lime },
-  bubbleHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
-  bubbleTime: { ...type.micro, color: colors.textDim, letterSpacing: 0 },
-  bubbleTimeMine: { color: colors.bgElevated },
-  bubbleText: { ...type.body, color: colors.text, lineHeight: 22 },
-  bubbleTextMine: { color: colors.bg, fontWeight: '600' },
-  composer: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.bgElevated,
-  },
-  composerHint: { ...type.micro, color: colors.textDim, marginBottom: 6 },
-  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-  input: {
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 120,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    color: colors.text,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-  },
-  send: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.lime,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendOff: { backgroundColor: colors.surface },
 });
