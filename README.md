@@ -17,7 +17,7 @@ v1 is **local-first**: seeded fan profiles for **demo mode**, optional **Supabas
 - **Match hub** — discussion thread, participants, empty states, feed posts attached to that match id, plus **score predictions** and **Man of the Match** voting. Composer can deep-link from the match page.
 - **Predictions & MOTM** — before kickoff, pick a home/away score and see community aggregates (other demo fans are seeded). Picks lock at kickoff / once the match is live. During and after the match, vote once for MOTM from lineups (squad fallback). Not a betting product.
 - **Prediction leaderboards** — global and per-league ranks by prediction points (optional MOTM bonus). Your rank + top 10. Demo board is this device + seeded fans; email sign-in writes picks to KickFeed Postgres. Honesty banners say which table you are on.
-- **Notifications** — in-app center for match-chat replies, DMs, your prediction/MOTM confirmations, goals/kickoff demo alerts for fixtures you care about, follows, and friend posts. Device alerts are opt-in on Profile: **kickoff soon** (one reminder per favorite match) and **goals** when live scores tick up. Remote Expo push tokens need an EAS `projectId`; without it the app stays on local/in-app alerts and does not crash.
+- **Notifications** — in-app center for match-chat replies, DMs, your prediction/MOTM confirmations, goals/kickoff alerts for fixtures you care about, follows, and friend posts. Device alerts are opt-in on Profile: **kickoff soon** (one reminder per favorite match) and **goals** when live scores tick up. Email sign-in stores an Expo push token so those alerts can arrive after you close the app. Without a token, the in-app center still works.
 - **Direct messages** — 1:1 text between fans (demo seeds or Supabase uuids). Inbox + thread from Home, Profile, a fan page, or search. Blocks hide the thread both ways. No group chats, no media in v1.
 - **Report, block, slow-mode** — report a post, profile, match-chat message, or **DM**. Block a fan to hide their posts, match-chat, DMs, and notifications on this account. Match hub discussion and 1:1 DMs have a 20s slow-mode (plus a short burst cap) so spam does not take over. Demo saves stay in AsyncStorage; email sessions also write `user_blocks` / `user_reports` / `direct_messages` in KickFeed Postgres. Not a moderation dashboard.
 
@@ -69,43 +69,53 @@ Google / Apple providers can be enabled in the same Auth settings later — OAut
 
 ## EAS push (Karol)
 
-Device match alerts are **opt-in** (Profile → Enable device match alerts). KickFeed does **not** send push from a server in this PR: kickoff reminders are scheduled on the device, and goal banners fire when the existing football catalog refreshes (fixtures TTL still ~45s if anything is live, else 5 min). No extra API polling, no BFF change, no secrets in CI.
+Device match alerts are **opt-in** and part of the free core (Profile → Enable device match alerts). They are not behind a paywall.
 
-**Remote Expo push tokens** (so Expo’s dashboard / a later worker can target this install) need an EAS project. The UUID is public config, not a secret — still keep `.env` gitignored and never commit Expo access tokens, FCM keys, or `google-services.json`.
+Two paths:
 
-1. Create a free Expo account at [expo.dev/signup](https://expo.dev/signup).
-2. Install and log in (once per machine):
+- **While the app is open** — kickoff / goal banners are scheduled on the device from the same football catalog as Matches (no extra client polling).
+- **While the app is closed** — an email session stores this phone’s Expo push token plus favorite club ids. A Supabase Edge Function sends through [Expo’s push service](https://docs.expo.dev/push-notifications/sending-notifications/). Demo mode stays on-device only.
+
+The in-app notification center is unchanged.
+
+`extra.eas.projectId` is already `52a1ee7a-e7db-49c4-bc11-419d316ebd44` (Expo owner `kaysi8805`, project KickFeed / `kickfeed`). That UUID is public config, not a secret. Never commit Expo access tokens, FCM keys, APNs keys, or `google-services.json`. CI does not need them, and it never receives `FOOTBALL_API_KEY`.
+
+### What fires
+
+- **Kickoff soon** — one alert per favorite match. Within 30 minutes of kickoff (or the first 10 minutes after it goes live) it sends. Further out (up to 6 hours) is remembered and delivered when that window opens.
+- **Goals** — the first live score is a baseline (no dump). The next score tick for that favorite match sends `GOAL`. Closed-app copy is the scoreline; scorer names stay on the in-app path (event feeds are a separate request and are not polled for push).
+- **Tap** — `matchId` in the payload opens the match hub, including a cold start. A remote test has no `matchId`, so a tap does not navigate.
+- **Cap** — at most 3 banners per user per dispatch (same idea as `MAX_DEVICE_ALERTS_PER_SYNC`). A run stops at 60 Expo messages.
+- **Closed-app delay** — the dispatcher refetches a live league about every 10 minutes and an idle league hourly, and only between 10:00 and 22:59 UTC, so the free API-Football budget (100 requests/day, shared with the BFF) is not burned. Goals can take a few minutes. The phone does not poll.
+
+Favorite clubs are matched by the ids the app already resolves (`liv` and the API-Football team id, plus a favorite player’s club). Leagues outside England, Slovakia Niké Liga, and La Liga are not pushed.
+
+### Device checklist
+
+1. Supabase URL + anon key in `.env` (see [Supabase email auth](#supabase-email-auth)). Apply [`supabase/migrations/20260923140000_push_devices.sql`](supabase/migrations/20260923140000_push_devices.sql) after the earlier migrations. Restart Expo.
+2. Deploy the function (once), from the repo root, after `supabase login` and `supabase link`:
    ```bash
-   npm i -g eas-cli
-   eas login
+   supabase functions deploy dispatch-favorite-push --no-verify-jwt
+   supabase secrets set PUSH_DISPATCH_SECRET="$(openssl rand -hex 24)"
+   supabase secrets set FOOTBALL_BFF_URL="https://kickfeed-football-bff.kaysi8805.workers.dev"
    ```
-3. From this repo, link the app (writes `extra.eas.projectId` into `app.json` — **commit that UUID**):
-   ```bash
-   eas init
-   ```
-   Confirm the slug `kickfeed` / owner. `eas init` also creates `eas.json` if missing.
-4. **Or** skip committing `app.json` and put the same UUID in gitignored `.env`:
-   ```
-   EXPO_PUBLIC_EAS_PROJECT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-   ```
-   Copy from Expo → Project settings → General → Project ID. Restart Expo so `EXPO_PUBLIC_*` is inlined.
-5. Open KickFeed on a **phone** (Expo Go or a native build). Web cannot show device banners.
-6. Profile → **Enable device match alerts** → allow the system permission. Defaults: kickoff soon **on**, goals **on**. **Send a test alert** fires a 3-second local ping.
-7. Optional Android remote push: Expo Go on Android often cannot fetch an Expo push token. Use a dev client:
-   ```bash
-   eas build --profile development --platform android
-   ```
-   iOS Expo Go can still register a token once `projectId` is set.
+   `--no-verify-jwt` is required because cron authenticates with `PUSH_DISPATCH_SECRET`, not a user JWT. The function still rejects anonymous dispatch. Optional: `EXPO_ACCESS_TOKEN` if Expo push security is enabled on the project, and `FOOTBALL_SEASON=2026` only if the app pins `EXPO_PUBLIC_FOOTBALL_SEASON` (so both hit the same BFF cache key).
+3. Enable `pg_cron` and `pg_net`, put `project_url` and the same `PUSH_DISPATCH_SECRET` in Vault, then run [`supabase/cron/dispatch-favorite-push.sql`](supabase/cron/dispatch-favorite-push.sql). Do not paste the service role key into that file.
+4. On a **phone**, sign in with email (demo mode will not register a remote token). Favorite a live-coverage club (Premier League, Championship, Niké Liga, or La Liga). Profile → **Enable device match alerts** → allow notifications. Kickoff and goals default **on**.
+5. **Send a test alert** is a 3-second local ping. **Send a remote test** calls the function with your session and should banner even if you then leave KickFeed.
+6. For a real match: leave the app closed. Within about 10 minutes of a favorite kickoff (inside the 30-minute window) or a goal, the banner should arrive. Tap it — the match hub opens.
+7. **Expo Go vs a dev build**
+   - **iOS Expo Go** can register an Expo token once `projectId` is set.
+   - **Android Expo Go** often cannot. Use a development build:
+     ```bash
+     eas login
+     eas build --profile development --platform android
+     ```
+   - A standalone / dev build needs your own credentials before remote push is delivered: [EAS credentials](https://docs.expo.dev/app-signing/app-credentials/) — an APNs key for iOS and FCM v1 (`google-services.json`) for Android, uploaded with `eas credentials`. Expo’s push service uses those keys; KickFeed does not embed them.
 
-**Resolution order:** `EXPO_PUBLIC_EAS_PROJECT_ID` → `Constants.easConfig.projectId` (EAS builds) → `extra.eas.projectId` (`eas init`). Empty everywhere → no token, no crash, in-app center still works.
+**Resolution order for projectId:** `EXPO_PUBLIC_EAS_PROJECT_ID` → `Constants.easConfig.projectId` → `extra.eas.projectId`. Empty everywhere → no token, no crash, in-app center still works.
 
-**What fires**
-
-- **Kickoff soon** — one banner per favorite match. If kickoff is within 30 minutes (or the match just went live, first 10 minutes), it presents now. If kickoff is 30 minutes–6 hours away, a local notification is scheduled for T−15 minutes.
-- **Goals** — first sight of a live score is a baseline (no dump). The next score tick for that favorite match presents `GOAL`. Same catalog as Matches / Home.
-- Tapping a banner (including the notification that cold-starts the app) opens the match hub when `matchId` is present.
-
-Demo/mock: Maya’s Liverpool–Arsenal clock still drives in-app alerts; device banners need the OS permission on a real device. CI and Expo web never call the Expo Push API.
+Web preview never shows device banners and never calls Expo’s push API.
 
 ## Public landing (Batch 0)
 
@@ -218,7 +228,7 @@ On first launch without Supabase env, choose a demo profile. With Supabase env, 
 
 Corrupt JSON is discarded. A missing or newer `schemaVersion` still keeps valid slices (signed-in demo user or uuid, follows, posts, …) and stamps the current version. Unknown `currentUserId` values (not a demo id and not a uuid) are cleared. On boot, a live Supabase session wins; if the session is gone, a leftover uuid is dropped so demo restore still works.
 
-Use **Profile → Switch demo user** / **Switch account** / **Sign out** to return to the gate. **Profile → Enable device match alerts** opts into kickoff-soon and goal banners for your clubs. Remote Expo push needs an EAS `projectId` (see [EAS push](#eas-push-karol)); without it, local alerts still work on a phone after you grant permission, and web/demo never crash.
+Use **Profile → Switch demo user** / **Switch account** / **Sign out** to return to the gate. **Profile → Enable device match alerts** opts into kickoff-soon and goal banners for your clubs. Remote Expo push needs an EAS `projectId` and an email session (see [EAS push](#eas-push-karol)); without a token, local alerts still work on a phone after you grant permission, and web/demo never crash.
 
 ## Project layout
 
@@ -236,7 +246,8 @@ components/          UI, feed cards, match rows, entity links, search entry, TV 
 lib/moderation.ts    Report/block helpers + match-chat slow-mode
 lib/dms.ts           1:1 thread keys, inbox, DM slow-mode, block hiding
 lib/matchSocial.ts   Attach/match-post helpers (live vs mock ids)
-lib/favoritePush.ts  Kickoff-soon / goal device-alert planner (no extra polling)
+lib/favoritePush.ts  Kickoff-soon / goal device-alert planner
+lib/remotePush.ts   Remote Expo push planner (shared with the Edge Function)
 lib/easProject.ts    EXPO_PUBLIC_EAS_PROJECT_ID + Constants.easConfig / extra.eas
 lib/engagement.ts    Prediction lock, MOTM ballot, community tallies
 lib/leaderboard.ts   Prediction points, MOTM bonus, top-N + current rank

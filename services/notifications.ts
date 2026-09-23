@@ -12,6 +12,7 @@ import {
   type PushSnapshot,
   type PushStore,
 } from '@/lib/favoritePush';
+import { normalizeExpoPushToken } from '@/lib/remotePush';
 
 const PUSH_STORE_KEY = 'kickfeed.v1.push';
 const ANDROID_CHANNEL = 'matches';
@@ -29,6 +30,30 @@ type NotificationsModule = typeof import('expo-notifications');
 
 let handlerReady = false;
 let storeWrite: Promise<void> = Promise.resolve();
+const presentedFingerprints = new Set<string>();
+
+export function notePresentedFingerprints(fingerprints: readonly string[]): void {
+  for (const fp of fingerprints) {
+    if (!fp) continue;
+    presentedFingerprints.add(fp);
+  }
+  if (presentedFingerprints.size <= 200) return;
+  const keep = [...presentedFingerprints].slice(-200);
+  presentedFingerprints.clear();
+  for (const fp of keep) presentedFingerprints.add(fp);
+}
+
+function fingerprintFromNotification(notification: unknown): string {
+  if (!notification || typeof notification !== 'object') return '';
+  const request = (notification as { request?: unknown }).request;
+  if (!request || typeof request !== 'object') return '';
+  const content = (request as { content?: unknown }).content;
+  if (!content || typeof content !== 'object') return '';
+  const data = (content as { data?: unknown }).data;
+  if (!data || typeof data !== 'object') return '';
+  const fp = (data as { fingerprint?: unknown }).fingerprint;
+  return typeof fp === 'string' ? fp : '';
+}
 
 function nativePlatform(): 'web' | 'native' {
   return Platform.OS === 'web' ? 'web' : 'native';
@@ -61,12 +86,16 @@ async function ensureHandler(Notifications: NotificationsModule): Promise<void> 
   if (handlerReady) return;
   try {
     Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowBanner: true,
-        shouldShowList: true,
-        shouldPlaySound: false,
-        shouldSetBadge: false,
-      }),
+      handleNotification: async (notification) => {
+        const fp = fingerprintFromNotification(notification);
+        const hide = fp !== '' && presentedFingerprints.has(fp);
+        return {
+          shouldShowBanner: !hide,
+          shouldShowList: !hide,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+        };
+      },
     });
     handlerReady = true;
   } catch {
@@ -239,6 +268,7 @@ export async function applyDeviceAlerts(alerts: DeviceAlert[]): Promise<void> {
         }
         if (!allowed) continue;
         if (alert.action === 'present') {
+          notePresentedFingerprints([alert.fingerprint]);
           try {
             await Notifications.cancelScheduledNotificationAsync(identifier);
           } catch {
@@ -250,7 +280,7 @@ export async function applyDeviceAlerts(alerts: DeviceAlert[]): Promise<void> {
               title: alert.title,
               body: alert.body,
               sound: false,
-              data: { matchId: alert.matchId, type: alert.type },
+              data: { matchId: alert.matchId, type: alert.type, fingerprint: alert.fingerprint },
             },
             trigger: Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL } : null,
           });
@@ -262,7 +292,7 @@ export async function applyDeviceAlerts(alerts: DeviceAlert[]): Promise<void> {
             title: alert.title,
             body: alert.body,
             sound: false,
-            data: { matchId: alert.matchId, type: alert.type },
+            data: { matchId: alert.matchId, type: alert.type, fingerprint: alert.fingerprint },
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.DATE,
@@ -365,7 +395,7 @@ export async function loadPushStore(): Promise<PushStore> {
     const raw = await AsyncStorage.getItem(PUSH_STORE_KEY);
     return parsePushStore(raw);
   } catch {
-    return { prefs: defaultPushPrefs(), snapshot: emptyPushSnapshot() };
+    return { prefs: defaultPushPrefs(), snapshot: emptyPushSnapshot(), token: null };
   }
 }
 
@@ -384,6 +414,27 @@ export async function savePushStore(store: PushStore): Promise<void> {
   await storeWrite;
 }
 
-export async function persistPushState(prefs: PushPrefs, snapshot: PushSnapshot): Promise<void> {
-  await savePushStore({ prefs, snapshot });
+export async function persistPushState(
+  prefs: PushPrefs,
+  snapshot: PushSnapshot,
+  token: string | null,
+): Promise<void> {
+  await savePushStore({ prefs, snapshot, token: normalizeExpoPushToken(token) });
+}
+
+/** Fetch an Expo token only when permission is already granted. Does not prompt. */
+export async function readPushTokenIfGranted(): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+  try {
+    const Notifications = await loadNotifications();
+    if (!Notifications) return null;
+    const projectId = await readProjectId();
+    if (!projectId) return null;
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return null;
+    const result = await Notifications.getExpoPushTokenAsync({ projectId });
+    return normalizeExpoPushToken(result.data);
+  } catch {
+    return null;
+  }
 }

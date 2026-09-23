@@ -13,6 +13,7 @@ Email auth, **prediction leaderboards**, **reports/blocks**, and **1:1 DMs** use
    - [`migrations/20260919120000_direct_messages.sql`](migrations/20260919120000_direct_messages.sql) — `direct_messages` + incoming-block SELECT + `dm` report target; slow-mode trigger stamps `created_at`
    - [`migrations/20260919133000_dm_stamp_created_at.sql`](migrations/20260919133000_dm_stamp_created_at.sql) — follow-up if 19120000 was already applied: trigger overwrites client `created_at` with `now()`
    - [`migrations/20260923120000_dm_groups.sql`](migrations/20260923120000_dm_groups.sql) — group membership on `direct_messages` (`group_id`, optional `share` card) + RLS
+   - [`migrations/20260923140000_push_devices.sql`](migrations/20260923140000_push_devices.sql) — Expo push tokens (own-row RLS), dispatch dedupe, fixture cache. Writes go through `kickfeed_upsert_push_device` / `kickfeed_ack_push_fingerprints`. The dispatcher uses the service role.
 
 Identity is the same key as AsyncStorage social state: demo seed (`maya`) **or** `auth.users` uuid (`user_id text`). RLS only allows **reads** of `predictions` / `motm_votes` for signed-in users. Writes go through `kickfeed_upsert_prediction` / `kickfeed_upsert_motm_vote` (server clock vs stored kickoff; client timestamps ignored). Demo ids stay on-device. Live ranking reads Postgres; missing env uses the seeded local board.
 
@@ -22,9 +23,11 @@ Direct messages: participants select/insert `direct_messages` when they are `sen
 
 Group chats use the same `direct_messages` table. A group row sets `group_id` and leaves `recipient_id` null. Membership lives in `dm_groups` / `dm_group_members`. `kickfeed_create_dm_group` inserts the group and every member in one transaction (a block rolls the whole create back). Direct inserts into those tables are revoked. Optional `share` jsonb is an in-app post card and must not include a `url`, `href`, or `link`. Mutual friends are checked in the app; Postgres has no friends graph. Demo ids stay in AsyncStorage.
 
+Push tokens: `push_devices` is readable only by the signed-in owner (`auth.uid() = user_id`). Clients do not insert directly. `kickfeed_upsert_push_device` stores the Expo token, platform, kickoff/goal toggles, and up to 40 favorite team ids (already expanded to API-Football ids). A token moves to the account that just registered it, because the token is the device secret. `push_dispatch_state` and `push_fixture_cache` have RLS on and no policies for `authenticated` — the Edge Function uses the service role. `kickfeed_ack_push_fingerprints` lets the user append only fingerprints that start with their own id, so an alert already shown in the foreground is not sent again. `kickfeed_save_push_dispatch_state` refuses anything except `service_role`.
+
 ### Apply notes (Karol)
 
-In the SQL editor, run migrations **in filename order**. If reports/blocks are already applied, run `20260919120000_direct_messages.sql`. If that file was already applied before the `created_at := now()` trigger fix, also run `20260919133000_dm_stamp_created_at.sql` (CREATE OR REPLACE; safe to re-run). Group chats: run `20260923120000_dm_groups.sql` after those. Greenfield: every file, in order. No secrets, no client env beyond the existing anon key.
+In the SQL editor, run migrations **in filename order**. If reports/blocks are already applied, run `20260919120000_direct_messages.sql`. If that file was already applied before the `created_at := now()` trigger fix, also run `20260919133000_dm_stamp_created_at.sql` (CREATE OR REPLACE; safe to re-run). Group chats: run `20260923120000_dm_groups.sql` after those. Remote match push: run `20260923140000_push_devices.sql` (safe to re-run), deploy `dispatch-favorite-push`, then optionally [`cron/dispatch-favorite-push.sql`](cron/dispatch-favorite-push.sql). Greenfield: every migration file, in order. No secrets, no client env beyond the existing anon key. Do not put `FOOTBALL_API_KEY` or the service role key in Expo or CI.
 
 Handles are `localpart_` + 8 hex chars of the user uuid (`fan@gmail.com` vs `fan@yahoo.com` do not collide).
 

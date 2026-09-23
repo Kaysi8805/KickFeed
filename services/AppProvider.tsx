@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 
 import type { AppNotification, Comment, DirectMessage, DmGroup, Fixture, GroupMessage, MotmVote, Post, PostAudience, ReportTargetType, ScorePrediction, SharedPostPayload, User } from '@/data/types';
 import { motmVoteForUser, predictionForUser, type MotmCandidate } from '@/lib/engagement';
 import { shouldPersistLeaderboard } from '@/lib/leaderboard';
 import { defaultPushPrefs, emptyPushSnapshot, planFavoriteDeviceAlerts, type PushPrefs, type PushSnapshot } from '@/lib/favoritePush';
+import { alertsForLocalDelivery, handoffSchedulesToRemote, pushFavoriteTeamIds } from '@/lib/remotePush';
 import { attachMatchId, favoriteMatchAlertDrafts, relatedFixtureIds } from '@/lib/matchSocial';
 import {
   isBlockedUser,
@@ -39,9 +40,19 @@ import {
   loadPushStore,
   peekEasProjectId,
   persistPushState,
+  readPushTokenIfGranted,
   registerForPushNotifications,
   type PushRegisterResult,
 } from '@/services/notifications';
+import {
+  ackRemotePushFingerprints,
+  asPushDeviceClient,
+  pushPlatform,
+  requestRemotePushTest,
+  shouldPersistPushDevice,
+  upsertRemotePushDevice,
+  type PushRemoteStatus,
+} from '@/services/pushDevices';
 import { isSupabaseConfigured, getSupabaseClient } from '@/services/supabase';
 import {
   addComment as addCommentState,
@@ -187,9 +198,12 @@ interface AppContextValue {
   markNotificationsRead: () => void;
   followerCount: (userId: string) => number;
   pushPrefs: PushPrefs;
+  pushToken: string | null;
+  pushRemote: PushRemoteStatus;
   easProjectId: string | null;
   enableDeviceAlerts: () => Promise<PushRegisterResult>;
   setPushPref: (patch: Partial<Pick<PushPrefs, 'kickoff' | 'goals' | 'enabled'>>) => void;
+  sendRemotePushTest: () => Promise<string>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -198,6 +212,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<Persisted>(defaults);
   const [ready, setReady] = useState(false);
   const [pushPrefs, setPushPrefs] = useState<PushPrefs>(defaultPushPrefs);
+  const [pushToken, setPushToken] = useState<string | null>(null);
+  const [pushRemote, setPushRemote] = useState<PushRemoteStatus>('off');
   const [easProjectId, setEasProjectId] = useState<string | null>(null);
   const [pushReady, setPushReady] = useState(false);
   const supabaseConfigured = isSupabaseConfigured();
@@ -206,6 +222,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const prefsRef = useRef(pushPrefs);
   prefsRef.current = pushPrefs;
   const snapshotRef = useRef<PushSnapshot>(emptyPushSnapshot());
+  const tokenRef = useRef<string | null>(null);
+  const remoteSyncedRef = useRef(false);
+  remoteSyncedRef.current = pushRemote === 'synced';
 
   useEffect(() => {
     let cancelled = false;
@@ -285,6 +304,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         setPushPrefs(store.prefs);
         snapshotRef.current = store.snapshot;
+        tokenRef.current = store.token;
+        setPushToken(store.token);
+        if (store.prefs.enabled) {
+          const fresh = await readPushTokenIfGranted();
+          if (!cancelled && fresh) {
+            tokenRef.current = fresh;
+            setPushToken(fresh);
+            await persistPushState(store.prefs, store.snapshot, fresh);
+          }
+        }
         const projectId = await peekEasProjectId();
         if (cancelled) return;
         setEasProjectId(projectId ?? null);
@@ -315,9 +344,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         prefs: prefsRef.current,
         snapshot: snapshotRef.current,
       });
-      snapshotRef.current = plan.snapshot;
-      void persistPushState(prefsRef.current, plan.snapshot);
-      void applyDeviceAlerts(plan.alerts);
+      const synced = remoteSyncedRef.current;
+      const handed = handoffSchedulesToRemote(plan.alerts, plan.snapshot, synced);
+      snapshotRef.current = handed.snapshot;
+      void persistPushState(prefsRef.current, handed.snapshot, tokenRef.current);
+      const appActive = AppState.currentState === 'active';
+      const delivery = alertsForLocalDelivery(handed.alerts, {
+        synced,
+        appActive,
+      });
+      void applyDeviceAlerts(delivery);
+      if (remoteSyncedRef.current && appActive && userId && shouldPersistPushDevice(supabaseConfigured, prev.authMode)) {
+        const shown = plan.alerts.filter((alert) => alert.action === 'present').map((alert) => alert.fingerprint);
+        const client = asPushDeviceClient(getSupabaseClient());
+        if (client && shown.length) void ackRemotePushFingerprints(client, userId, shown);
+      }
     };
     syncAlerts();
     const stop = football.subscribe(syncAlerts);
@@ -326,7 +367,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       stop();
       clearInterval(tick);
     };
-  }, [ready, pushReady, pushPrefs]);
+  }, [ready, pushReady, pushPrefs, pushRemote, supabaseConfigured]);
 
   useEffect(() => {
     if (!ready) return;
@@ -411,6 +452,81 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
   );
   const visibleComments = visibleByAuthor(state.comments, blockedUserIds);
+  const pushTeamKey = pushFavoriteTeamIds({
+    teamIds: favoriteTeamIds,
+    playerIds: favoritePlayerIds,
+    relatedTeamIds: (id) => football.relatedIds('team', id),
+    teamIdForPlayer: (id) => football.getPlayer(id)?.teamId,
+  }).join('\n');
+
+  useEffect(() => {
+    if (!ready || !pushReady) return;
+    let cancelled = false;
+    const prefs = pushPrefs;
+    const token = pushToken;
+    const userId = state.currentUserId;
+    const authMode = state.authMode;
+    const platform = pushPlatform(Platform.OS);
+    const favoriteTeamIdsForDevice = pushTeamKey ? pushTeamKey.split('\n') : [];
+
+    void (async () => {
+      const client = asPushDeviceClient(getSupabaseClient());
+      const canSync = Boolean(token && platform && client && shouldPersistPushDevice(supabaseConfigured, authMode) && userId);
+      if (!prefs.enabled) {
+        if (canSync && client && token && platform) {
+          await upsertRemotePushDevice(client, {
+            token,
+            platform,
+            enabled: false,
+            kickoff: prefs.kickoff,
+            goals: prefs.goals,
+            favoriteTeamIds: favoriteTeamIdsForDevice,
+          });
+        }
+        if (!cancelled) setPushRemote('off');
+        return;
+      }
+      if (!token || !platform) {
+        if (!cancelled) setPushRemote('local');
+        return;
+      }
+      if (!supabaseConfigured) {
+        if (!cancelled) setPushRemote('unconfigured');
+        return;
+      }
+      if (authMode !== 'supabase' || !userId) {
+        if (!cancelled) setPushRemote('demo');
+        return;
+      }
+      if (!client) {
+        if (!cancelled) setPushRemote('unconfigured');
+        return;
+      }
+      if (!cancelled) setPushRemote((prev) => (prev === 'synced' ? prev : 'pending'));
+      const result = await upsertRemotePushDevice(client, {
+        token,
+        platform,
+        enabled: true,
+        kickoff: prefs.kickoff,
+        goals: prefs.goals,
+        favoriteTeamIds: favoriteTeamIdsForDevice,
+      });
+      if (!cancelled) setPushRemote(result.ok ? 'synced' : 'error');
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    pushPrefs,
+    pushReady,
+    pushTeamKey,
+    pushToken,
+    ready,
+    state.authMode,
+    state.currentUserId,
+    supabaseConfigured,
+  ]);
 
   const patch = useCallback((fn: (prev: Persisted) => Persisted) => {
     setState((prev) => fn(prev));
@@ -429,8 +545,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     else setEasProjectId(null);
     if (result.permission === 'granted') {
       const next = { ...prefsRef.current, enabled: true };
+      prefsRef.current = next;
       setPushPrefs(next);
-      void persistPushState(next, snapshotRef.current);
+      if (result.token) {
+        tokenRef.current = result.token;
+        setPushToken(result.token);
+      }
+      void persistPushState(next, snapshotRef.current, tokenRef.current);
     }
     return result;
   }, []);
@@ -446,7 +567,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           scheduled: {},
         };
       }
-      void persistPushState(next, snapshotRef.current);
+      void persistPushState(next, snapshotRef.current, tokenRef.current);
       return next;
     });
   }, []);
@@ -648,8 +769,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return result;
       },
       signOut: () => {
+        const token = tokenRef.current;
+        const prev = stateRef.current;
+        const platform = pushPlatform(Platform.OS);
+        const client = asPushDeviceClient(getSupabaseClient());
         patch(signOutState);
-        void auth.signOut().catch(() => undefined);
+        void (async () => {
+          if (token && platform && client && shouldPersistPushDevice(supabaseConfigured, prev.authMode)) {
+            await upsertRemotePushDevice(client, {
+              token,
+              platform,
+              enabled: false,
+              kickoff: prefsRef.current.kickoff,
+              goals: prefsRef.current.goals,
+              favoriteTeamIds: [],
+            });
+          }
+          tokenRef.current = null;
+          setPushToken(null);
+          await auth.signOut().catch(() => undefined);
+        })();
       },
       follow: (userId) =>
         patch((p) => followState(p, userId, currentUser?.name ?? 'A fan')),
@@ -739,9 +878,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       markNotificationsRead: () => patch(markNotificationsReadState),
       followerCount: (userId) => Object.values(state.following).filter((ids) => ids.includes(userId)).length,
       pushPrefs,
+      pushToken,
+      pushRemote,
       easProjectId,
       enableDeviceAlerts,
       setPushPref,
+      sendRemotePushTest: async () => {
+        const client = getSupabaseClient();
+        if (!client || !shouldPersistPushDevice(supabaseConfigured, state.authMode)) {
+          return 'Sign in with email to send a remote test. Demo mode stays on this device.';
+        }
+        const result = await requestRemotePushTest(client);
+        return result.message;
+      },
     }),
     [
       blockedUserIds,
@@ -762,6 +911,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       notifications,
       patch,
       pushPrefs,
+      pushRemote,
+      pushToken,
       rememberProfiles,
       ready,
       setPushPref,

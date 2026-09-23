@@ -8,6 +8,7 @@ import {
   fixtureTouchesFavorites,
   type MatchCatalog,
 } from '@/lib/matchSocial';
+import { normalizeExpoPushToken } from '@/lib/remotePush';
 
 /** Cap so a first hydrate of several live favorites cannot dump a pile of banners. */
 export const MAX_DEVICE_ALERTS_PER_SYNC = 3;
@@ -35,10 +36,11 @@ export function emptyPushSnapshot(): PushSnapshot {
 export type PushStore = {
   prefs: PushPrefs;
   snapshot: PushSnapshot;
+  token: string | null;
 };
 
 export function parsePushStore(raw: string | null): PushStore {
-  const fallback: PushStore = { prefs: defaultPushPrefs(), snapshot: emptyPushSnapshot() };
+  const fallback: PushStore = { prefs: defaultPushPrefs(), snapshot: emptyPushSnapshot(), token: null };
   if (!raw) return fallback;
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -47,6 +49,7 @@ export function parsePushStore(raw: string | null): PushStore {
     return {
       prefs: parsePrefs(row.prefs),
       snapshot: parseSnapshot(row.snapshot),
+      token: normalizeExpoPushToken(row.token),
     };
   } catch {
     return fallback;
@@ -115,6 +118,8 @@ export type DeviceAlertsCopyInput = {
   permission: 'granted' | 'denied' | 'undetermined' | 'web' | 'unavailable';
   token: string | null;
   platform: 'web' | 'native';
+  /** Set once we know whether the Expo token was saved for remote delivery. */
+  remote?: 'synced' | 'error' | 'demo' | 'unconfigured' | 'pending';
 };
 
 export function deviceAlertsCopy(input: DeviceAlertsCopyInput): string {
@@ -133,6 +138,19 @@ export function deviceAlertsCopy(input: DeviceAlertsCopyInput): string {
       : 'Opt in for on-device kickoff-soon and goal alerts. Remote Expo push needs an EAS projectId (see README). In-app notifications still work.';
   }
   if (input.token) {
+    if (input.remote === 'synced') {
+      return 'Device alerts on. Kickoff and goals can reach this phone with KickFeed closed. Tap a banner to open the match. Closed-app goals can take a few minutes.';
+    }
+    if (input.remote === 'pending') return 'Saving this phone for remote Expo push…';
+    if (input.remote === 'error') {
+      return 'Local match alerts on. Couldn’t save this phone for remote Expo push. In-app notifications still work.';
+    }
+    if (input.remote === 'demo') {
+      return 'Local match alerts on. Remote Expo push is tied to email sign-in so KickFeed can reach you after you close the app.';
+    }
+    if (input.remote === 'unconfigured') {
+      return 'Local match alerts on. Add Supabase env to store this Expo token for alerts after you close the app. In-app notifications still work.';
+    }
     return 'Device alerts on. Kickoff reminders are scheduled on this device; goals fire when live scores refresh (same cache as Matches).';
   }
   if (input.projectId) {
