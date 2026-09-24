@@ -68,7 +68,7 @@ export function SafetyMenu({
               style={styles.row}
             >
               <Text style={styles.rowText}>
-                Report {targetType === 'profile' ? 'profile' : targetType === 'post' ? 'post' : 'message'}
+                Report {targetType === 'profile' ? 'profile' : targetType === 'post' ? 'post' : targetType === 'rivalry' ? 'banter' : 'message'}
               </Text>
             </Pressable>
             <Pressable onPress={onBlock} accessibilityRole="button" accessibilityLabel={blocked ? `Unblock ${label}` : `Block ${label}`} style={styles.row}>
