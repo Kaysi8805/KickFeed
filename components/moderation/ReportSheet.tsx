@@ -15,6 +15,7 @@ const TARGET_COPY: Record<ReportTargetType, string> = {
   profile: 'this profile',
   comment: 'this match-chat message',
   dm: 'this message',
+  rivalry: 'this banter',
 };
 
 export function ReportSheet({

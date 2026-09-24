@@ -123,6 +123,16 @@ export default function UserScreen() {
                   <Text style={[styles.followText, styles.unfollowText]}>Message</Text>
                 </Pressable>
               ) : null}
+              {(following || friendIds.includes(user.id)) && !blocked ? (
+                <Pressable
+                  onPress={() => router.push({ pathname: '/rivalry', params: { peer: user.id } })}
+                  style={[styles.follow, styles.unfollow]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Rivalry with ${user.name}`}
+                >
+                  <Text style={[styles.followText, styles.unfollowText]}>Rivalry</Text>
+                </Pressable>
+              ) : null}
               {!blocked ? (
                 <Pressable
                   onPress={() => blockUser(user.id)}

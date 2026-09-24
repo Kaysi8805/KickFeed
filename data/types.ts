@@ -338,11 +338,11 @@ export interface AppNotification {
   groupId?: string;
 }
 
-export const REPORT_TARGET_TYPES = ['post', 'profile', 'comment', 'dm'] as const;
+export const REPORT_TARGET_TYPES = ['post', 'profile', 'comment', 'dm', 'rivalry'] as const;
 
 export type ReportTargetType = (typeof REPORT_TARGET_TYPES)[number];
 
-/** Report of a post, profile, match-chat message, or DM. Keyed by demo id or auth uuid. */
+/** Report of a post, profile, match-chat message, DM, or rivalry banter. Keyed by demo id or auth uuid. */
 export interface UserReport {
   id: string;
   reporterId: string;

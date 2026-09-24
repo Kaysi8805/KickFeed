@@ -175,6 +175,14 @@ export default function ProfileScreen() {
             </Pressable>
             <Pressable
               style={styles.btn}
+              onPress={() => router.push('/rivalry')}
+              accessibilityRole="button"
+              accessibilityLabel="Rivalry Bonds"
+            >
+              <Text style={styles.btnText}>Rivalry</Text>
+            </Pressable>
+            <Pressable
+              style={styles.btn}
               onPress={() => router.push('/about')}
               accessibilityRole="link"
               accessibilityLabel="About, privacy, and support"
