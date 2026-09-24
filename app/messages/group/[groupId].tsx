@@ -2,7 +2,11 @@ import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useMatchTapeThread } from '@/lib/useMatchTapeThread';
+
 import { ChatBubble } from '@/components/dm/ChatBubble';
+import { MatchTapeChip } from '@/components/dm/MatchTapeChip';
+import { MatchTapePanel } from '@/components/dm/MatchTapePanel';
 import { ThreadComposer } from '@/components/dm/ThreadComposer';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
@@ -42,7 +46,8 @@ export default function GroupThreadScreen() {
   const blocked = group ? groupBlockReason(group.id) : 'This group isn’t on KickFeed.';
   const slow = group ? groupSlowModeFor(group.id, Date.now()) : { ok: true as const };
   const slowCopy = dmSlowModeComposerCopy(slow);
-  const canSend = !!group && !blocked && !!draft.trim() && slow.ok;
+  const tape = useMatchTapeThread(group && !blocked ? { kind: 'group', groupId: group.id } : null, messages);
+  const canSend = !!group && !blocked && !!draft.trim() && slow.ok && !tape.locked;
   const honesty = dmDisclaimer(shouldPersistDms(supabaseConfigured, authMode));
   const title =
     group && currentUser
@@ -69,12 +74,13 @@ export default function GroupThreadScreen() {
 
   function send() {
     if (!group || !canSend) return;
-    const result = sendGroupMessage(group.id, draft);
+    const result = sendGroupMessage(group.id, draft, tape.pending);
     if (!result.ok) {
       setNote(result.error);
       return;
     }
     setDraft('');
+    tape.setPending(null);
     setNote(null);
   }
 
@@ -104,6 +110,7 @@ export default function GroupThreadScreen() {
       </View>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Text style={styles.honesty}>{honesty}</Text>
+        {!blocked ? <MatchTapePanel model={tape} /> : null}
         {confirmLeave ? (
           <View style={styles.confirm}>
             <Text style={styles.confirmText}>Leave this group?</Text>
@@ -132,6 +139,7 @@ export default function GroupThreadScreen() {
                 text={row.text}
                 createdAt={row.createdAt}
                 share={row.share}
+                tape={row.tape}
                 sender={sender}
                 showName
               />
@@ -143,7 +151,7 @@ export default function GroupThreadScreen() {
         <View style={styles.blocked}>
           <Text style={styles.blockedText}>{blocked}</Text>
         </View>
-      ) : (
+      ) : tape.locked ? null : (
         <ThreadComposer
           draft={draft}
           onChange={(value) => {
@@ -154,8 +162,33 @@ export default function GroupThreadScreen() {
           canSend={canSend}
           editable={slow.ok}
           placeholder={!slow.ok ? slowCopy : 'Message the group…'}
-          hint={note ?? slowCopy}
+          hint={note ?? (tape.pending ? `Anchored · ${tape.pending.label}` : slowCopy)}
           inputLabel="Group message"
+          accessory={
+            tape.attachment?.status === 'active' ? (
+              <View style={styles.anchorRow}>
+                {tape.pending ? <MatchTapeChip anchor={tape.pending} mine={false} /> : null}
+                <Pressable
+                  onPress={() => tape.setEventOpen(true)}
+                  onLongPress={() => tape.setEventOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Anchor message to a match event"
+                  style={styles.anchorBtn}
+                >
+                  <Text style={styles.anchorText}>{tape.pending ? 'Change event' : 'Event'}</Text>
+                </Pressable>
+                {tape.pending ? (
+                  <Pressable
+                    onPress={() => tape.setPending(null)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear event anchor"
+                  >
+                    <Text style={styles.clearAnchor}>Clear</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null
+          }
         />
       )}
     </Screen>
@@ -193,4 +226,15 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   blockedText: { ...type.caption, color: colors.textMuted, lineHeight: 18 },
+  anchorRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  anchorBtn: {
+    minHeight: 36,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    backgroundColor: colors.lime,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  anchorText: { ...type.micro, color: colors.bg, letterSpacing: 0 },
+  clearAnchor: { ...type.caption, color: colors.textMuted },
 });

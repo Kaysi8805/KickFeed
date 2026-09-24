@@ -1,9 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import { MatchTapeChip } from '@/components/dm/MatchTapeChip';
 import { SharedPostCard } from '@/components/dm/SharedPostCard';
 import { SafetyMenu } from '@/components/moderation/SafetyMenu';
 import { Avatar } from '@/components/ui/Avatar';
-import type { SharedPostPayload } from '@/data/types';
+import type { MatchTapeAnchor, SharedPostPayload } from '@/data/types';
 import { timeAgo } from '@/lib/format';
 import { colors, radius, spacing, type } from '@/theme';
 
@@ -13,6 +14,7 @@ export function ChatBubble({
   text,
   createdAt,
   share,
+  tape,
   sender,
   showName,
 }: {
@@ -21,6 +23,7 @@ export function ChatBubble({
   text: string;
   createdAt: string;
   share?: SharedPostPayload;
+  tape?: MatchTapeAnchor;
   sender: { id: string; name: string; initials: string; avatarColor: string };
   showName?: boolean;
 }) {
@@ -41,6 +44,7 @@ export function ChatBubble({
             />
           )}
         </View>
+        {tape ? <MatchTapeChip anchor={tape} mine={mine} /> : null}
         {share ? <SharedPostCard share={share} mine={mine} /> : <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{text}</Text>}
       </View>
     </View>

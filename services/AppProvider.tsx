@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform, type AppStateStatus } from 'react-native';
 
-import type { AppNotification, Comment, DirectMessage, DmGroup, Fixture, GroupMessage, MotmVote, Post, PostAudience, ReportTargetType, ScorePrediction, SharedPostPayload, User } from '@/data/types';
+import type { AppNotification, Comment, DirectMessage, DmGroup, Fixture, GroupMessage, MatchTapeAnchor, MatchTapeAttachment, MotmVote, Post, PostAudience, ReportTargetType, ScorePrediction, SharedPostPayload, User } from '@/data/types';
 import { motmVoteForUser, predictionForUser, type MotmCandidate } from '@/lib/engagement';
 import { shouldPersistLeaderboard } from '@/lib/leaderboard';
 import { defaultPushPrefs, emptyPushSnapshot, planFavoriteDeviceAlerts, type PushPrefs, type PushSnapshot } from '@/lib/favoritePush';
@@ -34,6 +34,7 @@ import {
   type SendGroupResult,
 } from '@/lib/groups';
 import { shouldPersistLiveCircle } from '@/lib/liveCircle';
+import { governingTape, type TapeScoreSnapshot, type TapeTeams } from '@/lib/matchTape';
 import { sharedPostBody } from '@/lib/shareToChat';
 import {
   applyDeviceAlerts,
@@ -70,6 +71,9 @@ import {
   dmReadsFor,
   follow as followState,
   groupReadsFor,
+  archiveMatchTape as archiveMatchTapeState,
+  attachMatchTape as attachMatchTapeState,
+  dropMatchTape,
   leaveDmGroup as leaveDmGroupState,
   liveCircleEnabledFor,
   noteFriendLive as noteFriendLiveState,
@@ -80,6 +84,7 @@ import {
   markGroupRead as markGroupReadState,
   mergeRemoteDirectMessages,
   mergeRemoteGroupChats,
+  mergeRemoteMatchTapes,
   mergeRemoteModeration,
   notificationsFor,
   rememberProfiles as rememberProfilesState,
@@ -134,6 +139,12 @@ import {
   syncRemoteDirectMessages,
   syncRemoteGroupChats,
 } from '@/services/dms';
+import {
+  archiveRemoteMatchTape,
+  asMatchTapeClient,
+  attachRemoteMatchTape,
+  fetchRemoteMatchTapes,
+} from '@/services/matchTapeRemote';
 
 const STORAGE_KEY = 'kickfeed.v1.state';
 
@@ -174,7 +185,7 @@ interface AppContextValue {
   inbox: InboxEntry[];
   unreadDmCount: number;
   threadMessages: (peerId: string) => DirectMessage[];
-  sendDirectMessage: (peerId: string, text: string) => SendDmResult;
+  sendDirectMessage: (peerId: string, text: string, tape?: MatchTapeAnchor | null) => SendDmResult;
   markDmThreadRead: (peerId: string) => void;
   dmSlowModeFor: (peerId: string, now?: number) => ReturnType<typeof dmSlowMode>;
   dmGroups: DmGroup[];
@@ -184,7 +195,20 @@ interface AppContextValue {
   ) => { ok: true; group: DmGroup } | { ok: false; error: string };
   leaveDmGroup: (groupId: string) => void;
   groupThreadMessages: (groupId: string) => GroupMessage[];
-  sendGroupMessage: (groupId: string, text: string) => SendGroupResult;
+  sendGroupMessage: (groupId: string, text: string, tape?: MatchTapeAnchor | null) => SendGroupResult;
+  matchTapes: MatchTapeAttachment[];
+  tapeForThread: (threadKey: string) => MatchTapeAttachment | null;
+  attachMatchTape: (input: {
+    kind: 'dm' | 'group';
+    threadKey: string;
+    matchId: string;
+    teams: TapeTeams;
+    kickoff?: string;
+  }) => Promise<{ ok: true; attachment: MatchTapeAttachment } | { ok: false; error: string }>;
+  archiveMatchTape: (
+    id: string,
+    snapshot?: TapeScoreSnapshot,
+  ) => Promise<{ ok: true; attachment: MatchTapeAttachment } | { ok: false; error: string }>;
   sendPostToChat: (
     target: { kind: 'direct'; peerId: string } | { kind: 'group'; groupId: string },
     share: SharedPostPayload,
@@ -445,6 +469,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!('error' in remote)) next = mergeRemoteDirectMessages(next, userId, remote.messages);
         if (!('error' in groups)) next = mergeRemoteGroupChats(next, userId, groups.groups, groups.messages);
         return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, state.currentUserId, state.authMode, supabaseConfigured]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const userId = state.currentUserId;
+    if (!userId || !shouldPersistDms(supabaseConfigured, state.authMode)) return;
+    let cancelled = false;
+    void (async () => {
+      const remote = await fetchRemoteMatchTapes(asMatchTapeClient(getSupabaseClient()));
+      if (cancelled || 'error' in remote) return;
+      setState((prev) => {
+        if (prev.currentUserId !== userId) return prev;
+        return mergeRemoteMatchTapes(prev, remote.tapes);
       });
     })();
     return () => {
@@ -716,10 +758,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unreadDmCount: dmUnread,
       threadMessages: (peerId) =>
         currentUser ? messagesForThread(visibleDms, currentUser.id, peerId) : [],
-      sendDirectMessage: (peerId, text) => {
+      sendDirectMessage: (peerId, text, tape) => {
         let result: SendDmResult = { ok: false, error: 'Couldn’t send this message.' };
         patch((p) => {
-          const next = sendDirectMessageState(p, peerId, text, Date.now());
+          const next = sendDirectMessageState(p, peerId, text, Date.now(), undefined, tape);
           result = next.result;
           if (
             next.result.ok &&
@@ -768,10 +810,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }),
       groupThreadMessages: (groupId) =>
         visibleGroupMessages(state.groupMessages, groupId, cannotDmUserIds),
-      sendGroupMessage: (groupId, text) => {
+      sendGroupMessage: (groupId, text, tape) => {
         let result: SendGroupResult = { ok: false, error: 'Couldn’t send this message.' };
         patch((p) => {
-          const next = sendGroupMessageState(p, groupId, text, Date.now());
+          const next = sendGroupMessageState(p, groupId, text, Date.now(), undefined, tape);
           result = next.result;
           if (next.result.ok && shouldPersistDms(supabaseConfigured, next.state.authMode)) {
             void insertRemoteGroupMessage(asDmsClient(getSupabaseClient()), next.result.message);
@@ -808,6 +850,55 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       markGroupRead: (groupId) => patch((p) => markGroupReadState(p, groupId)),
       groupSlowModeFor: (groupId, now = Date.now()) =>
         groupSlowMode(state.groupMessages, state.directMessages, currentUser?.id, groupId, now),
+      matchTapes: state.matchTapes,
+      tapeForThread: (threadKey) => governingTape(state.matchTapes, threadKey),
+      attachMatchTape: async (input) => {
+        const held: { result: { ok: true; attachment: MatchTapeAttachment } | { ok: false; error: string } | null } = {
+          result: null,
+        };
+        patch((p) => {
+          const next = attachMatchTapeState(p, input, Date.now());
+          held.result = next.result;
+          return next.state;
+        });
+        const result = held.result ?? { ok: false as const, error: 'Couldn’t start that Match Tape.' };
+        if (!result.ok) return result;
+        if (shouldPersistDms(supabaseConfigured, stateRef.current.authMode)) {
+          const remote = await attachRemoteMatchTape(asMatchTapeClient(getSupabaseClient()), result.attachment);
+          if (remote.error) {
+            patch((p) => dropMatchTape(p, result.attachment.id));
+            return { ok: false, error: remote.error };
+          }
+        }
+        return result;
+      },
+      archiveMatchTape: async (id, snapshot) => {
+        const held: {
+          previous: MatchTapeAttachment | null;
+          result: { ok: true; attachment: MatchTapeAttachment } | { ok: false; error: string } | null;
+        } = { previous: null, result: null };
+        patch((p) => {
+          held.previous = p.matchTapes.find((row) => row.id === id) ?? null;
+          const next = archiveMatchTapeState(p, id, Date.now(), snapshot);
+          held.result = next.result;
+          return next.state;
+        });
+        const result = held.result ?? { ok: false as const, error: 'Couldn’t archive that Match Tape.' };
+        if (!result.ok) return result;
+        if (held.previous?.status === 'archived') return result;
+        if (shouldPersistDms(supabaseConfigured, stateRef.current.authMode)) {
+          const remote = await archiveRemoteMatchTape(asMatchTapeClient(getSupabaseClient()), id, snapshot);
+          if (remote.error && held.previous) {
+            const revert = held.previous;
+            patch((p) => ({
+              ...p,
+              matchTapes: p.matchTapes.map((row) => (row.id === id ? revert : row)),
+            }));
+            return { ok: false, error: remote.error };
+          }
+        }
+        return result;
+      },
       groupBlockReason: (groupId) => {
         const group = myGroups.find((row) => row.id === groupId);
         if (!group) return 'This group isn’t on KickFeed.';

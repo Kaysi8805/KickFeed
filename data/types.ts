@@ -369,6 +369,16 @@ export interface SharedPostPayload {
   matchId?: string;
 }
 
+/** Event a chat message is pinned to inside a Match Tape. */
+export interface MatchTapeAnchor {
+  matchId: string;
+  eventKey: string;
+  minute: number;
+  /** Goal, card, or substitution. VAR is not an anchor. */
+  eventType: 'goal' | 'yellow' | 'red' | 'sub';
+  label: string;
+}
+
 /** 1:1 direct message. Keyed by demo seed id or auth.users uuid. */
 export interface DirectMessage {
   id: string;
@@ -377,6 +387,7 @@ export interface DirectMessage {
   text: string;
   createdAt: string;
   share?: SharedPostPayload;
+  tape?: MatchTapeAnchor;
 }
 
 /** Group thread. Members are demo ids or auth uuids. `title` null → derive from names. */
@@ -396,4 +407,27 @@ export interface GroupMessage {
   text: string;
   createdAt: string;
   share?: SharedPostPayload;
+  tape?: MatchTapeAnchor;
+}
+
+/** One chat thread bound to one fixture. Archived tapes are read-only. */
+export interface MatchTapeAttachment {
+  id: string;
+  kind: 'dm' | 'group';
+  /** Sorted DM pair (`a::b`) or a group id. */
+  threadKey: string;
+  matchId: string;
+  status: 'active' | 'archived';
+  attachedBy: string;
+  createdAt: string;
+  archivedAt?: string;
+  homeName: string;
+  awayName: string;
+  homeShort: string;
+  awayShort: string;
+  kickoff?: string;
+  homeScore?: number;
+  awayScore?: number;
+  minute?: number;
+  matchStatus?: MatchStatus;
 }

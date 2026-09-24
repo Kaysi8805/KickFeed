@@ -42,6 +42,7 @@ export function parseRemoteDirectMessage(value: unknown): DirectMessage | null {
     text: asString(value.body) ?? asString(value.text),
     createdAt: asString(value.created_at),
     share: value.share,
+    tape: value.tape,
   });
 }
 
@@ -54,6 +55,7 @@ export function dmToRemote(row: DirectMessage): Record<string, unknown> {
     body: row.text,
   };
   if (row.share) payload.share = row.share;
+  if (row.tape) payload.tape = row.tape;
   return payload;
 }
 
@@ -65,6 +67,7 @@ export function groupMessageToRemote(row: GroupMessage): Record<string, unknown>
     body: row.text,
   };
   if (row.share) payload.share = row.share;
+  if (row.tape) payload.tape = row.tape;
   return payload;
 }
 
@@ -78,6 +81,7 @@ export function parseRemoteGroupMessage(value: unknown): GroupMessage | null {
     text: asString(value.body) ?? asString(value.text),
     createdAt: asString(value.created_at),
     share: value.share,
+    tape: value.tape,
   });
 }
 
@@ -166,7 +170,7 @@ export async function fetchRemoteDirectMessages(
   if (!client) return { error: 'not_configured' };
   if (!isPersistedUserId(userId)) return { error: 'bad_identity' };
   try {
-    const columns = 'id,sender_id,recipient_id,body,created_at,share';
+    const columns = 'id,sender_id,recipient_id,body,created_at,share,tape';
     const [sent, received] = await Promise.all([
       client.from('direct_messages').select(columns).eq('sender_id', userId),
       client.from('direct_messages').select(columns).eq('recipient_id', userId),
@@ -269,7 +273,7 @@ export async function fetchRemoteGroupChats(
       client.from('dm_groups').select('id,title,created_by,created_at').in('id', groupIds),
       client
         .from('direct_messages')
-        .select('id,group_id,sender_id,recipient_id,body,created_at,share')
+        .select('id,group_id,sender_id,recipient_id,body,created_at,share,tape')
         .in('group_id', groupIds),
     ]);
     if (members.error) return { error: members.error.message };

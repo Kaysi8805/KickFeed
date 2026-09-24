@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { colors, radius, spacing, type } from '@/theme';
@@ -12,6 +13,7 @@ export function ThreadComposer({
   placeholder,
   hint,
   inputLabel,
+  accessory,
 }: {
   draft: string;
   onChange: (value: string) => void;
@@ -21,9 +23,11 @@ export function ThreadComposer({
   placeholder: string;
   hint: string;
   inputLabel: string;
+  accessory?: ReactNode;
 }) {
   return (
     <View style={styles.composer}>
+      {accessory}
       <Text style={styles.composerHint}>{hint}</Text>
       <View style={styles.inputRow}>
         <TextInput

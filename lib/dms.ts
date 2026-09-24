@@ -1,4 +1,5 @@
-import type { AppNotification, DirectMessage, SharedPostPayload, User } from '@/data/types';
+import type { AppNotification, DirectMessage, MatchTapeAnchor, SharedPostPayload, User } from '@/data/types';
+import { parseMatchTapeAnchor } from '@/lib/matchTape';
 import { parseSharedPost } from '@/lib/shareToChat';
 import { DM_SLOW_MODE_HINT } from '@/lib/honesty';
 import {
@@ -23,6 +24,7 @@ export type SendDmInput = {
   recipientId: string;
   text: string;
   share?: SharedPostPayload;
+  tape?: MatchTapeAnchor;
 };
 
 export type SendDmResult =
@@ -73,6 +75,8 @@ export function parseDirectMessage(value: unknown): DirectMessage | null {
   const message: DirectMessage = { id, senderId, recipientId, text, createdAt };
   const share = parseSharedPost(row.share);
   if (share) message.share = share;
+  const tape = parseMatchTapeAnchor(row.tape);
+  if (tape) message.tape = tape;
   return message;
 }
 
@@ -84,6 +88,7 @@ export function buildDirectMessage(input: SendDmInput, now: number, id?: string)
     text: input.text,
     createdAt: new Date(now).toISOString(),
     share: input.share,
+    tape: input.tape,
   });
 }
 

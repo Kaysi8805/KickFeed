@@ -170,6 +170,16 @@ export function dmDisclaimer(live: boolean): string {
   return live ? DM_LIVE_COPY : DM_DEMO_COPY;
 }
 
+export const MATCH_TAPE_DEMO_COPY =
+  'Demo Match Tape — this attachment stays on this device. Sample events are labeled and are not a live feed.';
+
+export const MATCH_TAPE_LIVE_COPY =
+  'Match Tape syncs to KickFeed Postgres for people in this chat. It is a private memory, not a public stadium room.';
+
+export function matchTapeDisclaimer(live: boolean): string {
+  return live ? MATCH_TAPE_LIVE_COPY : MATCH_TAPE_DEMO_COPY;
+}
+
 export const BLOCKED_PROFILE_TITLE = 'You’ve blocked this fan';
 
 export const BLOCKED_PROFILE_BODY =

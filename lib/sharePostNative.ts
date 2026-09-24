@@ -12,6 +12,18 @@ export function isShareAvailable(): boolean {
 
 export type SharePostResult = 'shared' | 'dismissed' | 'unavailable';
 
+/** Opens the OS share sheet for a ready-made message. Cancel / dismiss never throws. */
+export async function sharePlainText(message: string, title = 'KickFeed'): Promise<SharePostResult> {
+  if (!isShareAvailable()) return 'unavailable';
+  try {
+    const result = await Share.share(Platform.OS === 'ios' ? { message } : { message, title });
+    if (result.action === Share.dismissedAction) return 'dismissed';
+    return 'shared';
+  } catch {
+    return 'dismissed';
+  }
+}
+
 /** Opens the OS share sheet. Cancel / dismiss never throws. */
 export async function sharePost(parts: PostShareParts): Promise<SharePostResult> {
   if (!isShareAvailable()) return 'unavailable';

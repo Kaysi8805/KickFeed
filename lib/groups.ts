@@ -1,4 +1,5 @@
-import type { DirectMessage, DmGroup, GroupMessage, SharedPostPayload } from '@/data/types';
+import type { DirectMessage, DmGroup, GroupMessage, MatchTapeAnchor, SharedPostPayload } from '@/data/types';
+import { parseMatchTapeAnchor } from '@/lib/matchTape';
 import type { DmThread } from '@/lib/dms';
 import { DM_TEXT_MAX, normalizeDmText, slowModeFromStamps, stampsAtOrBefore } from '@/lib/dms';
 import type { SlowModeDecision } from '@/lib/moderation';
@@ -193,6 +194,8 @@ export function parseGroupMessage(value: unknown): GroupMessage | null {
   const message: GroupMessage = { id, groupId, senderId, text, createdAt };
   const share = parseSharedPost(row.share);
   if (share) message.share = share;
+  const tape = parseMatchTapeAnchor(row.tape);
+  if (tape) message.tape = tape;
   return message;
 }
 
@@ -201,6 +204,7 @@ export function buildGroupMessage(input: {
   senderId: string;
   text: string;
   share?: SharedPostPayload;
+  tape?: MatchTapeAnchor;
   now: number;
   id?: string;
 }): GroupMessage | null {
@@ -212,6 +216,7 @@ export function buildGroupMessage(input: {
     text: input.text,
     createdAt: new Date(input.now).toISOString(),
     share: input.share,
+    tape: input.tape,
   });
 }
 

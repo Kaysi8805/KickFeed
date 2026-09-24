@@ -1,4 +1,4 @@
-import type { AppNotification, Comment, DirectMessage, DmGroup, Fixture, GroupMessage, MatchStatus, MotmVote, Post, PostAudience, ScorePrediction, SharedPostPayload, User, UserReport } from '@/data/types';
+import type { AppNotification, Comment, DirectMessage, DmGroup, Fixture, GroupMessage, MatchStatus, MatchTapeAnchor, MatchTapeAttachment, MotmVote, Post, PostAudience, ScorePrediction, SharedPostPayload, User, UserReport } from '@/data/types';
 import { seedMotmVotes, seedPredictions } from '@/data/mocks/engagement';
 import { demoUsers, seedComments, seedDirectMessages, seedFollowing, seedNotifications, seedPosts } from '@/data/mocks/social';
 import {
@@ -39,6 +39,17 @@ import {
 } from '@/lib/moderation';
 import { friendPostRecipientIds } from '@/lib/homeFeed';
 import { isLiveCircleDebounced, liveCirclePushBody } from '@/lib/liveCircle';
+import {
+  createTapeId,
+  dmTapeThreadKey,
+  gateTapeMessage,
+  mergeMatchTapes,
+  parseMatchTapeAttachment,
+  planMatchTapeArchive,
+  planMatchTapeAttach,
+  type TapeScoreSnapshot,
+  type TapeTeams,
+} from '@/lib/matchTape';
 import {
   inferAuthMode,
   isDemoUserId,
@@ -89,6 +100,8 @@ export interface Persisted {
    * Explicit false stays off and is not replaced by a remote true.
    */
   liveCircleEnabled: Record<string, boolean>;
+  /** Fixture bound to a DM or group. Demo stays in this blob; email accounts also sync. */
+  matchTapes: MatchTapeAttachment[];
 }
 
 export function defaults(): Persisted {
@@ -118,6 +131,7 @@ export function defaults(): Persisted {
     groupMessages: [],
     groupReads: {},
     liveCircleEnabled: {},
+    matchTapes: [],
   };
 }
 
@@ -302,6 +316,7 @@ export function hydratePersisted(raw: string | null): Persisted {
     groupMessages: pickParsedRows(parsed.groupMessages, base.groupMessages, parseGroupMessage),
     groupReads: pickGroupReads(parsed.groupReads, base.groupReads),
     liveCircleEnabled: pickLiveCircle(parsed.liveCircleEnabled),
+    matchTapes: pickParsedRows(parsed.matchTapes, base.matchTapes, parseMatchTapeAttachment),
   };
 }
 
@@ -1030,6 +1045,7 @@ export function sendDirectMessage(
   text: string,
   now = Date.now(),
   share?: SharedPostPayload,
+  tape?: MatchTapeAnchor | null,
 ): { state: Persisted; result: SendDmResult } {
   const senderId = state.currentUserId;
   if (!senderId) return { state, result: { ok: false, error: 'Sign in to send a message.' } };
@@ -1038,13 +1054,15 @@ export function sendDirectMessage(
   }
   const parsedShare = share ? (parseSharedPost(share) ?? undefined) : undefined;
   if (share && !parsedShare) return { state, result: { ok: false, error: 'Couldn’t share that post.' } };
+  const gate = gateTapeMessage(state.matchTapes, dmTapeThreadKey(senderId, recipientId), text, tape);
+  if (!gate.ok) return { state, result: { ok: false, error: gate.error } };
   const otherSends = state.groupMessages.filter((row) => row.senderId === senderId);
   const slow = dmSlowMode(state.directMessages, senderId, recipientId, now, otherSends);
   if (!slow.ok) {
     return { state, result: { ok: false, error: 'Slow mode — wait before sending.', slow } };
   }
-  const message = buildDirectMessage({ senderId, recipientId, text, share: parsedShare }, now);
-  if (!message) {
+  const message = buildDirectMessage({ senderId, recipientId, text, share: parsedShare, tape: gate.value }, now);
+  if (!message || (tape && !message.tape)) {
     return { state, result: { ok: false, error: 'Write a short message (1–1000 characters).' } };
   }
   const senderName = fanName(state, senderId);
@@ -1084,6 +1102,101 @@ export function createDmGroup(
   };
 }
 
+function tapeViewerCanUse(state: Persisted, attachment: MatchTapeAttachment, userId: string): boolean {
+  if (attachment.kind === 'group') {
+    const group = state.dmGroups.find((row) => row.id === attachment.threadKey);
+    if (!group || !isGroupMember(group, userId)) return false;
+    return !groupSendBlockReason(group, userId, cannotDmPeerIds(state, userId));
+  }
+  const parts = attachment.threadKey.split('::');
+  const peer = parts.find((id) => id !== userId);
+  return !!peer && dmTapeThreadKey(userId, peer) === attachment.threadKey && canMessagePeer(state, peer);
+}
+
+export function attachMatchTape(
+  state: Persisted,
+  input: {
+    kind: 'dm' | 'group';
+    threadKey: string;
+    matchId: string;
+    teams: TapeTeams;
+    kickoff?: string;
+  },
+  now = Date.now(),
+): { state: Persisted; result: { ok: true; attachment: MatchTapeAttachment } | { ok: false; error: string } } {
+  const userId = state.currentUserId;
+  if (!userId) return { state, result: { ok: false, error: 'Sign in to attach a match.' } };
+  if (input.kind === 'dm') {
+    const peer = input.threadKey.split('::').find((id) => id !== userId);
+    if (!peer || dmTapeThreadKey(userId, peer) !== input.threadKey || !canMessagePeer(state, peer)) {
+      return { state, result: { ok: false, error: 'Only people in this chat can attach a match.' } };
+    }
+  } else {
+    const group = state.dmGroups.find((row) => row.id === input.threadKey);
+    if (!group || !isGroupMember(group, userId)) {
+      return { state, result: { ok: false, error: 'Only people in this chat can attach a match.' } };
+    }
+    const blocked = groupSendBlockReason(group, userId, cannotDmPeerIds(state, userId));
+    if (blocked) return { state, result: { ok: false, error: blocked } };
+  }
+  const plan = planMatchTapeAttach({
+    rows: state.matchTapes,
+    id: createTapeId(now, userId),
+    kind: input.kind,
+    threadKey: input.threadKey,
+    matchId: input.matchId,
+    attachedBy: userId,
+    teams: input.teams,
+    kickoff: input.kickoff,
+    now,
+  });
+  if (!plan.ok) return { state, result: plan };
+  return {
+    state: { ...state, matchTapes: [...state.matchTapes, plan.value] },
+    result: { ok: true, attachment: plan.value },
+  };
+}
+
+export function archiveMatchTape(
+  state: Persisted,
+  id: string,
+  now = Date.now(),
+  snapshot?: TapeScoreSnapshot,
+): { state: Persisted; result: { ok: true; attachment: MatchTapeAttachment } | { ok: false; error: string } } {
+  const userId = state.currentUserId;
+  if (!userId) return { state, result: { ok: false, error: 'Sign in to archive a Match Tape.' } };
+  const existing = state.matchTapes.find((row) => row.id === id);
+  if (!existing || !tapeViewerCanUse(state, existing, userId)) {
+    return { state, result: { ok: false, error: 'Only people in this chat can archive a Match Tape.' } };
+  }
+  const plan = planMatchTapeArchive(state.matchTapes, id, now, snapshot);
+  if (!plan.ok) return { state, result: plan };
+  if (plan.value.status === existing.status && existing.status === 'archived') {
+    return { state, result: { ok: true, attachment: existing } };
+  }
+  return {
+    state: { ...state, matchTapes: state.matchTapes.map((row) => (row.id === id ? plan.value : row)) },
+    result: { ok: true, attachment: plan.value },
+  };
+}
+
+export function dropMatchTape(state: Persisted, id: string): Persisted {
+  if (!state.matchTapes.some((row) => row.id === id)) return state;
+  return { ...state, matchTapes: state.matchTapes.filter((row) => row.id !== id) };
+}
+
+export function mergeRemoteMatchTapes(state: Persisted, remote: readonly MatchTapeAttachment[]): Persisted {
+  const next = mergeMatchTapes(state.matchTapes, remote);
+  const same =
+    next.length === state.matchTapes.length &&
+    next.every((row) => {
+      const local = state.matchTapes.find((item) => item.id === row.id);
+      return !!local && local.status === row.status && local.archivedAt === row.archivedAt && local.homeScore === row.homeScore;
+    });
+  if (same) return state;
+  return { ...state, matchTapes: next };
+}
+
 export function leaveDmGroup(state: Persisted, groupId: string): Persisted {
   const userId = state.currentUserId;
   if (!userId) return state;
@@ -1103,6 +1216,7 @@ export function sendGroupMessage(
   text: string,
   now = Date.now(),
   share?: SharedPostPayload,
+  tape?: MatchTapeAnchor | null,
 ): { state: Persisted; result: SendGroupResult } {
   const senderId = state.currentUserId;
   if (!senderId) return { state, result: { ok: false, error: 'Sign in to send a message.' } };
@@ -1112,6 +1226,8 @@ export function sendGroupMessage(
   if (blocked) return { state, result: { ok: false, error: blocked } };
   const parsedShare = share ? (parseSharedPost(share) ?? undefined) : undefined;
   if (share && !parsedShare) return { state, result: { ok: false, error: 'Couldn’t share that post.' } };
+  const gate = gateTapeMessage(state.matchTapes, groupId, text, tape);
+  if (!gate.ok) return { state, result: { ok: false, error: gate.error } };
   const slow = groupSlowMode(state.groupMessages, state.directMessages, senderId, groupId, now);
   if (!slow.ok) {
     return { state, result: { ok: false, error: 'Slow mode — wait before sending.', slow } };
@@ -1121,9 +1237,10 @@ export function sendGroupMessage(
     senderId,
     text,
     share: parsedShare,
+    tape: gate.value,
     now,
   });
-  if (!message) {
+  if (!message || (tape && !message.tape)) {
     return { state, result: { ok: false, error: 'Write a short message (1–1000 characters).' } };
   }
   const senderName = fanName(state, senderId);
